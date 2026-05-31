@@ -15,7 +15,10 @@ Requires **Node.js 20+** (see `engines` in [`package.json`](package.json), align
 npm ci
 npm run typecheck
 npm run lint
+npm run test
 ```
+
+Coverage (lcov under `coverage/`) is produced when you run `npm run test -- --coverage` (CI does this on every run).
 
 ## Documentation
 
@@ -24,4 +27,4 @@ npm run lint
 
 ## Tooling status
 
-**ESLint** (flat config, `typescript-eslint`) is configured; use `npm run lint` / `npm run lint:fix`. A **GitHub Actions** workflow runs `typecheck` and `lint` on pull requests and on pushes to `main`. **Husky** is installed (`prepare` script); `.husky/pre-commit` is a no-op until **lint-staged** is added in the next slice. Tests (Vitest) and SonarCloud follow after that. Coverage / Sonar / extra badges can follow once those tools are wired.
+**ESLint** (flat config, `typescript-eslint`) is configured; use `npm run lint` / `npm run lint:fix`. **Vitest** runs via `npm run test` / `npm run test:watch`; CI runs tests **with coverage** (`lcov` in `coverage/` for a future Sonar slice). **Husky** is installed; `.husky/pre-commit` stays a placeholder until **lint-staged** wires staged-file checks. **SonarCloud** is still a follow-up PR.
