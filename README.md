@@ -24,4 +24,4 @@ npm run lint
 
 ## Tooling status
 
-**ESLint** (flat config, `typescript-eslint`) is configured; use `npm run lint` / `npm run lint:fix`. A **GitHub Actions** workflow runs `typecheck` and `lint` on pull requests and on pushes to `main`. Tests (Vitest), git hooks, and SonarCloud land in follow-up PRs. Coverage / Sonar / extra badges can follow once those tools are wired.
+**ESLint** (flat config, `typescript-eslint`) is configured; use `npm run lint` / `npm run lint:fix`. A **GitHub Actions** workflow runs `typecheck` and `lint` on pull requests and on pushes to `main`. **Husky** is installed (`prepare` script); `.husky/pre-commit` is a no-op until **lint-staged** is added in the next slice. Tests (Vitest) and SonarCloud follow after that. Coverage / Sonar / extra badges can follow once those tools are wired.
