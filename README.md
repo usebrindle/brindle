@@ -29,7 +29,7 @@ Static analysis runs in [`.github/workflows/sonar.yml`](.github/workflows/sonar.
 
 1. In [SonarCloud](https://sonarcloud.io), import **`usebrindle/brindle`** (or create a project and copy the **organization** and **project key** into `sonar-project.properties` so they match the UI exactly).
 2. In GitHub: **Settings → Secrets and variables → Actions**, add **`SONAR_TOKEN`** from SonarCloud ([token docs](https://docs.sonarsource.com/sonarqube-cloud/managing-your-account/managing-tokens/)). Prefer an **organization-level** secret if your org policy allows it.
-3. The workflow runs **`npm ci`**, **`npm run test -- --coverage`** (for `coverage/lcov.info`), then **`SonarSource/sonarqube-scan-action@v8.1.0`**. **Fork pull requests are skipped** so the job does not fail when secrets are unavailable.
+3. The workflow runs **`npm ci`**, **`npm run test -- --coverage`** (for `coverage/lcov.info`), then **`SonarSource/sonarqube-scan-action`** at release **v8.1.0** (pinned by full commit SHA in [`.github/workflows/sonar.yml`](.github/workflows/sonar.yml)). **Fork pull requests are skipped** so the job does not fail when secrets are unavailable.
 
 The Quality Gate badge above appears once the SonarCloud project exists and the first analysis succeeds.
 
