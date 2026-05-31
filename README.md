@@ -20,6 +20,8 @@ npm run test
 
 Coverage (lcov under `coverage/`) is produced when you run `npm run test -- --coverage` (CI does this on every run).
 
+On **commit**, **Husky** runs **lint-staged** on staged `*.{ts,tsx}`: **`eslint --fix`**, then **`vitest related --run`** for a fast, file-scoped test pass.
+
 ## Documentation
 
 - [Architecture Decision Records](docs/adrs/)
@@ -27,4 +29,4 @@ Coverage (lcov under `coverage/`) is produced when you run `npm run test -- --co
 
 ## Tooling status
 
-**ESLint** (flat config, `typescript-eslint`) is configured; use `npm run lint` / `npm run lint:fix`. **Vitest** runs via `npm run test` / `npm run test:watch`; CI runs tests **with coverage** (`lcov` in `coverage/` for a future Sonar slice). **Husky** is installed; `.husky/pre-commit` stays a placeholder until **lint-staged** wires staged-file checks. **SonarCloud** is still a follow-up PR.
+**ESLint** (flat config, `typescript-eslint`) is configured; use `npm run lint` / `npm run lint:fix`. **Vitest** runs via `npm run test` / `npm run test:watch`; CI runs tests **with coverage** (`lcov` in `coverage/` for a future Sonar slice). **Husky** + **lint-staged** run on **pre-commit** for staged TypeScript: ESLint fix, then Vitest related. **SonarCloud** is still a follow-up PR.
