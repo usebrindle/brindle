@@ -1,0 +1,17 @@
+{
+  "name": "brindle",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Platform-agnostic merge-risk classifier and CI extensions",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2"
+  }
+}
