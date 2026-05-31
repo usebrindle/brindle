@@ -1,3 +1,2 @@
 #!/usr/bin/env sh
-# Placeholder: chore/lint-staged will run `npx lint-staged` here.
-true
+npx lint-staged
