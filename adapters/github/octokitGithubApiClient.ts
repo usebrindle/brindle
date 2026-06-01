@@ -3,11 +3,14 @@
  *
  * @see docs/adrs/0007-platform-adapter-boundary.md
  */
+import { withCustomRequest } from "@octokit/graphql";
 import { Octokit } from "@octokit/rest";
 
+import type { MergeMethod } from "../../core/types.js";
 import type {
   CreateMergeRiskCheckRunInput,
   CreatePullRequestCommentInput,
+  EnableNativePullRequestAutoMergeInput,
   GitHubApiClient,
   GitHubPullFileSnapshot,
   GitHubPullRequestLookup,
@@ -26,7 +29,24 @@ const truncateCheckRunSummaryMarkdown = (markdown: string): string => {
   return `${markdown.slice(0, Math.max(0, headLength))}${suffix}`;
 };
 
+const ENABLE_PULL_REQUEST_AUTO_MERGE_MUTATION = `
+mutation EnablePullRequestAutoMerge($pullRequestId: ID!, $mergeMethod: PullRequestMergeMethod!) {
+  enablePullRequestAutoMerge(input: { pullRequestId: $pullRequestId, mergeMethod: $mergeMethod }) {
+    pullRequest {
+      id
+    }
+  }
+}
+`;
+
+const mergeMethodToGithubGraphQlEnum = (mergeMethod: MergeMethod): "MERGE" | "REBASE" | "SQUASH" => {
+  if (mergeMethod === "merge") return "MERGE";
+  if (mergeMethod === "rebase") return "REBASE";
+  return "SQUASH";
+};
+
 const toPullSnapshot = (data: {
+  node_id?: string;
   head: { sha: string };
   base: { ref: string };
   user: { login: string } | null;
@@ -35,6 +55,7 @@ const toPullSnapshot = (data: {
   labels: { name?: string | null }[];
   created_at: string;
 }): GitHubPullSnapshot => ({
+  pullRequestNodeId: typeof data.node_id === "string" ? data.node_id : "",
   headSha: data.head.sha,
   baseRefName: data.base.ref,
   authorLogin: data.user?.login ?? "unknown",
@@ -93,6 +114,19 @@ export const createOctokitGithubApiClient = (octokit: Octokit): GitHubApiClient 
       repo: input.repositoryName,
       issue_number: input.pullRequestNumber,
       body: input.body,
+    });
+  },
+
+  async enableNativePullRequestAutoMerge(input: EnableNativePullRequestAutoMergeInput): Promise<void> {
+    if (input.pullRequestNodeId === "") {
+      throw new Error(
+        "enableNativePullRequestAutoMerge requires pullRequestNodeId (GitHub REST pull `node_id`).",
+      );
+    }
+    const graphqlWithOctokitRequest = withCustomRequest(octokit.request);
+    await graphqlWithOctokitRequest(ENABLE_PULL_REQUEST_AUTO_MERGE_MUTATION, {
+      pullRequestId: input.pullRequestNodeId,
+      mergeMethod: mergeMethodToGithubGraphQlEnum(input.mergeMethod),
     });
   },
 });

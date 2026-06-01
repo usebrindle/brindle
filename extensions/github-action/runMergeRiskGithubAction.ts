@@ -2,6 +2,7 @@
  * Loads merge-risk config from the PR base ref (Contents API), scores, then writes check + comment.
  *
  * @see docs/adrs/0001-no-pr-head-execution.md
+ * @see docs/adrs/0002-native-auto-merge.md
  */
 import { getBooleanInput, getInput, info } from "@actions/core";
 import { readFile } from "node:fs/promises";
@@ -11,16 +12,21 @@ import { Octokit } from "@octokit/rest";
 import { GitHubAdapter, createOctokitGithubApiClient } from "../../adapters/index.js";
 import {
   buildRiskReport,
-  loadScoringConfigFromMergeRiskYaml,
+  loadMergeRiskRepositoryYaml,
   MergeRiskConfigError,
   score,
 } from "../../core/index.js";
 import type { BuildRiskReportOptions } from "../../core/report.types.js";
+import type { MergeRiskAutoMergeConfig } from "../../core/types.js";
 
-const defaultMergeRiskReportPolicy = (): BuildRiskReportOptions => ({
+const buildMergeRiskReportOptionsFromAutoMergeConfig = (
+  autoMerge: MergeRiskAutoMergeConfig | undefined,
+): BuildRiskReportOptions => ({
   failOnHigh: false,
-  /** Native auto-merge wiring is slice 09; keep policy off in the Action until then. */
-  autoMergePolicy: { enabled: false, maxEligibleTier: "LOW" },
+  autoMergePolicy:
+    autoMerge === undefined
+      ? { enabled: false, maxEligibleTier: "LOW" }
+      : { enabled: true, maxEligibleTier: autoMerge.maxEligibleTier },
   nativeAutoMergeSupported: true,
 });
 
@@ -192,15 +198,17 @@ export const runMergeRiskGithubAction = async (): Promise<void> => {
     return;
   }
 
-  let scoringConfig;
+  let mergeRiskRepositoryYaml;
   try {
-    scoringConfig = loadScoringConfigFromMergeRiskYaml(mergeRiskYamlText);
+    mergeRiskRepositoryYaml = loadMergeRiskRepositoryYaml(mergeRiskYamlText);
   } catch (cause: unknown) {
     if (cause instanceof MergeRiskConfigError) {
       throw new Error(`Invalid merge-risk config: ${cause.message}`, { cause });
     }
     throw cause;
   }
+
+  const { scoringConfig, autoMerge } = mergeRiskRepositoryYaml;
 
   const githubApiClient = createOctokitGithubApiClient(octokit);
 
@@ -213,8 +221,17 @@ export const runMergeRiskGithubAction = async (): Promise<void> => {
 
   const pullRequestContext = await githubAdapter.buildContext();
   const scoreResult = score(pullRequestContext, scoringConfig);
-  const riskReport = buildRiskReport(scoreResult, defaultMergeRiskReportPolicy());
+  const riskReport = buildRiskReport(
+    scoreResult,
+    buildMergeRiskReportOptionsFromAutoMergeConfig(autoMerge),
+  );
   await githubAdapter.writeResult(riskReport);
+
+  if (riskReport.autoMergeOutcome === "eligible") {
+    const mergeMethod = autoMerge?.method ?? "squash";
+    const nativeAutoMergeOutcome = await githubAdapter.enableAutoMerge(mergeMethod);
+    info(`Brindle native auto-merge outcome: ${nativeAutoMergeOutcome}.`);
+  }
 
   info(
     `Brindle merge risk finished (tier=${scoreResult.tier}, score=${String(scoreResult.score)}, check=${riskReport.checkConclusion}).`,

@@ -31354,7 +31354,7 @@ module.exports = {
 __nccwpck_require__.a(module, async (__webpack_handle_async_dependencies__, __webpack_async_result__) => { try {
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0__ = __nccwpck_require__(7484);
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__nccwpck_require__.n(_actions_core__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(2538);
+/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(2611);
 /**
  * GitHub Actions entry: scores the pull request from base-branch config and publishes results.
  *
@@ -31375,7 +31375,7 @@ __webpack_async_result__();
 
 /***/ }),
 
-/***/ 2538:
+/***/ 2611:
 /***/ ((__unused_webpack_module, __webpack_exports__, __nccwpck_require__) => {
 
 
@@ -32132,7 +32132,7 @@ function dist_bundle_withDefaults(oldEndpoint, newDefaults) {
 var request = dist_bundle_withDefaults(endpoint, defaults_default);
 
 
-;// CONCATENATED MODULE: ./node_modules/@octokit/graphql/dist-bundle/index.js
+;// CONCATENATED MODULE: ./node_modules/@octokit/core/node_modules/@octokit/graphql/dist-bundle/index.js
 // pkg/dist-src/index.js
 
 
@@ -35375,12 +35375,140 @@ const dist_src_Octokit = Octokit.plugin(requestLog, legacyRestEndpointMethods, p
 );
 
 
+;// CONCATENATED MODULE: ./node_modules/@octokit/graphql/dist-bundle/index.js
+// pkg/dist-src/index.js
+
+
+
+// pkg/dist-src/version.js
+var _octokit_graphql_dist_bundle_VERSION = "0.0.0-development";
+
+// pkg/dist-src/with-defaults.js
+
+
+// pkg/dist-src/graphql.js
+
+
+// pkg/dist-src/error.js
+function dist_bundle_buildMessageForResponseErrors(data) {
+  return `Request failed due to following response errors:
+` + data.errors.map((e) => ` - ${e.message}`).join("\n");
+}
+var dist_bundle_GraphqlResponseError = class extends Error {
+  constructor(request2, headers, response) {
+    super(dist_bundle_buildMessageForResponseErrors(response));
+    this.request = request2;
+    this.headers = headers;
+    this.response = response;
+    this.errors = response.errors;
+    this.data = response.data;
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, this.constructor);
+    }
+  }
+  name = "GraphqlResponseError";
+  errors;
+  data;
+};
+
+// pkg/dist-src/graphql.js
+var dist_bundle_NON_VARIABLE_OPTIONS = [
+  "method",
+  "baseUrl",
+  "url",
+  "headers",
+  "request",
+  "query",
+  "mediaType"
+];
+var dist_bundle_FORBIDDEN_VARIABLE_OPTIONS = ["query", "method", "url"];
+var dist_bundle_GHES_V3_SUFFIX_REGEX = /\/api\/v3\/?$/;
+function dist_bundle_graphql(request2, query, options) {
+  if (options) {
+    if (typeof query === "string" && "query" in options) {
+      return Promise.reject(
+        new Error(`[@octokit/graphql] "query" cannot be used as variable name`)
+      );
+    }
+    for (const key in options) {
+      if (!dist_bundle_FORBIDDEN_VARIABLE_OPTIONS.includes(key))
+        continue;
+      return Promise.reject(
+        new Error(
+          `[@octokit/graphql] "${key}" cannot be used as variable name`
+        )
+      );
+    }
+  }
+  const parsedOptions = typeof query === "string" ? Object.assign({ query }, options) : query;
+  const requestOptions = Object.keys(
+    parsedOptions
+  ).reduce((result, key) => {
+    if (dist_bundle_NON_VARIABLE_OPTIONS.includes(key)) {
+      result[key] = parsedOptions[key];
+      return result;
+    }
+    if (!result.variables) {
+      result.variables = {};
+    }
+    result.variables[key] = parsedOptions[key];
+    return result;
+  }, {});
+  const baseUrl = parsedOptions.baseUrl || request2.endpoint.DEFAULTS.baseUrl;
+  if (dist_bundle_GHES_V3_SUFFIX_REGEX.test(baseUrl)) {
+    requestOptions.url = baseUrl.replace(dist_bundle_GHES_V3_SUFFIX_REGEX, "/api/graphql");
+  }
+  return request2(requestOptions).then((response) => {
+    if (response.data.errors) {
+      const headers = {};
+      for (const key of Object.keys(response.headers)) {
+        headers[key] = response.headers[key];
+      }
+      throw new dist_bundle_GraphqlResponseError(
+        requestOptions,
+        headers,
+        response.data
+      );
+    }
+    return response.data.data;
+  });
+}
+
+// pkg/dist-src/with-defaults.js
+function _octokit_graphql_dist_bundle_withDefaults(request2, newDefaults) {
+  const newRequest = request2.defaults(newDefaults);
+  const newApi = (query, options) => {
+    return dist_bundle_graphql(newRequest, query, options);
+  };
+  return Object.assign(newApi, {
+    defaults: _octokit_graphql_dist_bundle_withDefaults.bind(null, newRequest),
+    endpoint: newRequest.endpoint
+  });
+}
+
+// pkg/dist-src/index.js
+var dist_bundle_graphql2 = _octokit_graphql_dist_bundle_withDefaults(request, {
+  headers: {
+    "user-agent": `octokit-graphql.js/${_octokit_graphql_dist_bundle_VERSION} ${getUserAgent()}`
+  },
+  method: "POST",
+  url: "/graphql"
+});
+function dist_bundle_withCustomRequest(customRequest) {
+  return _octokit_graphql_dist_bundle_withDefaults(customRequest, {
+    method: "POST",
+    url: "/graphql"
+  });
+}
+
+
 ;// CONCATENATED MODULE: ./adapters/github/octokitGithubApiClient.ts
 /**
  * {@link GitHubApiClient} backed by `@octokit/rest` (reads for context, check runs and PR comments for results).
  *
  * @see docs/adrs/0007-platform-adapter-boundary.md
  */
+
 
 /** GitHub `checks` API `output.summary` maximum length (characters). */
 const GITHUB_CHECK_RUN_OUTPUT_SUMMARY_MAX_CHARS = 65535;
@@ -35392,7 +35520,24 @@ const truncateCheckRunSummaryMarkdown = (markdown) => {
     const headLength = GITHUB_CHECK_RUN_OUTPUT_SUMMARY_MAX_CHARS - suffix.length;
     return `${markdown.slice(0, Math.max(0, headLength))}${suffix}`;
 };
+const ENABLE_PULL_REQUEST_AUTO_MERGE_MUTATION = `
+mutation EnablePullRequestAutoMerge($pullRequestId: ID!, $mergeMethod: PullRequestMergeMethod!) {
+  enablePullRequestAutoMerge(input: { pullRequestId: $pullRequestId, mergeMethod: $mergeMethod }) {
+    pullRequest {
+      id
+    }
+  }
+}
+`;
+const mergeMethodToGithubGraphQlEnum = (mergeMethod) => {
+    if (mergeMethod === "merge")
+        return "MERGE";
+    if (mergeMethod === "rebase")
+        return "REBASE";
+    return "SQUASH";
+};
 const toPullSnapshot = (data) => ({
+    pullRequestNodeId: typeof data.node_id === "string" ? data.node_id : "",
     headSha: data.head.sha,
     baseRefName: data.base.ref,
     authorLogin: data.user?.login ?? "unknown",
@@ -35449,6 +35594,16 @@ const createOctokitGithubApiClient = (octokit) => ({
             body: input.body,
         });
     },
+    async enableNativePullRequestAutoMerge(input) {
+        if (input.pullRequestNodeId === "") {
+            throw new Error("enableNativePullRequestAutoMerge requires pullRequestNodeId (GitHub REST pull `node_id`).");
+        }
+        const graphqlWithOctokitRequest = dist_bundle_withCustomRequest(octokit.request);
+        await graphqlWithOctokitRequest(ENABLE_PULL_REQUEST_AUTO_MERGE_MUTATION, {
+            pullRequestId: input.pullRequestNodeId,
+            mergeMethod: mergeMethodToGithubGraphQlEnum(input.mergeMethod),
+        });
+    },
 });
 
 ;// CONCATENATED MODULE: ./adapters/github/mapGitHubPullToPrContext.ts
@@ -35486,14 +35641,37 @@ const mapGitHubPullAndFilesToPRContext = (repositoryOwner, repositoryName, pullR
 };
 
 ;// CONCATENATED MODULE: ./adapters/github/GitHubAdapter.ts
+/**
+ * GitHub implementation of {@link PlatformAdapter}: hydrates {@link PRContext} from the REST API.
+ *
+ * @see docs/adrs/0001-no-pr-head-execution.md
+ * @see docs/adrs/0002-native-auto-merge.md
+ * @see docs/adrs/0007-platform-adapter-boundary.md
+ */
 
+
+const mapGithubNativeAutoMergeFailureToOutcome = (cause) => {
+    if (cause instanceof dist_bundle_GraphqlResponseError) {
+        return "setting_off";
+    }
+    if (cause instanceof Error) {
+        const lowered = cause.message.toLowerCase();
+        if (lowered.includes("403") || lowered.includes("401")) {
+            return "setting_off";
+        }
+    }
+    throw cause;
+};
 class GitHubAdapter {
     githubAdapterDependencies;
     /** Set in {@link GitHubAdapter.buildContext} for {@link GitHubAdapter.writeResult} (check run `head_sha`). */
     lastPullRequestHeadSha;
+    /** Set in {@link GitHubAdapter.buildContext} for {@link GitHubAdapter.enableAutoMerge} (GraphQL `pullRequestId`). */
+    lastPullRequestNodeId;
     constructor(githubAdapterDependencies) {
         this.githubAdapterDependencies = githubAdapterDependencies;
         this.lastPullRequestHeadSha = undefined;
+        this.lastPullRequestNodeId = undefined;
     }
     async buildContext() {
         const pullRequestLookup = {
@@ -35504,6 +35682,7 @@ class GitHubAdapter {
         const { githubApiClient } = this.githubAdapterDependencies;
         const pullSnapshot = await githubApiClient.getPullRequest(pullRequestLookup);
         this.lastPullRequestHeadSha = pullSnapshot.headSha;
+        this.lastPullRequestNodeId = pullSnapshot.pullRequestNodeId;
         const fileSnapshots = await githubApiClient.listPullRequestFiles(pullRequestLookup);
         return mapGitHubPullAndFilesToPRContext(pullRequestLookup.repositoryOwner, pullRequestLookup.repositoryName, pullRequestLookup.pullRequestNumber, pullSnapshot, fileSnapshots);
     }
@@ -35533,8 +35712,25 @@ class GitHubAdapter {
             });
         }
     }
-    async enableAutoMerge(_method) {
-        throw new Error("GitHubAdapter.enableAutoMerge is not implemented yet (slice 09).");
+    async enableAutoMerge(method) {
+        const pullRequestNodeId = this.lastPullRequestNodeId;
+        if (pullRequestNodeId === undefined || pullRequestNodeId === "") {
+            throw new Error("GitHubAdapter.enableAutoMerge requires buildContext() first and a non-empty pull request node_id from GitHub.");
+        }
+        const { githubApiClient, repositoryOwner, repositoryName, pullRequestNumber } = this.githubAdapterDependencies;
+        try {
+            await githubApiClient.enableNativePullRequestAutoMerge({
+                repositoryOwner,
+                repositoryName,
+                pullRequestNumber,
+                pullRequestNodeId,
+                mergeMethod: method,
+            });
+            return "enabled";
+        }
+        catch (cause) {
+            return mapGithubNativeAutoMergeFailureToOutcome(cause);
+        }
     }
 }
 
@@ -39671,7 +39867,7 @@ var jsYaml = {
 
 
 ;// CONCATENATED MODULE: ./schema/merge-risk-config.schema.json
-const merge_risk_config_schema_namespaceObject = /*#__PURE__*/JSON.parse('{"$schema":"http://json-schema.org/draft-07/schema#","$id":"https://brindle.dev/schema/merge-risk-config.schema.json","title":"Merge risk scoring config (subset)","description":"YAML shape under .merge-risk.yml consumed by the scorer. Additional top-level keys are allowed for forward compatibility.","type":"object","required":["thresholds","criteria"],"additionalProperties":true,"properties":{"thresholds":{"type":"object","required":["low","medium"],"additionalProperties":true,"properties":{"low":{"type":"number"},"medium":{"type":"number"}}},"criteria":{"type":"object","additionalProperties":{"type":"object","required":["weight"],"additionalProperties":true,"properties":{"enabled":{"type":"boolean"},"weight":{"type":"number"},"options":{}}}},"mutators":{"type":"object","additionalProperties":{"type":"object","additionalProperties":true,"properties":{"enabled":{"type":"boolean"},"options":{}}}}}}');
+const merge_risk_config_schema_namespaceObject = /*#__PURE__*/JSON.parse('{"$schema":"http://json-schema.org/draft-07/schema#","$id":"https://brindle.dev/schema/merge-risk-config.schema.json","title":"Merge risk scoring config (subset)","description":"YAML shape under .merge-risk.yml consumed by the scorer. Additional top-level keys are allowed for forward compatibility.","type":"object","required":["thresholds","criteria"],"additionalProperties":true,"properties":{"thresholds":{"type":"object","required":["low","medium"],"additionalProperties":true,"properties":{"low":{"type":"number"},"medium":{"type":"number"}}},"criteria":{"type":"object","additionalProperties":{"type":"object","required":["weight"],"additionalProperties":true,"properties":{"enabled":{"type":"boolean"},"weight":{"type":"number"},"options":{}}}},"mutators":{"type":"object","additionalProperties":{"type":"object","additionalProperties":true,"properties":{"enabled":{"type":"boolean"},"options":{}}}},"auto_merge":{"type":"object","additionalProperties":true,"properties":{"enabled":{"type":"boolean"},"tier":{"type":"string"},"method":{"type":"string"}}}}}');
 ;// CONCATENATED MODULE: ./core/config.ts
 /**
  * Parse `.merge-risk.yml` (or equivalent) into a {@link ScoringConfig} using JSON Schema validation.
@@ -39738,10 +39934,68 @@ const ensureRootMapping = (parsedDocument) => {
  */
 const assertValidScoringConfig = (parsedDocument) => {
     const rootMapping = ensureRootMapping(parsedDocument);
+    return splitValidatedMergeRiskRootMapping(rootMapping).scoringConfig;
+};
+const mergeRiskTierYamlToScoreTier = (tierRaw) => {
+    const normalized = tierRaw.trim().toLowerCase();
+    if (normalized === "low")
+        return "LOW";
+    if (normalized === "medium")
+        return "MEDIUM";
+    if (normalized === "high")
+        return "HIGH";
+    throw new MergeRiskConfigError(`auto_merge.tier must be low, medium, or high (got ${JSON.stringify(tierRaw)}).`);
+};
+const mergeMethodFromYamlString = (methodRaw) => {
+    const normalized = methodRaw.trim().toLowerCase();
+    if (normalized === "squash" || normalized === "merge" || normalized === "rebase") {
+        return normalized;
+    }
+    throw new MergeRiskConfigError(`auto_merge.method must be squash, merge, or rebase (got ${JSON.stringify(methodRaw)}).`);
+};
+/** Parses optional `auto_merge` from a parsed root mapping (defensive checks for non-object shapes). */
+const parseMergeRiskAutoMergeSection = (rootMapping) => {
+    const raw = rootMapping.auto_merge;
+    if (raw === undefined || raw === null) {
+        return undefined;
+    }
+    if (typeof raw !== "object" || Array.isArray(raw)) {
+        throw new MergeRiskConfigError("auto_merge must be a YAML mapping when present.");
+    }
+    const mapping = raw;
+    if (mapping.enabled !== true) {
+        return undefined;
+    }
+    const tierRaw = mapping.tier;
+    const methodRaw = mapping.method;
+    if (typeof tierRaw !== "string" || typeof methodRaw !== "string") {
+        throw new MergeRiskConfigError("When auto_merge.enabled is true, tier and method must be strings.");
+    }
+    return {
+        enabled: true,
+        maxEligibleTier: mergeRiskTierYamlToScoreTier(tierRaw),
+        method: mergeMethodFromYamlString(methodRaw),
+    };
+};
+const splitValidatedMergeRiskRootMapping = (rootMapping) => {
     if (!validateParsedMergeRiskConfig(rootMapping)) {
         throw new MergeRiskConfigError(`Config failed schema validation: ${formatAjvErrors(validateParsedMergeRiskConfig.errors)}`);
     }
-    return rootMapping;
+    const autoMerge = parseMergeRiskAutoMergeSection(rootMapping);
+    return {
+        scoringConfig: rootMapping,
+        autoMerge,
+    };
+};
+/**
+ * Parses and validates a full `.merge-risk.yml` document from the base branch: scoring plus optional `auto_merge`.
+ *
+ * @param mergeRiskYamlText - Full file contents from the base ref (ADR 0001).
+ */
+const loadMergeRiskRepositoryYaml = (mergeRiskYamlText) => {
+    const parsedDocument = parseMergeRiskYamlDocument(mergeRiskYamlText);
+    const rootMapping = ensureRootMapping(parsedDocument);
+    return splitValidatedMergeRiskRootMapping(rootMapping);
 };
 /**
  * Parses YAML and returns a {@link ScoringConfig} ready for {@link score}.
@@ -39749,10 +40003,7 @@ const assertValidScoringConfig = (parsedDocument) => {
  * @param mergeRiskYamlText - Full `.merge-risk.yml` (or fragment) text from the base branch.
  * @returns Validated scoring configuration.
  */
-const loadScoringConfigFromMergeRiskYaml = (mergeRiskYamlText) => {
-    const parsedDocument = parseMergeRiskYamlDocument(mergeRiskYamlText);
-    return assertValidScoringConfig(parsedDocument);
-};
+const loadScoringConfigFromMergeRiskYaml = (mergeRiskYamlText) => loadMergeRiskRepositoryYaml(mergeRiskYamlText).scoringConfig;
 
 ;// CONCATENATED MODULE: ./core/report.ts
 const numericRiskRankForTier = (riskTier) => {
@@ -39862,7 +40113,7 @@ const buildRiskReport = (scoreResult, reportOptions) => ({
  * - **`BRINDLE_VERSION`** — package semver string.
  * - **Re-exports** from `./types.js` — neutral domain types (`PRContext`, `ScoringConfig`, …).
  * - **`score`** — entrypoint for deterministic merge-risk scoring (see `./scorer.js`).
- * - **`loadScoringConfigFromMergeRiskYaml`** — parse and validate `.merge-risk.yml` (see `./config.js`).
+ * - **`loadScoringConfigFromMergeRiskYaml`** / **`loadMergeRiskRepositoryYaml`** — parse and validate `.merge-risk.yml` (see `./config.js`).
  * - **`buildRiskReport`** — neutral comment + check + auto-merge metadata from a score (see `./report.js`).
  *
  * Pipeline-only types (`scorer.types.ts`, per-criterion `*.types.ts`) stay out of the barrel; **`BuildRiskReportOptions`** is exported for report policy wiring.
@@ -39880,16 +40131,18 @@ const BRINDLE_VERSION = "0.0.0";
  * Loads merge-risk config from the PR base ref (Contents API), scores, then writes check + comment.
  *
  * @see docs/adrs/0001-no-pr-head-execution.md
+ * @see docs/adrs/0002-native-auto-merge.md
  */
 
 
 
 
 
-const defaultMergeRiskReportPolicy = () => ({
+const buildMergeRiskReportOptionsFromAutoMergeConfig = (autoMerge) => ({
     failOnHigh: false,
-    /** Native auto-merge wiring is slice 09; keep policy off in the Action until then. */
-    autoMergePolicy: { enabled: false, maxEligibleTier: "LOW" },
+    autoMergePolicy: autoMerge === undefined
+        ? { enabled: false, maxEligibleTier: "LOW" }
+        : { enabled: true, maxEligibleTier: autoMerge.maxEligibleTier },
     nativeAutoMergeSupported: true,
 });
 const parseGithubRepositorySlug = (githubRepositoryEnvironmentValue) => {
@@ -40017,9 +40270,9 @@ const runMergeRiskGithubAction = async () => {
             "Merge that file to the default branch to enable scoring; this run exited successfully because skip_when_merge_risk_missing_on_base is true.");
         return;
     }
-    let scoringConfig;
+    let mergeRiskRepositoryYaml;
     try {
-        scoringConfig = loadScoringConfigFromMergeRiskYaml(mergeRiskYamlText);
+        mergeRiskRepositoryYaml = loadMergeRiskRepositoryYaml(mergeRiskYamlText);
     }
     catch (cause) {
         if (cause instanceof MergeRiskConfigError) {
@@ -40027,6 +40280,7 @@ const runMergeRiskGithubAction = async () => {
         }
         throw cause;
     }
+    const { scoringConfig, autoMerge } = mergeRiskRepositoryYaml;
     const githubApiClient = createOctokitGithubApiClient(octokit);
     const githubAdapter = new GitHubAdapter({
         githubApiClient,
@@ -40036,8 +40290,13 @@ const runMergeRiskGithubAction = async () => {
     });
     const pullRequestContext = await githubAdapter.buildContext();
     const scoreResult = score(pullRequestContext, scoringConfig);
-    const riskReport = buildRiskReport(scoreResult, defaultMergeRiskReportPolicy());
+    const riskReport = buildRiskReport(scoreResult, buildMergeRiskReportOptionsFromAutoMergeConfig(autoMerge));
     await githubAdapter.writeResult(riskReport);
+    if (riskReport.autoMergeOutcome === "eligible") {
+        const mergeMethod = autoMerge?.method ?? "squash";
+        const nativeAutoMergeOutcome = await githubAdapter.enableAutoMerge(mergeMethod);
+        (0,core.info)(`Brindle native auto-merge outcome: ${nativeAutoMergeOutcome}.`);
+    }
     (0,core.info)(`Brindle merge risk finished (tier=${scoreResult.tier}, score=${String(scoreResult.score)}, check=${riskReport.checkConclusion}).`);
 };
 
