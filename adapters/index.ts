@@ -3,6 +3,8 @@ export { GitHubAdapter } from "./github/GitHubAdapter.js";
 export { createOctokitGithubApiClient } from "./github/octokitGithubApiClient.js";
 export { mapGitHubPullAndFilesToPRContext } from "./github/mapGitHubPullToPrContext.js";
 export type {
+  CreateMergeRiskCheckRunInput,
+  CreatePullRequestCommentInput,
   GitHubAdapterDependencies,
   GitHubApiClient,
   GitHubPullFileSnapshot,
