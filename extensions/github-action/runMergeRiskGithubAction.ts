@@ -3,7 +3,7 @@
  *
  * @see docs/adrs/0001-no-pr-head-execution.md
  */
-import { getInput, info } from "@actions/core";
+import { getBooleanInput, getInput, info } from "@actions/core";
 import { readFile } from "node:fs/promises";
 
 import { Octokit } from "@octokit/rest";
@@ -101,14 +101,31 @@ const decodeGithubContentsApiFileBody = (
   return Buffer.from(normalizedBase64, "base64").toString("utf8");
 };
 
+const isGithubContentsApiNotFoundError = (error: unknown): boolean => {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+  const maybeStatus = (error as { status?: unknown }).status;
+  return maybeStatus === 404;
+};
+
 const fetchMergeRiskYamlTextFromGithubBaseRef = async (options: {
   octokit: Octokit;
   repositoryOwner: string;
   repositoryName: string;
   baseRefName: string;
   mergeRiskFilePath: string;
-}): Promise<string> => {
-  const { octokit, repositoryOwner, repositoryName, baseRefName, mergeRiskFilePath } = options;
+  /** When true, a missing file on the base ref returns `null` instead of throwing (ADR 0001 still holds: nothing is read from the PR head). */
+  skipWhenMergeRiskFileMissingOnBase: boolean;
+}): Promise<string | null> => {
+  const {
+    octokit,
+    repositoryOwner,
+    repositoryName,
+    baseRefName,
+    mergeRiskFilePath,
+    skipWhenMergeRiskFileMissingOnBase,
+  } = options;
   try {
     const { data } = await octokit.rest.repos.getContent({
       owner: repositoryOwner,
@@ -118,10 +135,14 @@ const fetchMergeRiskYamlTextFromGithubBaseRef = async (options: {
     });
     return decodeGithubContentsApiFileBody(data, mergeRiskFilePath);
   } catch (cause: unknown) {
+    if (skipWhenMergeRiskFileMissingOnBase && isGithubContentsApiNotFoundError(cause)) {
+      return null;
+    }
     const message = cause instanceof Error ? cause.message : String(cause);
     throw new Error(
       `Could not load ${mergeRiskFilePath} from base ref "${baseRefName}" (${message}). ` +
-        "Add the file on the default branch / base ref (see ADR 0001).",
+        "Add the file on the default branch / base ref (see ADR 0001). " +
+        "If this pull request only adds the file, set input skip_when_merge_risk_missing_on_base to true until the base branch has it, or merge the config in an earlier change.",
       { cause },
     );
   }
@@ -146,13 +167,13 @@ export const runMergeRiskGithubAction = async (): Promise<void> => {
   const githubToken = resolveGithubAuthTokenFromActionInputs();
   const mergeRiskFilePath =
     getInput("merge_risk_file_path") === "" ? ".merge-risk.yml" : getInput("merge_risk_file_path");
+  const skipWhenMergeRiskFileMissingOnBase = getBooleanInput("skip_when_merge_risk_missing_on_base");
 
   const { repositoryOwner, repositoryName } = parseGithubRepositorySlug(process.env.GITHUB_REPOSITORY);
   const githubEventPayload = await readGithubEventPayloadFromRunner();
   const { pullRequestNumber, baseRefName } = readPullRequestNumberAndBaseRefFromEvent(githubEventPayload);
 
   const octokit = new Octokit({ auth: githubToken });
-  const githubApiClient = createOctokitGithubApiClient(octokit);
 
   const mergeRiskYamlText = await fetchMergeRiskYamlTextFromGithubBaseRef({
     octokit,
@@ -160,7 +181,16 @@ export const runMergeRiskGithubAction = async (): Promise<void> => {
     repositoryName,
     baseRefName,
     mergeRiskFilePath,
+    skipWhenMergeRiskFileMissingOnBase,
   });
+
+  if (mergeRiskYamlText === null) {
+    info(
+      `Brindle skipped: "${mergeRiskFilePath}" is not on base ref "${baseRefName}" yet (Contents API 404). ` +
+        "Merge that file to the default branch to enable scoring; this run exited successfully because skip_when_merge_risk_missing_on_base is true.",
+    );
+    return;
+  }
 
   let scoringConfig;
   try {
@@ -171,6 +201,8 @@ export const runMergeRiskGithubAction = async (): Promise<void> => {
     }
     throw cause;
   }
+
+  const githubApiClient = createOctokitGithubApiClient(octokit);
 
   const githubAdapter = new GitHubAdapter({
     githubApiClient,

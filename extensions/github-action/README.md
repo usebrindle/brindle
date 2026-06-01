@@ -32,8 +32,12 @@ permissions:
   pull-requests: write
 ```
 
-Use `uses: ./extensions/github-action` (path) or, once published, `uses: usebrindle/brindle/path/to/action@vX`.
+Use `uses: ./extensions/github-action` (path) or, once published, `uses: usebrindle/brindle/extensions/github-action@vX` once tags exist.
+
+### Bootstrap: config not on the default branch yet
+
+The Contents API always reads **`merge_risk_file_path` from the pull request base ref**. If that file is not on `main` yet (for example the same PR introduces it), set **`skip_when_merge_risk_missing_on_base: true`** so the job succeeds with an explanatory log until the file is merged. Defaults to **`false`** so a missing file fails loudly when you expect Brindle to always run. This does **not** read YAML from the PR head (ADR 0001).
 
 ## First-time enablement
 
-The Contents API reads config from the **base** ref of the pull request. If `.merge-risk.yml` is not yet on the default branch, the merge-risk job fails until that file exists on `main` (for example merge a config-only change first, or expect one red run on the introducing PR).
+After `.merge-risk.yml` exists on the default branch, omit **`skip_when_merge_risk_missing_on_base`** or set it to **`false`** so a missing or mistyped config path fails the job again.
