@@ -80,7 +80,8 @@ out
 
 # Nuxt.js build / generate output
 .nuxt
-dist
+# Root-level dist only; the GitHub Action ships a committed bundle under extensions/github-action/dist/
+/dist
 .output
 
 # Gatsby files

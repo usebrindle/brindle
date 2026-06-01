@@ -13,7 +13,7 @@
 
 </div>
 
-> **Status … early development.** The scoring engine is being built in the open. The install and output below show where Brindle is headed. It does not yet score live pull requests. Watch or star the repo to follow along, and see the [design docs](docs/designs/) and [ADRs](docs/adrs/) for the thinking behind it.
+> **Status … early development.** The scoring engine and GitHub Action path (`extensions/github-action`) run on pull requests when `.merge-risk.yml` is on the base branch. Native auto-merge is not wired yet (slice 09). Watch or star the repo to follow along, and see the [design docs](docs/designs/) and [ADRs](docs/adrs/) for the thinking behind it.
 
 ---
 
@@ -38,27 +38,43 @@ Add a workflow and a config file. That is the whole install.
 
 ```yaml
 # .github/workflows/merge-risk.yml
-name: Merge Risk Check
+name: Merge risk
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
 
 jobs:
-  risk-check:
+  brindle:
     runs-on: ubuntu-latest
     permissions:
-      pull-requests: write
+      contents: read
       checks: write
-      # contents: write  # add when auto_merge is enabled (see LLD + ADR 0002)
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
+      - uses: ./extensions/github-action
         with:
-          ref: ${{ github.base_ref }}
-      - uses: usebrindle/brindle@v1
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
+For a published version, replace the path with `uses: usebrindle/brindle/extensions/github-action@vX` once tags exist.
+
 ```yaml
-# .merge-risk.yml
+# .merge-risk.yml (on your default branch / PR base ref)
+thresholds:
+  low: 30
+  medium: 60
+
+criteria:
+  diff_size:
+    weight: 100
+    options:
+      max_lines_for_cap: 200
+```
+
+The example below shows additional criteria planned in the LLD; only built-ins shipped in this repo apply today.
+
+```yaml
+# .merge-risk.yml — fuller example (criteria beyond diff_size ship over time)
 thresholds:
   low: 30
   medium: 60
@@ -119,8 +135,8 @@ Result … human review recommended, change touches authentication paths.
 
 ## Roadmap
 
-- [ ] Core scoring engine
-- [ ] GitHub Action … score, comment, check run
+- [x] Core scoring engine
+- [x] GitHub Action … score, comment, check run (path action + committed `ncc` bundle)
 - [ ] Native auto-merge on low-risk changes
 - [ ] Coverage formats … Istanbul, then lcov and Cobertura
 - [ ] GitLab CI component
