@@ -124,6 +124,7 @@ export type MergeMethod = "squash" | "merge" | "rebase";
 export type AutoMergeOutcome =
   | "skipped"        // disabled in config
   | "not_eligible"   // tier riskier than configured
+  | "eligible"       // core: adapter should attempt enable (replaced after mutation)
   | "enabled"        // native auto-merge turned on
   | "unsupported"    // platform has no native auto-merge
   | "setting_off";   // platform setting disallows it

@@ -14,6 +14,7 @@ export default defineConfig({
         "core/types.ts",
         "core/scorer.types.ts",
         "core/criteria/diffSize.types.ts",
+        "core/report.types.ts",
         "**/*.config.ts",
       ],
     },

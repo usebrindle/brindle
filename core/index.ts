@@ -5,8 +5,9 @@
  * - **Re-exports** from `./types.js` — neutral domain types (`PRContext`, `ScoringConfig`, …).
  * - **`score`** — entrypoint for deterministic merge-risk scoring (see `./scorer.js`).
  * - **`loadScoringConfigFromMergeRiskYaml`** — parse and validate `.merge-risk.yml` (see `./config.js`).
+ * - **`buildRiskReport`** — neutral comment + check + auto-merge metadata from a score (see `./report.js`).
  *
- * Pipeline-only types (`scorer.types.ts`, per-criterion `*.types.ts`) are not re-exported here.
+ * Pipeline-only types (`scorer.types.ts`, per-criterion `*.types.ts`) stay out of the barrel; **`BuildRiskReportOptions`** is exported for report policy wiring.
  *
  * @see docs/designs/lld-merge-risk-classifier.md
  */
@@ -20,3 +21,9 @@ export {
   MergeRiskConfigError,
   parseMergeRiskYamlDocument,
 } from "./config.js";
+export {
+  buildMergeRiskCommentMarkdown,
+  buildRiskReport,
+  checkConclusionForTier,
+} from "./report.js";
+export type { BuildRiskReportOptions } from "./report.types.js";
