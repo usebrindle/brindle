@@ -6,3 +6,9 @@ criteria:
     weight: 100
     options:
       max_lines_for_cap: 200
+
+# Optional native auto-merge (ADR 0002). Requires workflow `contents: write` and repo auto-merge enabled.
+# auto_merge:
+#   enabled: true
+#   tier: low
+#   method: squash
