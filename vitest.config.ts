@@ -7,13 +7,14 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "lcov"],
       reportsDirectory: "coverage",
-      /** Executable core sources; `adapters/` is type-only until implementations land. */
-      include: ["core/**/*.ts"],
+      /** Executable `core/` and `adapters/` sources; type-only modules excluded below. */
+      include: ["core/**/*.ts", "adapters/**/*.ts"],
       exclude: [
         "**/node_modules/**",
         "core/types.ts",
         "core/scorer.types.ts",
         "core/criteria/diffSize.types.ts",
+        "adapters/github/githubAdapter.types.ts",
         "core/report.types.ts",
         "**/*.config.ts",
       ],
