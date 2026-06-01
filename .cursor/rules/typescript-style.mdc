@@ -12,6 +12,7 @@ When changing TypeScript in this repo:
 - **Short bodies**: aim for about **ten lines or fewer** of real logic per function; when a function grows, extract a helper instead of nesting more control flow.
 - Prefer **`const` arrow functions** at module scope unless hoisting, `this` binding, or `function*` genuinely reads clearer.
 - **Layering**: do not add platform SDKs (`@actions/*`, Octokit, etc.) under `core/`. Platform code stays in `adapters/` and `extensions/` (see ADR 0007 and [CONTRIBUTING.md](CONTRIBUTING.md)).
+- **Types next to logic**: do not put `export type` / `export interface` for a module’s config or pipeline shapes in the same file as its runtime implementation. Use a sibling **`*.types.ts` with the same stem** (for example `core/criteria/diffSize.ts` + `core/criteria/diffSize.types.ts`, and `core/scorer.ts` + `core/scorer.types.ts`). Keep `core/types.ts` for the **shared** platform-neutral domain model only.
 
 **Documentation:** follow the companion [JSDoc rule](jsdoc.mdc) for exports and public contracts; that matches [CONTRIBUTING.md](CONTRIBUTING.md) § **Documentation (JSDoc)**.
 
