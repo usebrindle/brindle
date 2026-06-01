@@ -33,3 +33,7 @@ Positive. A clean separation of concerns. The Action is the judgment layer. GitH
 Negative. The Action depends on the repo having auto-merge allowed in settings. When it is not allowed, the mutation errors and the Action logs a clear message and continues without enabling. The team must turn the setting on themselves.
 
 Negative. A team that runs auto-merge with no required checks and no branch protection is trusting the score alone. This is a knowing choice and the docs flag it, but the Action cannot prevent it.
+
+## Amendment (2026-05-31)
+
+The neutral `AutoMergeOutcome` union includes **`eligible`**: the core may set this after scoring when policy says native auto-merge **should be attempted**, before any platform API call. The adapter replaces `eligible` with **`enabled`** or **`setting_off`** (or **`unsupported`** on platforms without native auto-merge) once the attempt completes. This keeps `RiskReport` buildable from `ScoreResult` alone in `core/report.ts` while preserving honest post-mutation outcomes.
