@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   assertValidScoringConfig,
+  loadMergeRiskRepositoryYaml,
   loadScoringConfigFromMergeRiskYaml,
   MergeRiskConfigError,
+  parseMergeRiskAutoMergeSection,
   parseMergeRiskYamlDocument,
 } from "../core/config.js";
 import { score } from "../core/index.js";
@@ -109,6 +111,78 @@ criteria:
     weight: "heavy"
 `;
     expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+});
+
+describe("loadMergeRiskRepositoryYaml", () => {
+  it("returns scoring plus auto_merge when enabled", () => {
+    const yamlText = `${minimalValidYaml}
+auto_merge:
+  enabled: true
+  tier: low
+  method: merge
+`;
+    const bundle = loadMergeRiskRepositoryYaml(yamlText);
+    expect(bundle.scoringConfig.criteria.diff_size?.weight).toBe(100);
+    expect(bundle.autoMerge).toEqual({
+      enabled: true,
+      maxEligibleTier: "LOW",
+      method: "merge",
+    });
+  });
+
+  it("omits auto_merge when disabled or absent", () => {
+    expect(loadMergeRiskRepositoryYaml(minimalValidYaml).autoMerge).toBeUndefined();
+    const disabled = `
+${minimalValidYaml}
+auto_merge:
+  enabled: false
+`;
+    expect(loadMergeRiskRepositoryYaml(disabled).autoMerge).toBeUndefined();
+  });
+
+  it("throws when auto_merge.enabled is true but tier is invalid", () => {
+    const yamlText = `
+${minimalValidYaml}
+auto_merge:
+  enabled: true
+  tier: unknown
+  method: squash
+`;
+    expect(() => loadMergeRiskRepositoryYaml(yamlText)).toThrow(/tier/i);
+  });
+});
+
+describe("parseMergeRiskAutoMergeSection", () => {
+  it("returns undefined when auto_merge is absent, null, or disabled", () => {
+    expect(parseMergeRiskAutoMergeSection({})).toBeUndefined();
+    expect(parseMergeRiskAutoMergeSection({ auto_merge: null })).toBeUndefined();
+    expect(parseMergeRiskAutoMergeSection({ auto_merge: { enabled: false } })).toBeUndefined();
+  });
+
+  it("throws when auto_merge is present but not a YAML mapping", () => {
+    expect(() => parseMergeRiskAutoMergeSection({ auto_merge: [] })).toThrow(
+      /auto_merge must be a YAML mapping/,
+    );
+    expect(() => parseMergeRiskAutoMergeSection({ auto_merge: "nope" })).toThrow(
+      /auto_merge must be a YAML mapping/,
+    );
+    expect(() => parseMergeRiskAutoMergeSection({ auto_merge: 1 })).toThrow(
+      /auto_merge must be a YAML mapping/,
+    );
+  });
+
+  it("throws when auto_merge.enabled is true but tier or method is not a string", () => {
+    expect(() =>
+      parseMergeRiskAutoMergeSection({
+        auto_merge: { enabled: true, tier: 1, method: "squash" },
+      }),
+    ).toThrow(/tier and method must be strings/);
+    expect(() =>
+      parseMergeRiskAutoMergeSection({
+        auto_merge: { enabled: true, tier: "low", method: null },
+      }),
+    ).toThrow(/tier and method must be strings/);
   });
 });
 

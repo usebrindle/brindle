@@ -2,13 +2,29 @@
  * GitHub implementation of {@link PlatformAdapter}: hydrates {@link PRContext} from the REST API.
  *
  * @see docs/adrs/0001-no-pr-head-execution.md
+ * @see docs/adrs/0002-native-auto-merge.md
  * @see docs/adrs/0007-platform-adapter-boundary.md
  */
+import { GraphqlResponseError } from "@octokit/graphql";
+
 import type { AutoMergeOutcome, MergeMethod, PRContext, RiskReport } from "../../core/types.js";
 import type { PlatformAdapter } from "../PlatformAdapter.js";
 
 import type { GitHubAdapterDependencies } from "./githubAdapter.types.js";
 import { mapGitHubPullAndFilesToPRContext } from "./mapGitHubPullToPrContext.js";
+
+const mapGithubNativeAutoMergeFailureToOutcome = (cause: unknown): AutoMergeOutcome => {
+  if (cause instanceof GraphqlResponseError) {
+    return "setting_off";
+  }
+  if (cause instanceof Error) {
+    const lowered = cause.message.toLowerCase();
+    if (lowered.includes("403") || lowered.includes("401")) {
+      return "setting_off";
+    }
+  }
+  throw cause;
+};
 
 export class GitHubAdapter implements PlatformAdapter {
   private readonly githubAdapterDependencies: GitHubAdapterDependencies;
@@ -16,9 +32,13 @@ export class GitHubAdapter implements PlatformAdapter {
   /** Set in {@link GitHubAdapter.buildContext} for {@link GitHubAdapter.writeResult} (check run `head_sha`). */
   private lastPullRequestHeadSha: string | undefined;
 
+  /** Set in {@link GitHubAdapter.buildContext} for {@link GitHubAdapter.enableAutoMerge} (GraphQL `pullRequestId`). */
+  private lastPullRequestNodeId: string | undefined;
+
   constructor(githubAdapterDependencies: GitHubAdapterDependencies) {
     this.githubAdapterDependencies = githubAdapterDependencies;
     this.lastPullRequestHeadSha = undefined;
+    this.lastPullRequestNodeId = undefined;
   }
 
   async buildContext(): Promise<PRContext> {
@@ -30,6 +50,7 @@ export class GitHubAdapter implements PlatformAdapter {
     const { githubApiClient } = this.githubAdapterDependencies;
     const pullSnapshot = await githubApiClient.getPullRequest(pullRequestLookup);
     this.lastPullRequestHeadSha = pullSnapshot.headSha;
+    this.lastPullRequestNodeId = pullSnapshot.pullRequestNodeId;
     const fileSnapshots = await githubApiClient.listPullRequestFiles(pullRequestLookup);
     return mapGitHubPullAndFilesToPRContext(
       pullRequestLookup.repositoryOwner,
@@ -70,7 +91,26 @@ export class GitHubAdapter implements PlatformAdapter {
     }
   }
 
-  async enableAutoMerge(_method: MergeMethod): Promise<AutoMergeOutcome> {
-    throw new Error("GitHubAdapter.enableAutoMerge is not implemented yet (slice 09).");
+  async enableAutoMerge(method: MergeMethod): Promise<AutoMergeOutcome> {
+    const pullRequestNodeId = this.lastPullRequestNodeId;
+    if (pullRequestNodeId === undefined || pullRequestNodeId === "") {
+      throw new Error(
+        "GitHubAdapter.enableAutoMerge requires buildContext() first and a non-empty pull request node_id from GitHub.",
+      );
+    }
+    const { githubApiClient, repositoryOwner, repositoryName, pullRequestNumber } =
+      this.githubAdapterDependencies;
+    try {
+      await githubApiClient.enableNativePullRequestAutoMerge({
+        repositoryOwner,
+        repositoryName,
+        pullRequestNumber,
+        pullRequestNodeId,
+        mergeMethod: method,
+      });
+      return "enabled";
+    } catch (cause: unknown) {
+      return mapGithubNativeAutoMergeFailureToOutcome(cause);
+    }
   }
 }

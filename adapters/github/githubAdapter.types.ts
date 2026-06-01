@@ -5,8 +5,12 @@
  * @see docs/adrs/0007-platform-adapter-boundary.md
  */
 
+import type { MergeMethod } from "../../core/types.js";
+
 /** Neutral snapshot of a pull request returned by {@link GitHubApiClient.getPullRequest}. */
 export type GitHubPullSnapshot = {
+  /** GitHub global node ID for GraphQL (e.g. `enablePullRequestAutoMerge`). */
+  pullRequestNodeId: string;
   headSha: string;
   baseRefName: string;
   authorLogin: string;
@@ -51,6 +55,15 @@ export type CreatePullRequestCommentInput = {
   body: string;
 };
 
+/** Input for {@link GitHubApiClient.enableNativePullRequestAutoMerge} (GraphQL `enablePullRequestAutoMerge`). */
+export type EnableNativePullRequestAutoMergeInput = {
+  repositoryOwner: string;
+  repositoryName: string;
+  pullRequestNumber: number;
+  pullRequestNodeId: string;
+  mergeMethod: MergeMethod;
+};
+
 /**
  * Minimal GitHub REST surface for {@link import("./GitHubAdapter.js").GitHubAdapter}: context reads plus publishing merge-risk results.
  */
@@ -59,6 +72,7 @@ export type GitHubApiClient = {
   listPullRequestFiles(lookup: GitHubPullRequestLookup): Promise<GitHubPullFileSnapshot[]>;
   createMergeRiskCheckRun(input: CreateMergeRiskCheckRunInput): Promise<void>;
   createPullRequestComment(input: CreatePullRequestCommentInput): Promise<void>;
+  enableNativePullRequestAutoMerge(input: EnableNativePullRequestAutoMergeInput): Promise<void>;
 };
 
 /**

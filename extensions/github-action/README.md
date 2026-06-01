@@ -23,7 +23,16 @@ CI runs the same command and **`git diff --exit-code extensions/github-action/di
 
 ## Consumer workflow
 
-Minimal permissions for check + comment (native auto-merge is slice 09 and needs extra scopes):
+Permissions depend on whether **native auto-merge** is enabled in `.merge-risk.yml` (`auto_merge.enabled: true` calls GitHub’s `enablePullRequestAutoMerge` mutation; see [ADR 0002](docs/adrs/0002-native-auto-merge.md)):
+
+```yaml
+permissions:
+  contents: write
+  checks: write
+  pull-requests: write
+```
+
+Use **`contents: read`** only when auto-merge stays off (check + comment only).
 
 ```yaml
 permissions:

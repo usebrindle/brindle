@@ -5,6 +5,7 @@ export { mapGitHubPullAndFilesToPRContext } from "./github/mapGitHubPullToPrCont
 export type {
   CreateMergeRiskCheckRunInput,
   CreatePullRequestCommentInput,
+  EnableNativePullRequestAutoMergeInput,
   GitHubAdapterDependencies,
   GitHubApiClient,
   GitHubPullFileSnapshot,

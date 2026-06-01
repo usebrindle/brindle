@@ -39,6 +39,15 @@
           "options": {}
         }
       }
+    },
+    "auto_merge": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "tier": { "type": "string" },
+        "method": { "type": "string" }
+      }
     }
   }
 }
