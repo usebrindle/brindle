@@ -98,7 +98,8 @@ const mergeMethodFromYamlString = (methodRaw: string): MergeMethod => {
   );
 };
 
-const parseMergeRiskAutoMergeSection = (
+/** Parses optional `auto_merge` from a parsed root mapping (defensive checks for non-object shapes). */
+export const parseMergeRiskAutoMergeSection = (
   rootMapping: Record<string, unknown>,
 ): MergeRiskAutoMergeConfig | undefined => {
   const raw = rootMapping.auto_merge;

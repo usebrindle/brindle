@@ -227,6 +227,56 @@ describe("GitHubAdapter.enableAutoMerge", () => {
     });
   });
 
+  it("returns setting_off when enableNativePullRequestAutoMerge fails with HTTP 403 in the message", async () => {
+    const enableNativePullRequestAutoMerge = vi.fn().mockRejectedValue(new Error("Request failed — 403"));
+    const githubAdapter = new GitHubAdapter({
+      githubApiClient: createMockGithubApiClient({ enableNativePullRequestAutoMerge }),
+      repositoryOwner: "acme",
+      repositoryName: "demo",
+      pullRequestNumber: 1,
+    });
+    await githubAdapter.buildContext();
+    await expect(githubAdapter.enableAutoMerge("squash")).resolves.toBe("setting_off");
+  });
+
+  it("returns setting_off when enableNativePullRequestAutoMerge fails with HTTP 401 in the message", async () => {
+    const enableNativePullRequestAutoMerge = vi.fn().mockRejectedValue(new Error("401 Unauthorized"));
+    const githubAdapter = new GitHubAdapter({
+      githubApiClient: createMockGithubApiClient({ enableNativePullRequestAutoMerge }),
+      repositoryOwner: "acme",
+      repositoryName: "demo",
+      pullRequestNumber: 1,
+    });
+    await githubAdapter.buildContext();
+    await expect(githubAdapter.enableAutoMerge("merge")).resolves.toBe("setting_off");
+  });
+
+  it("rethrows other Error failures from enableNativePullRequestAutoMerge", async () => {
+    const enableNativePullRequestAutoMerge = vi
+      .fn()
+      .mockRejectedValue(new Error("network reset without status code"));
+    const githubAdapter = new GitHubAdapter({
+      githubApiClient: createMockGithubApiClient({ enableNativePullRequestAutoMerge }),
+      repositoryOwner: "acme",
+      repositoryName: "demo",
+      pullRequestNumber: 1,
+    });
+    await githubAdapter.buildContext();
+    await expect(githubAdapter.enableAutoMerge("squash")).rejects.toThrow(/network reset/);
+  });
+
+  it("rethrows non-Error rejection values from enableNativePullRequestAutoMerge", async () => {
+    const enableNativePullRequestAutoMerge = vi.fn().mockRejectedValue("not an Error instance");
+    const githubAdapter = new GitHubAdapter({
+      githubApiClient: createMockGithubApiClient({ enableNativePullRequestAutoMerge }),
+      repositoryOwner: "acme",
+      repositoryName: "demo",
+      pullRequestNumber: 1,
+    });
+    await githubAdapter.buildContext();
+    await expect(githubAdapter.enableAutoMerge("squash")).rejects.toBe("not an Error instance");
+  });
+
   it("returns setting_off when GraphQL enable auto-merge fails", async () => {
     const enableNativePullRequestAutoMerge = vi.fn().mockRejectedValue(
       new GraphqlResponseError(

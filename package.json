@@ -19,6 +19,7 @@
     "test:watch": "vitest"
   },
   "devDependencies": {
+    "@octokit/request": "^9.2.4",
     "@actions/core": "^1.11.1",
     "@eslint/js": "^9.17.0",
     "@types/js-yaml": "^4.0.9",

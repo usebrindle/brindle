@@ -1,3 +1,4 @@
+import { request } from "@octokit/request";
 import type { Octokit } from "@octokit/rest";
 import { describe, expect, it, vi } from "vitest";
 
@@ -186,5 +187,94 @@ describe("createOctokitGithubApiClient", () => {
       issue_number: 55,
       body: "Hello from Brindle",
     });
+  });
+
+  it("throws when enableNativePullRequestAutoMerge is called with an empty pullRequestNodeId", async () => {
+    const octokit = {
+      rest: {
+        pulls: { get: vi.fn(), listFiles: vi.fn() },
+        checks: { create: vi.fn() },
+        issues: { createComment: vi.fn() },
+      },
+      paginate: vi.fn(),
+      request: vi.fn(),
+    } as unknown as Octokit;
+
+    const githubApiClient = createOctokitGithubApiClient(octokit);
+    await expect(
+      githubApiClient.enableNativePullRequestAutoMerge({
+        repositoryOwner: "o",
+        repositoryName: "r",
+        pullRequestNumber: 1,
+        pullRequestNodeId: "",
+        mergeMethod: "squash",
+      }),
+    ).rejects.toThrow(/pullRequestNodeId/);
+    expect(octokit.request).not.toHaveBeenCalled();
+  });
+
+  it("posts the enablePullRequestAutoMerge GraphQL mutation with the expected mergeMethod enum", async () => {
+    const graphqlBodies: unknown[] = [];
+    const mockFetch = vi.fn(async (_url: string, init?: RequestInit): Promise<Response> => {
+      graphqlBodies.push(JSON.parse(String(init?.body ?? "{}")));
+      const payload = {
+        data: {
+          enablePullRequestAutoMerge: {
+            pullRequest: { id: "PR_from_graphql" },
+          },
+        },
+      };
+      return new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+
+    const boundRequest = request.defaults({
+      request: { fetch: mockFetch },
+    });
+
+    const octokit = {
+      rest: {
+        pulls: { get: vi.fn(), listFiles: vi.fn() },
+        checks: { create: vi.fn() },
+        issues: { createComment: vi.fn() },
+      },
+      paginate: vi.fn(),
+      request: boundRequest,
+    } as unknown as Octokit;
+
+    const githubApiClient = createOctokitGithubApiClient(octokit);
+
+    await githubApiClient.enableNativePullRequestAutoMerge({
+      repositoryOwner: "o",
+      repositoryName: "r",
+      pullRequestNumber: 9,
+      pullRequestNodeId: "node-pr-9",
+      mergeMethod: "merge",
+    });
+    await githubApiClient.enableNativePullRequestAutoMerge({
+      repositoryOwner: "o",
+      repositoryName: "r",
+      pullRequestNumber: 9,
+      pullRequestNodeId: "node-pr-9",
+      mergeMethod: "rebase",
+    });
+    await githubApiClient.enableNativePullRequestAutoMerge({
+      repositoryOwner: "o",
+      repositoryName: "r",
+      pullRequestNumber: 9,
+      pullRequestNodeId: "node-pr-9",
+      mergeMethod: "squash",
+    });
+
+    expect(mockFetch).toHaveBeenCalled();
+    const mergeMethods = graphqlBodies.map(
+      (body) => (body as { variables?: { mergeMethod?: string } }).variables?.mergeMethod,
+    );
+    expect(mergeMethods).toEqual(["MERGE", "REBASE", "SQUASH"]);
+    expect((graphqlBodies[0] as { variables?: { pullRequestId?: string } }).variables?.pullRequestId).toBe(
+      "node-pr-9",
+    );
   });
 });
