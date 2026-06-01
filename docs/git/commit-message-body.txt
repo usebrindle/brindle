@@ -1,0 +1,3 @@
+Document JSDoc and naming in Cursor rules and CONTRIBUTING; expand
+public contract comments. Rename terse locals in the scorer pipeline,
+diff_size criterion, and tests so call sites read clearly.
