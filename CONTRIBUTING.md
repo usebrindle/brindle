@@ -35,6 +35,8 @@ The LLD layout (`core/`, `adapters/`, `extensions/`) lives in-tree; new work sho
 
 A contribution that puts platform-specific code in `core/`, or executes content from a pull request head, will be asked to change. See [ADR 0001](docs/adrs/0001-no-pr-head-execution.md) and [ADR 0004](docs/adrs/0004-pure-criteria-over-hydrated-context.md) for the constraints that shape this.
 
+Publishing merge-risk results on GitHub (`GitHubAdapter.writeResult`) uses **Check Runs** and optionally **PR comments** via Octokit. The token used in CI needs permission to create checks on the repository and, if comments are enabled, to post issue comments on the pull request (see [ADR 0003](docs/adrs/0003-merge-risk-check-conclusion.md) and slice 09 for native auto-merge scopes).
+
 ## TypeScript style
 
 Keep **single responsibility** per function: one decision, one transformation, or one side effect (the scorer favors tiny helpers over long pipelines in one block).

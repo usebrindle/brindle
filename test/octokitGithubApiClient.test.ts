@@ -17,8 +17,14 @@ describe("createOctokitGithubApiClient", () => {
       },
     });
     const pullsListFiles = vi.fn();
+    const checksCreate = vi.fn();
+    const issuesCreateComment = vi.fn();
     const octokit = {
-      rest: { pulls: { get: pullsGet, listFiles: pullsListFiles } },
+      rest: {
+        pulls: { get: pullsGet, listFiles: pullsListFiles },
+        checks: { create: checksCreate },
+        issues: { createComment: issuesCreateComment },
+      },
       paginate: vi.fn().mockResolvedValue([
         { filename: "src/x.ts", status: "modified", additions: 2, deletions: 1 },
       ]),
@@ -58,11 +64,17 @@ describe("createOctokitGithubApiClient", () => {
       },
     });
     const pullsListFiles = vi.fn();
+    const checksCreate = vi.fn();
+    const issuesCreateComment = vi.fn();
     const paginate = vi.fn().mockResolvedValue([
       { filename: "a.ts", status: "added", additions: 10, deletions: 0 },
     ]);
     const octokit = {
-      rest: { pulls: { get: pullsGet, listFiles: pullsListFiles } },
+      rest: {
+        pulls: { get: pullsGet, listFiles: pullsListFiles },
+        checks: { create: checksCreate },
+        issues: { createComment: issuesCreateComment },
+      },
       paginate,
     } as unknown as Octokit;
 
@@ -82,5 +94,94 @@ describe("createOctokitGithubApiClient", () => {
     expect(fileSnapshots).toEqual([
       { path: "a.ts", status: "added", additions: 10, deletions: 0 },
     ]);
+  });
+
+  it("maps createMergeRiskCheckRun to rest.checks.create", async () => {
+    const checksCreate = vi.fn().mockResolvedValue({});
+    const octokit = {
+      rest: {
+        pulls: { get: vi.fn(), listFiles: vi.fn() },
+        checks: { create: checksCreate },
+        issues: { createComment: vi.fn() },
+      },
+      paginate: vi.fn(),
+    } as unknown as Octokit;
+
+    const githubApiClient = createOctokitGithubApiClient(octokit);
+    await githubApiClient.createMergeRiskCheckRun({
+      repositoryOwner: "org",
+      repositoryName: "repo",
+      headSha: "deadbeef",
+      name: "Merge risk",
+      conclusion: "failure",
+      summaryMarkdown: "## High\nDetails.",
+    });
+
+    expect(checksCreate).toHaveBeenCalledWith({
+      owner: "org",
+      repo: "repo",
+      name: "Merge risk",
+      head_sha: "deadbeef",
+      status: "completed",
+      conclusion: "failure",
+      output: {
+        title: "Merge risk",
+        summary: "## High\nDetails.",
+      },
+    });
+  });
+
+  it("truncates check run summary markdown past GitHub output limit", async () => {
+    const checksCreate = vi.fn().mockResolvedValue({});
+    const octokit = {
+      rest: {
+        pulls: { get: vi.fn(), listFiles: vi.fn() },
+        checks: { create: checksCreate },
+        issues: { createComment: vi.fn() },
+      },
+      paginate: vi.fn(),
+    } as unknown as Octokit;
+
+    const huge = "x".repeat(70000);
+    const githubApiClient = createOctokitGithubApiClient(octokit);
+    await githubApiClient.createMergeRiskCheckRun({
+      repositoryOwner: "o",
+      repositoryName: "r",
+      headSha: "sha",
+      name: "Merge risk",
+      conclusion: "success",
+      summaryMarkdown: huge,
+    });
+
+    const summary = checksCreate.mock.calls[0]![0].output.summary as string;
+    expect(summary.length).toBeLessThanOrEqual(65535);
+    expect(summary).toContain("truncated for GitHub check run output limit");
+  });
+
+  it("maps createPullRequestComment to rest.issues.createComment", async () => {
+    const issuesCreateComment = vi.fn().mockResolvedValue({});
+    const octokit = {
+      rest: {
+        pulls: { get: vi.fn(), listFiles: vi.fn() },
+        checks: { create: vi.fn() },
+        issues: { createComment: issuesCreateComment },
+      },
+      paginate: vi.fn(),
+    } as unknown as Octokit;
+
+    const githubApiClient = createOctokitGithubApiClient(octokit);
+    await githubApiClient.createPullRequestComment({
+      repositoryOwner: "org",
+      repositoryName: "repo",
+      pullRequestNumber: 55,
+      body: "Hello from Brindle",
+    });
+
+    expect(issuesCreateComment).toHaveBeenCalledWith({
+      owner: "org",
+      repo: "repo",
+      issue_number: 55,
+      body: "Hello from Brindle",
+    });
   });
 });
