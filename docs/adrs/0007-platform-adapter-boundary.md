@@ -23,7 +23,7 @@ Introduce a `PlatformAdapter` interface that isolates all platform-specific beha
 ```
 interface PlatformAdapter {
   buildContext(): Promise<PRContext>;
-  writeResult(result: ScoreResult): Promise<void>;
+  writeResult(report: RiskReport): Promise<void>;
   enableAutoMerge(method: MergeMethod): Promise<AutoMergeOutcome>;
 }
 ```
