@@ -33,7 +33,12 @@ export interface ChangedFile {
   deletions: number;
 }
 
-/** Parsed coverage summary attached in context build (formats TBD). */
+/**
+ * Parsed coverage summary attached during context build (see coverage adapters under `core/coverage/`).
+ *
+ * For Istanbul `coverage-final.json`, `linesCovered` / `linesTotal` are **statement** hit counts
+ * from the per-file `s` map (neutral names reused for simplicity).
+ */
 export interface CoverageReport {
   linesCovered?: number;
   linesTotal?: number;

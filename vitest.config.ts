@@ -14,6 +14,7 @@ export default defineConfig({
         "core/types.ts",
         "core/scorer.types.ts",
         "core/criteria/diffSize.types.ts",
+        "core/criteria/testCoverage.types.ts",
         "adapters/PlatformAdapter.ts",
         "adapters/github/githubAdapter.types.ts",
         "core/report.types.ts",

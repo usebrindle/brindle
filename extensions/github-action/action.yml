@@ -23,6 +23,13 @@ inputs:
       introduces .merge-risk.yml before it exists on main). Never reads config from the PR head (ADR 0001).
     required: false
     default: "false"
+  coverage_report_path:
+    description: >
+      Repository-root-relative path to an Istanbul-style coverage-final JSON file on the pull request head ref
+      (e.g. coverage/coverage-final.json). When set and criteria.test_coverage is enabled in .merge-risk.yml,
+      the action fetches and parses this file only then (ADR 0005). Leave empty to skip the Contents API call.
+    required: false
+    default: ""
 
 runs:
   using: node20
