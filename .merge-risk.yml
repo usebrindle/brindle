@@ -1,0 +1,8 @@
+thresholds:
+  low: 30
+  medium: 60
+criteria:
+  diff_size:
+    weight: 100
+    options:
+      max_lines_for_cap: 200

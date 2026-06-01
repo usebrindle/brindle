@@ -12,6 +12,7 @@ npm run typecheck
 npm run lint
 npm run test
 npm run test:coverage   # same as CI test step (lcov for Sonar)
+npm run build:github-action   # refresh extensions/github-action/dist after editing the Action
 ```
 
 ## Tests and coverage
@@ -29,7 +30,7 @@ Target layout (from the [LLD](docs/designs/lld-merge-risk-classifier.md)):
 - `schema/` … JSON Schema for merge-risk config (YAML on disk is validated against it in `core/config.ts`).
 - `core/` … the platform-agnostic scoring engine, criteria, mutators, coverage adapters, config, and reporting model. Depends on no platform SDK. This is what makes Brindle portable across GitHub, GitLab, and Bitbucket. See [ADR 0007](docs/adrs/0007-platform-adapter-boundary.md).
 - `adapters/` … one implementation of `PlatformAdapter` per platform. The only place that knows which platform it is talking to. GitHub lives under `adapters/github/` (REST client + `GitHubAdapter`).
-- `extensions/` … the native CI wrapper per platform (GitHub Action first).
+- `extensions/` … the native CI wrapper per platform (GitHub Action first). The shipping bundle lives under `extensions/github-action/dist/` and is produced with **`npm run build:github-action`** (`@vercel/ncc`). CI fails if `dist/` is out of date relative to the TypeScript sources.
 
 The LLD layout (`core/`, `adapters/`, `extensions/`) lives in-tree; new work should stay in the right layer so we do not paint ourselves into a GitHub-shaped corner.
 
