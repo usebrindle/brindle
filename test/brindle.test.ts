@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { BRINDLE_VERSION } from "../src/index.js";
+import { BRINDLE_VERSION } from "../core/index.js";
 
 describe("brindle", () => {
   it("exports a semver-shaped version string", () => {
