@@ -13,4 +13,6 @@ When changing TypeScript in this repo:
 - Prefer **`const` arrow functions** at module scope unless hoisting, `this` binding, or `function*` genuinely reads clearer.
 - **Layering**: do not add platform SDKs (`@actions/*`, Octokit, etc.) under `core/`. Platform code stays in `adapters/` and `extensions/` (see ADR 0007 and [CONTRIBUTING.md](CONTRIBUTING.md)).
 
+**Documentation:** follow the companion [JSDoc rule](jsdoc.mdc) for exports and public contracts; that matches [CONTRIBUTING.md](CONTRIBUTING.md) § **Documentation (JSDoc)**.
+
 Keep this rule aligned with [CONTRIBUTING.md](CONTRIBUTING.md) § **TypeScript style**; update both when conventions change.
