@@ -66,6 +66,12 @@ describe("diffSizeCriterion", () => {
     );
     expect(criterionResult.score).toBe(100);
   });
+
+  it("treats null and undefined options like the default cap", () => {
+    const heavyChurn = baseContext({ totalAdditions: 400, totalDeletions: 0 });
+    expect(diffSizeCriterion.evaluate(heavyChurn, null).score).toBe(100);
+    expect(diffSizeCriterion.evaluate(heavyChurn, undefined).score).toBe(100);
+  });
 });
 
 describe("score with built-in diff_size", () => {

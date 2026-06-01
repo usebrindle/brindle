@@ -93,4 +93,18 @@ describe("GitHubAdapter.buildContext", () => {
     });
     await expect(githubAdapter.writeResult({} as RiskReport)).rejects.toThrow(/slice 07/);
   });
+
+  it("rejects enableAutoMerge until slice 07", async () => {
+    const mockGithubApiClient: GitHubApiClient = {
+      getPullRequest: async () => samplePullSnapshot(),
+      listPullRequestFiles: async () => [],
+    };
+    const githubAdapter = new GitHubAdapter({
+      githubApiClient: mockGithubApiClient,
+      repositoryOwner: "acme",
+      repositoryName: "demo",
+      pullRequestNumber: 1,
+    });
+    await expect(githubAdapter.enableAutoMerge("squash")).rejects.toThrow(/slice 07/);
+  });
 });
