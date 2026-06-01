@@ -26,6 +26,7 @@ Brindle is platform-agnostic at its core. The split matters, so keep contributio
 
 Target layout (from the [LLD](docs/designs/lld-merge-risk-classifier.md)):
 
+- `schema/` … JSON Schema for merge-risk config (YAML on disk is validated against it in `core/config.ts`).
 - `core/` … the platform-agnostic scoring engine, criteria, mutators, coverage adapters, config, and reporting model. Depends on no platform SDK. This is what makes Brindle portable across GitHub, GitLab, and Bitbucket. See [ADR 0007](docs/adrs/0007-platform-adapter-boundary.md).
 - `adapters/` … one implementation of `PlatformAdapter` per platform. The only place that knows which platform it is talking to.
 - `extensions/` … the native CI wrapper per platform (GitHub Action first).
