@@ -6,16 +6,27 @@
  * @see docs/adrs/0002-native-auto-merge.md
  * @see docs/adrs/0003-check-runs-over-commit-statuses.md
  */
-import type { AutoMergeOutcome, RiskReport, ScoreResult } from "./types.js";
+import type {
+  AutoMergeOutcome,
+  CriterionBreakdown,
+  RiskReport,
+  ScoreResult,
+} from "./types.js";
 import type { BuildRiskReportOptions } from "./report.types.js";
 
 type RiskTier = ScoreResult["tier"];
 
-const tierRiskIndex = (tier: RiskTier): 0 | 1 | 2 => {
-  if (tier === "LOW") return 0;
-  if (tier === "MEDIUM") return 1;
+const numericRiskRankForTier = (riskTier: RiskTier): 0 | 1 | 2 => {
+  if (riskTier === "LOW") return 0;
+  if (riskTier === "MEDIUM") return 1;
   return 2;
 };
+
+const isRiskTierAtOrBelowMaxEligible = (
+  resultTier: RiskTier,
+  maxEligibleTier: RiskTier,
+): boolean =>
+  numericRiskRankForTier(resultTier) <= numericRiskRankForTier(maxEligibleTier);
 
 /**
  * Maps risk tier and `fail-on-high` to a Check Runs–style conclusion (ADR 0003).
@@ -32,15 +43,20 @@ export const checkConclusionForTier = (
   return failOnHigh ? "failure" : "action_required";
 };
 
-const autoMergeOutcomeFromPolicy = (
+const autoMergeOutcomeFromReportPolicy = (
   scoreResult: ScoreResult,
   reportOptions: BuildRiskReportOptions,
 ): AutoMergeOutcome => {
   if (!reportOptions.autoMergePolicy.enabled) return "skipped";
   if (!reportOptions.nativeAutoMergeSupported) return "unsupported";
-  const resultTierIndex = tierRiskIndex(scoreResult.tier);
-  const maxEligibleTierIndex = tierRiskIndex(reportOptions.autoMergePolicy.maxEligibleTier);
-  if (resultTierIndex > maxEligibleTierIndex) return "not_eligible";
+  if (
+    !isRiskTierAtOrBelowMaxEligible(
+      scoreResult.tier,
+      reportOptions.autoMergePolicy.maxEligibleTier,
+    )
+  ) {
+    return "not_eligible";
+  }
   return "eligible";
 };
 
@@ -52,51 +68,59 @@ const formatNumberForDisplay = (numericValue: number): string => {
   return Number.isInteger(roundedToTenth) ? String(roundedToTenth) : roundedToTenth.toFixed(1);
 };
 
+const markdownTableRowForBreakdown = (breakdownRow: CriterionBreakdown): string => {
+  const displayName = escapeMarkdownTableCell(breakdownRow.name);
+  const displayJustification = escapeMarkdownTableCell(breakdownRow.justification);
+  const rawScore = formatNumberForDisplay(breakdownRow.score);
+  const weightPercent = formatNumberForDisplay(breakdownRow.weight);
+  const weightedScore = formatNumberForDisplay(breakdownRow.weighted);
+  return `| ${displayName} | ${rawScore} | ${weightPercent} | ${weightedScore} | ${displayJustification} |`;
+};
+
+const markdownLinesForSummaryHeader = (scoreResult: ScoreResult): string[] => [
+  "## Merge risk",
+  "",
+  `**Tier:** ${scoreResult.tier}`,
+  `**Score:** ${formatNumberForDisplay(scoreResult.score)}`,
+  "",
+];
+
+const markdownLinesForCriteriaTable = (breakdownRows: CriterionBreakdown[]): string[] => [
+  "",
+  "### Criteria breakdown",
+  "",
+  "| Criterion | Raw | Weight % | Weighted | Notes |",
+  "| --- | ---: | ---: | ---: | --- |",
+  ...breakdownRows.map(markdownTableRowForBreakdown),
+];
+
+const markdownLinesForMutatorsAndDisabledCriteria = (scoreResult: ScoreResult): string[] => {
+  const lines: string[] = [];
+  if (scoreResult.mutatorsApplied.length > 0) {
+    const escapedMutatorIds = scoreResult.mutatorsApplied.map(escapeMarkdownTableCell);
+    lines.push(`_Mutators applied:_ ${escapedMutatorIds.join(", ")}`);
+  }
+  if (scoreResult.disabledCriteria.length > 0) {
+    const escapedCriterionIds = scoreResult.disabledCriteria.map(escapeMarkdownTableCell);
+    lines.push(`_Criteria disabled (config or self-disable):_ ${escapedCriterionIds.join(", ")}`);
+  }
+  return lines;
+};
+
 /**
  * Markdown summary suitable for an optional change-request comment (LLD reporting flow).
  *
  * @param scoreResult - Outcome from {@link score}.
  */
 export const buildMergeRiskCommentMarkdown = (scoreResult: ScoreResult): string => {
-  const headerLines = [
-    "## Merge risk",
-    "",
-    `**Tier:** ${scoreResult.tier}`,
-    `**Score:** ${formatNumberForDisplay(scoreResult.score)}`,
-    "",
-  ];
-
-  const mutatorLine =
-    scoreResult.mutatorsApplied.length === 0
-      ? ""
-      : `_Mutators applied:_ ${scoreResult.mutatorsApplied.map(escapeMarkdownTableCell).join(", ")}`;
-
-  const disabledLine =
-    scoreResult.disabledCriteria.length === 0
-      ? ""
-      : `_Criteria disabled (config or self-disable):_ ${scoreResult.disabledCriteria.map(escapeMarkdownTableCell).join(", ")}`;
-
-  const tableHeader = [
-    "",
-    "### Criteria breakdown",
-    "",
-    "| Criterion | Raw | Weight % | Weighted | Notes |",
-    "| --- | ---: | ---: | ---: | --- |",
-  ];
-
-  const tableBody = scoreResult.breakdown.map((breakdownRow) => {
-    const name = escapeMarkdownTableCell(breakdownRow.name);
-    const justification = escapeMarkdownTableCell(breakdownRow.justification);
-    return `| ${name} | ${formatNumberForDisplay(breakdownRow.score)} | ${formatNumberForDisplay(breakdownRow.weight)} | ${formatNumberForDisplay(breakdownRow.weighted)} | ${justification} |`;
-  });
-
-  const trailing = [mutatorLine, disabledLine].filter((line) => line.length > 0).join("\n\n");
-
-  const pieces = [...headerLines, ...tableHeader, ...tableBody];
-  if (trailing.length > 0) {
-    pieces.push("", trailing);
+  const summaryLines = markdownLinesForSummaryHeader(scoreResult);
+  const tableLines = markdownLinesForCriteriaTable(scoreResult.breakdown);
+  const auditLines = markdownLinesForMutatorsAndDisabledCriteria(scoreResult);
+  const bodyLines = [...summaryLines, ...tableLines];
+  if (auditLines.length > 0) {
+    bodyLines.push("", auditLines.join("\n\n"));
   }
-  return `${pieces.join("\n")}\n`;
+  return `${bodyLines.join("\n")}\n`;
 };
 
 /**
@@ -113,5 +137,5 @@ export const buildRiskReport = (
   result: scoreResult,
   commentMarkdown: buildMergeRiskCommentMarkdown(scoreResult),
   checkConclusion: checkConclusionForTier(scoreResult.tier, reportOptions.failOnHigh),
-  autoMergeOutcome: autoMergeOutcomeFromPolicy(scoreResult, reportOptions),
+  autoMergeOutcome: autoMergeOutcomeFromReportPolicy(scoreResult, reportOptions),
 });
