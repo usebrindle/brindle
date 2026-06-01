@@ -35,13 +35,11 @@ export class GitHubAdapter implements PlatformAdapter {
     );
   }
 
-  async writeResult(report: RiskReport): Promise<void> {
-    void report;
+  async writeResult(_report: RiskReport): Promise<void> {
     throw new Error("GitHubAdapter.writeResult is not implemented yet (slice 07).");
   }
 
-  async enableAutoMerge(method: MergeMethod): Promise<AutoMergeOutcome> {
-    void method;
+  async enableAutoMerge(_method: MergeMethod): Promise<AutoMergeOutcome> {
     throw new Error("GitHubAdapter.enableAutoMerge is not implemented yet (slice 07).");
   }
 }
