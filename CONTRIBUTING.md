@@ -18,7 +18,7 @@ npm run test:coverage   # same as CI test step (lcov for Sonar)
 
 **Vitest** drives unit tests under [`test/`](test/). **`npm run test:coverage`** runs Vitest with **v8 coverage**, writes **`coverage/lcov.info`** (for SonarCloud) and a text summary. CI runs **`npm run test -- --coverage`** on every push and PR.
 
-Coverage is **scoped in [`vitest.config.ts`](vitest.config.ts)** to **`core/**/*.ts`**, with **`core/types.ts`** and **`core/scorer.types.ts` excluded** (type-only modules). **`adapters/`** is still analyzed by Sonar as sources but is not in the Vitest coverage set until it contains executable implementations. Tighten or add thresholds later as the surface grows.
+Coverage is **scoped in [`vitest.config.ts`](vitest.config.ts)** to **`core/**/*.ts`**, with **`core/types.ts`**, **`core/scorer.types.ts`**, and **`core/criteria/diffSize.types.ts`** excluded (type-only modules). **`adapters/`** is still analyzed by Sonar as sources but is not in the Vitest coverage set until it contains executable implementations. Tighten or add thresholds later as the surface grows.
 
 ## Project layout
 
@@ -41,6 +41,8 @@ Keep **single responsibility** per function: one decision, one transformation, o
 Prefer **short bodies** (on the order of **ten lines or fewer** per function, blanks and closing braces not counted as “work”). When a function grows, extract a named helper rather than nesting more logic.
 
 Prefer **`const` arrow functions** for top-level helpers and exports unless a hoisted declaration or generator genuinely reads clearer.
+
+**Types vs implementation:** do not define criterion- or module-specific `export type` / `export interface` in the same file as that module’s runtime code. Use a sibling **`*.types.ts` with the same stem** (for example `core/criteria/diffSize.ts` + `core/criteria/diffSize.types.ts`). Keep **`core/types.ts`** for the shared platform-neutral model only.
 
 Cursor loads the same expectations from [`.cursor/rules/typescript-style.mdc`](.cursor/rules/typescript-style.mdc) when you work on `*.ts` files; keep that rule and this section in sync.
 
