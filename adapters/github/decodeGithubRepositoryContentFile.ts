@@ -8,19 +8,19 @@ export const decodeGithubRepositoryContentFile = (
   requestedFilePath: string,
 ): string => {
   if (Array.isArray(contentsApiResponse)) {
-    throw new Error(`${requestedFilePath} is a directory, not a file.`);
+    throw new TypeError(`${requestedFilePath} is a directory, not a file.`);
   }
   if (typeof contentsApiResponse !== "object" || contentsApiResponse === null) {
-    throw new Error(`Unexpected response when reading ${requestedFilePath}.`);
+    throw new TypeError(`Unexpected response when reading ${requestedFilePath}.`);
   }
   const fileRecord = contentsApiResponse as Record<string, unknown>;
   if (fileRecord.type !== "file") {
-    throw new Error(`${requestedFilePath} is not a file (type=${String(fileRecord.type)}).`);
+    throw new TypeError(`${requestedFilePath} is not a file (type=${String(fileRecord.type)}).`);
   }
   const encoding = fileRecord.encoding;
   const base64Content = fileRecord.content;
   if (encoding !== "base64" || typeof base64Content !== "string") {
-    throw new Error(`${requestedFilePath} could not be read as base64-encoded file content.`);
+    throw new TypeError(`${requestedFilePath} could not be read as base64-encoded file content.`);
   }
   const normalizedBase64 = base64Content.replace(/\s/g, "");
   return Buffer.from(normalizedBase64, "base64").toString("utf8");

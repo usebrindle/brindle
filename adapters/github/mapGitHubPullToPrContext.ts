@@ -51,6 +51,6 @@ export const mapGitHubPullAndFilesToPRContext = (
     files: changedFiles,
     totalAdditions: sumAdditions(changedFiles),
     totalDeletions: sumDeletions(changedFiles),
-    ...(coverageReport !== undefined ? { coverage: coverageReport } : {}),
+    ...(coverageReport === undefined ? {} : { coverage: coverageReport }),
   };
 };
