@@ -13,8 +13,12 @@ import { mapGitHubPullAndFilesToPRContext } from "./mapGitHubPullToPrContext.js"
 export class GitHubAdapter implements PlatformAdapter {
   private readonly githubAdapterDependencies: GitHubAdapterDependencies;
 
+  /** Set in {@link GitHubAdapter.buildContext} for {@link GitHubAdapter.writeResult} (check run `head_sha`). */
+  private lastPullRequestHeadSha: string | undefined;
+
   constructor(githubAdapterDependencies: GitHubAdapterDependencies) {
     this.githubAdapterDependencies = githubAdapterDependencies;
+    this.lastPullRequestHeadSha = undefined;
   }
 
   async buildContext(): Promise<PRContext> {
@@ -25,6 +29,7 @@ export class GitHubAdapter implements PlatformAdapter {
     };
     const { githubApiClient } = this.githubAdapterDependencies;
     const pullSnapshot = await githubApiClient.getPullRequest(pullRequestLookup);
+    this.lastPullRequestHeadSha = pullSnapshot.headSha;
     const fileSnapshots = await githubApiClient.listPullRequestFiles(pullRequestLookup);
     return mapGitHubPullAndFilesToPRContext(
       pullRequestLookup.repositoryOwner,
@@ -35,11 +40,37 @@ export class GitHubAdapter implements PlatformAdapter {
     );
   }
 
-  async writeResult(_report: RiskReport): Promise<void> {
-    throw new Error("GitHubAdapter.writeResult is not implemented yet (slice 07).");
+  async writeResult(report: RiskReport): Promise<void> {
+    const headSha = this.lastPullRequestHeadSha;
+    if (headSha === undefined) {
+      throw new Error(
+        "GitHubAdapter.writeResult requires buildContext() first so the PR head SHA is available for the check run.",
+      );
+    }
+    const { githubApiClient, repositoryOwner, repositoryName, pullRequestNumber } =
+      this.githubAdapterDependencies;
+    const checkName = this.githubAdapterDependencies.mergeRiskCheckRunName ?? "Merge risk";
+    await githubApiClient.createMergeRiskCheckRun({
+      repositoryOwner,
+      repositoryName,
+      headSha,
+      name: checkName,
+      conclusion: report.checkConclusion,
+      summaryMarkdown: report.commentMarkdown,
+    });
+    const shouldPostComment = this.githubAdapterDependencies.postRiskSummaryComment !== false;
+    const commentBody = report.commentMarkdown.trim();
+    if (shouldPostComment && commentBody.length > 0) {
+      await githubApiClient.createPullRequestComment({
+        repositoryOwner,
+        repositoryName,
+        pullRequestNumber,
+        body: report.commentMarkdown,
+      });
+    }
   }
 
   async enableAutoMerge(_method: MergeMethod): Promise<AutoMergeOutcome> {
-    throw new Error("GitHubAdapter.enableAutoMerge is not implemented yet (slice 07).");
+    throw new Error("GitHubAdapter.enableAutoMerge is not implemented yet (slice 09).");
   }
 }
