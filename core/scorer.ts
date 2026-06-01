@@ -17,6 +17,13 @@ import type {
   ScoreResult,
   ScoringConfig,
 } from "./types.js";
+import type {
+  ActiveCriterion,
+  CriterionGate,
+  CriterionResolution,
+  MutatorApplyResult,
+  WeightedParts,
+} from "./scorer.types.js";
 
 const clampScore = (n: number): number => Math.min(100, Math.max(0, n));
 
@@ -49,23 +56,8 @@ const tierForScore = (
   return "HIGH";
 };
 
-type ActiveCriterion = {
-  id: string;
-  criterion: Criterion;
-  configWeight: number;
-  options: unknown;
-  evaluated: CriterionResult;
-};
-
-type CriterionResolution =
-  | { type: "omit" }
-  | { type: "disabled"; id: string }
-  | { type: "active"; active: ActiveCriterion };
-
 const sortedCriterionIds = (criteria: ScoringConfig["criteria"]): string[] =>
   Object.keys(criteria).sort((a, b) => a.localeCompare(b));
-
-type CriterionGate = "omit" | "disabled" | "continue";
 
 const criterionGate = (
   context: PRContext,
@@ -161,13 +153,6 @@ const emptyScoreResult = (
   disabledCriteria,
 });
 
-type WeightedParts = {
-  raw: number;
-  normalizedWeight: number;
-  weighted: number;
-  evaluated: CriterionResult;
-};
-
 const weightedPartsForActive = (a: ActiveCriterion, weightSum: number): WeightedParts => {
   const { evaluated } = a;
   const raw = clampScore(evaluated.score);
@@ -217,8 +202,6 @@ const assertValidMutatorFactor = (id: string, factor: number): void => {
   if (Number.isFinite(factor) && factor > 0) return;
   throw new Error(`Mutator "${id}" returned invalid factor: ${String(factor)}`);
 };
-
-type MutatorApplyResult = { nextScore: number; didApply: boolean };
 
 const applyOneMutatorEntry = (
   id: string,

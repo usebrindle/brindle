@@ -12,6 +12,7 @@ export default defineConfig({
       exclude: [
         "**/node_modules/**",
         "core/types.ts",
+        "core/scorer.types.ts",
         "**/*.config.ts",
       ],
     },
