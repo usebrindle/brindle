@@ -11,11 +11,14 @@ npm ci
 npm run typecheck
 npm run lint
 npm run test
+npm run test:coverage   # same as CI test step (lcov for Sonar)
 ```
 
-Coverage (lcov under `coverage/`) is produced when you run `npm run test -- --coverage` (CI does this on every run).
+## Tests and coverage
 
-On **commit**, **Husky** runs **lint-staged** on staged `*.{ts,tsx}`: **`eslint --fix`**, then **`vitest related --run`** for a fast, file-scoped test pass.
+**Vitest** drives unit tests under [`test/`](test/). **`npm run test:coverage`** runs Vitest with **v8 coverage**, writes **`coverage/lcov.info`** (for SonarCloud) and a text summary. CI runs **`npm run test -- --coverage`** on every push and PR.
+
+Coverage is **scoped in [`vitest.config.ts`](vitest.config.ts)** to **`core/**/*.ts`**, with **`core/types.ts`** and **`core/scorer.types.ts` excluded** (type-only modules). **`adapters/`** is still analyzed by Sonar as sources but is not in the Vitest coverage set until it contains executable implementations. Tighten or add thresholds later as the surface grows.
 
 ## Project layout
 
@@ -31,9 +34,32 @@ The LLD layout (`core/`, `adapters/`, `extensions/`) lives in-tree; new work sho
 
 A contribution that puts platform-specific code in `core/`, or executes content from a pull request head, will be asked to change. See [ADR 0001](docs/adrs/0001-no-pr-head-execution.md) and [ADR 0004](docs/adrs/0004-pure-criteria-over-hydrated-context.md) for the constraints that shape this.
 
+## TypeScript style
+
+Keep **single responsibility** per function: one decision, one transformation, or one side effect (the scorer favors tiny helpers over long pipelines in one block).
+
+Prefer **short bodies** (on the order of **ten lines or fewer** per function, blanks and closing braces not counted as “work”). When a function grows, extract a named helper rather than nesting more logic.
+
+Prefer **`const` arrow functions** for top-level helpers and exports unless a hoisted declaration or generator genuinely reads clearer.
+
+Cursor loads the same expectations from [`.cursor/rules/typescript-style.mdc`](.cursor/rules/typescript-style.mdc) when you work on `*.ts` files; keep that rule and this section in sync.
+
+## Documentation (JSDoc)
+
+Use **JSDoc** so public contracts stay readable in the editor and for future API docs.
+
+- **File-level** `/** ... */` on non-trivial modules: what the file is responsible for; **`@see`** to the [LLD](docs/designs/lld-merge-risk-classifier.md) or an ADR when the file encodes an accepted decision.
+- **`export` functions and constants**: describe purpose; use **`@param`** and **`@returns`** when the signature alone does not carry the contract.
+- **`export interface` / `export type`**: document intent and invariants; use **`@see`** for cross-repo specs.
+- **Interface methods**: at least a one-line description when behavior or async contracts are not obvious.
+
+Agent-side detail lives in [`.cursor/rules/jsdoc.mdc`](.cursor/rules/jsdoc.mdc); keep it aligned with this section.
+
 ## Tooling status
 
-**ESLint** (flat config, `typescript-eslint`) is configured; use `npm run lint` / `npm run lint:fix`. **Vitest** runs via `npm run test` / `npm run test:watch`; CI runs tests **with coverage** (`lcov` in `coverage/`). **Husky** + **lint-staged** run on **pre-commit** for staged TypeScript: ESLint fix, then Vitest related. **SonarCloud** analysis runs via a dedicated workflow on same-repo PRs and on **`main`** (see **SonarCloud** below).
+**ESLint** (flat config, `typescript-eslint`) is configured; use `npm run lint` / `npm run lint:fix`. **Vitest** runs via `npm run test` / `npm run test:watch`; CI runs tests **with coverage** (`lcov` in `coverage/`). **SonarCloud** analysis runs via a dedicated workflow on same-repo PRs and on **`main`** (see **SonarCloud** below).
+
+On **commit**, **Husky** runs **lint-staged** on staged `*.{ts,tsx}`: **`eslint --fix`**, then **`vitest related --run`** for a fast, file-scoped test pass.
 
 ## SonarCloud
 
