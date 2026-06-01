@@ -71,7 +71,7 @@ export interface Criterion {
    * Pure scoring step: must not perform I/O or read clocks.
    *
    * @param context - Full {@link PRContext} built by an adapter.
-   * @param options - Criterion-specific options from config (validated in a later slice).
+   * @param options - Criterion-specific options from config (validated when loaded via {@link loadScoringConfigFromMergeRiskYaml} / schema; still `unknown` inside the scorer until wired through).
    * @returns Raw score 0–100 (higher = riskier for this signal), justification, and optional detail.
    */
   evaluate(context: PRContext, options: unknown): CriterionResult;
@@ -106,7 +106,7 @@ export interface MutatorConfiguration {
 }
 
 /**
- * Minimal config consumed by the scorer. The full merge-risk file is validated in a later slice.
+ * Minimal config consumed by the scorer. Load from YAML with {@link ./config.js}; schema lives under `schema/`.
  * @see docs/designs/lld-merge-risk-classifier.md
  */
 export interface ScoringConfig {
