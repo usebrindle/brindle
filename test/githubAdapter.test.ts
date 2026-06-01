@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { GraphqlResponseError } from "@octokit/graphql";
+
 import { GitHubAdapter } from "../adapters/github/GitHubAdapter.js";
 import type {
   GitHubApiClient,
@@ -10,6 +12,7 @@ import { mapGitHubPullAndFilesToPRContext } from "../adapters/github/mapGitHubPu
 import type { RiskReport } from "../core/types.js";
 
 const samplePullSnapshot = (): GitHubPullSnapshot => ({
+  pullRequestNodeId: "PRR_kwDOABC123",
   headSha: "headdeadbeef",
   baseRefName: "main",
   authorLogin: "alice",
@@ -44,6 +47,7 @@ const createMockGithubApiClient = (
   listPullRequestFiles: async () => [],
   createMergeRiskCheckRun: vi.fn().mockResolvedValue(undefined),
   createPullRequestComment: vi.fn().mockResolvedValue(undefined),
+  enableNativePullRequestAutoMerge: vi.fn().mockResolvedValue(undefined),
   ...overrides,
 });
 
@@ -203,7 +207,56 @@ describe("GitHubAdapter.writeResult", () => {
 });
 
 describe("GitHubAdapter.enableAutoMerge", () => {
-  it("rejects enableAutoMerge until slice 09", async () => {
+  it("calls enableNativePullRequestAutoMerge after buildContext and returns enabled", async () => {
+    const enableNativePullRequestAutoMerge = vi.fn().mockResolvedValue(undefined);
+    const githubAdapter = new GitHubAdapter({
+      githubApiClient: createMockGithubApiClient({ enableNativePullRequestAutoMerge }),
+      repositoryOwner: "acme",
+      repositoryName: "demo",
+      pullRequestNumber: 7,
+    });
+    await githubAdapter.buildContext();
+    const outcome = await githubAdapter.enableAutoMerge("merge");
+    expect(outcome).toBe("enabled");
+    expect(enableNativePullRequestAutoMerge).toHaveBeenCalledWith({
+      repositoryOwner: "acme",
+      repositoryName: "demo",
+      pullRequestNumber: 7,
+      pullRequestNodeId: "PRR_kwDOABC123",
+      mergeMethod: "merge",
+    });
+  });
+
+  it("returns setting_off when GraphQL enable auto-merge fails", async () => {
+    const enableNativePullRequestAutoMerge = vi.fn().mockRejectedValue(
+      new GraphqlResponseError(
+        { method: "POST", url: "https://api.github.com/graphql", query: "mutation" },
+        {},
+        {
+          data: {},
+          errors: [
+            {
+              type: "ERROR",
+              message: "Auto merge is not allowed",
+              path: ["enablePullRequestAutoMerge"],
+              locations: [{ line: 1, column: 1 }],
+              extensions: {},
+            },
+          ],
+        },
+      ),
+    );
+    const githubAdapter = new GitHubAdapter({
+      githubApiClient: createMockGithubApiClient({ enableNativePullRequestAutoMerge }),
+      repositoryOwner: "acme",
+      repositoryName: "demo",
+      pullRequestNumber: 1,
+    });
+    await githubAdapter.buildContext();
+    await expect(githubAdapter.enableAutoMerge("squash")).resolves.toBe("setting_off");
+  });
+
+  it("rejects enableAutoMerge when buildContext was never run", async () => {
     const mockGithubApiClient = createMockGithubApiClient();
     const githubAdapter = new GitHubAdapter({
       githubApiClient: mockGithubApiClient,
@@ -211,6 +264,7 @@ describe("GitHubAdapter.enableAutoMerge", () => {
       repositoryName: "demo",
       pullRequestNumber: 1,
     });
-    await expect(githubAdapter.enableAutoMerge("squash")).rejects.toThrow(/slice 09/);
+    await expect(githubAdapter.enableAutoMerge("squash")).rejects.toThrow(/buildContext/);
+    expect(mockGithubApiClient.enableNativePullRequestAutoMerge).not.toHaveBeenCalled();
   });
 });

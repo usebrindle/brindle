@@ -46,7 +46,7 @@ jobs:
   brindle:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       checks: write
       pull-requests: write
     steps:
@@ -101,7 +101,7 @@ auto_merge:
   method: squash
 ```
 
-When `auto_merge` is on, the consumer workflow also needs **`contents: write`** so the Action can enable native auto-merge. See the [LLD consumer example](docs/designs/lld-merge-risk-classifier.md) and [ADR 0002](docs/adrs/0002-native-auto-merge.md).
+When `auto_merge` is off, you can drop to **`contents: read`** if your org prefers minimal scopes. When `auto_merge` is on, **`contents: write`** is required so the Action can call **`enablePullRequestAutoMerge`**. See the [LLD consumer example](docs/designs/lld-merge-risk-classifier.md) and [ADR 0002](docs/adrs/0002-native-auto-merge.md).
 
 ## How the score works
 
@@ -138,7 +138,7 @@ Result … human review recommended, change touches authentication paths.
 - [x] Core scoring engine
 - [x] GitHub Action … score, comment, check run (path action + committed `ncc` bundle)
 - [ ] Extension testing … Vitest coverage for `extensions/**/*.ts` (and tests under `test/`), plus optional Sonar `sonar.sources` alignment once `lcov` includes that tree
-- [ ] Native auto-merge on low-risk changes
+- [x] Native auto-merge on low-risk changes
 - [ ] Coverage formats … Istanbul, then lcov and Cobertura
 - [ ] GitLab CI component
 - [ ] Bitbucket Pipe

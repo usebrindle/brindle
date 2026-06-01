@@ -120,6 +120,18 @@ export interface ScoringConfig {
   mutators?: Record<string, MutatorConfiguration>;
 }
 
+/**
+ * Native auto-merge policy from optional `auto_merge` in `.merge-risk.yml` (ADR 0002).
+ * Omitted or disabled in YAML means the workflow does not call `PlatformAdapter.enableAutoMerge`.
+ */
+export interface MergeRiskAutoMergeConfig {
+  enabled: true;
+  /** Inclusive upper bound: tiers at or below this qualify for `eligible` in {@link import("./report.js").buildRiskReport}. */
+  maxEligibleTier: "LOW" | "MEDIUM" | "HIGH";
+  /** Passed to GitHub's `enablePullRequestAutoMerge` mutation. */
+  method: MergeMethod;
+}
+
 /** Multiplies the running score after weighted criteria sum; return `null` to skip. */
 export interface Mutator {
   /** Display name for logs (mutator id comes from config keys). */

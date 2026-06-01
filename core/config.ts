@@ -7,7 +7,7 @@
 import { Ajv, type ErrorObject } from "ajv";
 import * as yaml from "js-yaml";
 
-import type { ScoringConfig } from "./types.js";
+import type { MergeRiskAutoMergeConfig, MergeMethod, ScoringConfig } from "./types.js";
 
 import mergeRiskConfigSchema from "../schema/merge-risk-config.schema.json" with { type: "json" };
 
@@ -75,12 +75,81 @@ const ensureRootMapping = (parsedDocument: unknown): Record<string, unknown> => 
  */
 export const assertValidScoringConfig = (parsedDocument: unknown): ScoringConfig => {
   const rootMapping = ensureRootMapping(parsedDocument);
+  return splitValidatedMergeRiskRootMapping(rootMapping).scoringConfig;
+};
+
+const mergeRiskTierYamlToScoreTier = (tierRaw: string): "LOW" | "MEDIUM" | "HIGH" => {
+  const normalized = tierRaw.trim().toLowerCase();
+  if (normalized === "low") return "LOW";
+  if (normalized === "medium") return "MEDIUM";
+  if (normalized === "high") return "HIGH";
+  throw new MergeRiskConfigError(
+    `auto_merge.tier must be low, medium, or high (got ${JSON.stringify(tierRaw)}).`,
+  );
+};
+
+const mergeMethodFromYamlString = (methodRaw: string): MergeMethod => {
+  const normalized = methodRaw.trim().toLowerCase();
+  if (normalized === "squash" || normalized === "merge" || normalized === "rebase") {
+    return normalized;
+  }
+  throw new MergeRiskConfigError(
+    `auto_merge.method must be squash, merge, or rebase (got ${JSON.stringify(methodRaw)}).`,
+  );
+};
+
+const parseMergeRiskAutoMergeSection = (
+  rootMapping: Record<string, unknown>,
+): MergeRiskAutoMergeConfig | undefined => {
+  const raw = rootMapping.auto_merge;
+  if (raw === undefined || raw === null) {
+    return undefined;
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    throw new MergeRiskConfigError("auto_merge must be a YAML mapping when present.");
+  }
+  const mapping = raw as Record<string, unknown>;
+  if (mapping.enabled !== true) {
+    return undefined;
+  }
+  const tierRaw = mapping.tier;
+  const methodRaw = mapping.method;
+  if (typeof tierRaw !== "string" || typeof methodRaw !== "string") {
+    throw new MergeRiskConfigError("When auto_merge.enabled is true, tier and method must be strings.");
+  }
+  return {
+    enabled: true,
+    maxEligibleTier: mergeRiskTierYamlToScoreTier(tierRaw),
+    method: mergeMethodFromYamlString(methodRaw),
+  };
+};
+
+const splitValidatedMergeRiskRootMapping = (
+  rootMapping: Record<string, unknown>,
+): { scoringConfig: ScoringConfig; autoMerge?: MergeRiskAutoMergeConfig } => {
   if (!validateParsedMergeRiskConfig(rootMapping)) {
     throw new MergeRiskConfigError(
       `Config failed schema validation: ${formatAjvErrors(validateParsedMergeRiskConfig.errors)}`,
     );
   }
-  return rootMapping as unknown as ScoringConfig;
+  const autoMerge = parseMergeRiskAutoMergeSection(rootMapping);
+  return {
+    scoringConfig: rootMapping as unknown as ScoringConfig,
+    autoMerge,
+  };
+};
+
+/**
+ * Parses and validates a full `.merge-risk.yml` document from the base branch: scoring plus optional `auto_merge`.
+ *
+ * @param mergeRiskYamlText - Full file contents from the base ref (ADR 0001).
+ */
+export const loadMergeRiskRepositoryYaml = (
+  mergeRiskYamlText: string,
+): { scoringConfig: ScoringConfig; autoMerge?: MergeRiskAutoMergeConfig } => {
+  const parsedDocument = parseMergeRiskYamlDocument(mergeRiskYamlText);
+  const rootMapping = ensureRootMapping(parsedDocument);
+  return splitValidatedMergeRiskRootMapping(rootMapping);
 };
 
 /**
@@ -89,7 +158,5 @@ export const assertValidScoringConfig = (parsedDocument: unknown): ScoringConfig
  * @param mergeRiskYamlText - Full `.merge-risk.yml` (or fragment) text from the base branch.
  * @returns Validated scoring configuration.
  */
-export const loadScoringConfigFromMergeRiskYaml = (mergeRiskYamlText: string): ScoringConfig => {
-  const parsedDocument = parseMergeRiskYamlDocument(mergeRiskYamlText);
-  return assertValidScoringConfig(parsedDocument);
-};
+export const loadScoringConfigFromMergeRiskYaml = (mergeRiskYamlText: string): ScoringConfig =>
+  loadMergeRiskRepositoryYaml(mergeRiskYamlText).scoringConfig;

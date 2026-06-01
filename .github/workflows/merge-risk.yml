@@ -7,7 +7,7 @@ jobs:
   brindle:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       checks: write
       pull-requests: write
     steps:

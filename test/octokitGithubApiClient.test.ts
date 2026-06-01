@@ -7,6 +7,7 @@ describe("createOctokitGithubApiClient", () => {
   it("maps pulls.get into a pull snapshot (null user and sparse labels)", async () => {
     const pullsGet = vi.fn().mockResolvedValue({
       data: {
+        node_id: "node-pr-1",
         head: { sha: "abc123" },
         base: { ref: "develop" },
         user: null,
@@ -43,6 +44,7 @@ describe("createOctokitGithubApiClient", () => {
       pull_number: 44,
     });
     expect(pullSnapshot.headSha).toBe("abc123");
+    expect(pullSnapshot.pullRequestNodeId).toBe("node-pr-1");
     expect(pullSnapshot.baseRefName).toBe("develop");
     expect(pullSnapshot.authorLogin).toBe("unknown");
     expect(pullSnapshot.title).toBe("");
@@ -54,6 +56,7 @@ describe("createOctokitGithubApiClient", () => {
   it("paginates listFiles and maps rows to path snapshots", async () => {
     const pullsGet = vi.fn().mockResolvedValue({
       data: {
+        node_id: "node-pr-2",
         head: { sha: "s" },
         base: { ref: "main" },
         user: { login: "bob" },

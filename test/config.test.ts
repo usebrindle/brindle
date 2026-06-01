@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   assertValidScoringConfig,
+  loadMergeRiskRepositoryYaml,
   loadScoringConfigFromMergeRiskYaml,
   MergeRiskConfigError,
   parseMergeRiskYamlDocument,
@@ -109,6 +110,45 @@ criteria:
     weight: "heavy"
 `;
     expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+});
+
+describe("loadMergeRiskRepositoryYaml", () => {
+  it("returns scoring plus auto_merge when enabled", () => {
+    const yamlText = `${minimalValidYaml}
+auto_merge:
+  enabled: true
+  tier: low
+  method: merge
+`;
+    const bundle = loadMergeRiskRepositoryYaml(yamlText);
+    expect(bundle.scoringConfig.criteria.diff_size?.weight).toBe(100);
+    expect(bundle.autoMerge).toEqual({
+      enabled: true,
+      maxEligibleTier: "LOW",
+      method: "merge",
+    });
+  });
+
+  it("omits auto_merge when disabled or absent", () => {
+    expect(loadMergeRiskRepositoryYaml(minimalValidYaml).autoMerge).toBeUndefined();
+    const disabled = `
+${minimalValidYaml}
+auto_merge:
+  enabled: false
+`;
+    expect(loadMergeRiskRepositoryYaml(disabled).autoMerge).toBeUndefined();
+  });
+
+  it("throws when auto_merge.enabled is true but tier is invalid", () => {
+    const yamlText = `
+${minimalValidYaml}
+auto_merge:
+  enabled: true
+  tier: unknown
+  method: squash
+`;
+    expect(() => loadMergeRiskRepositoryYaml(yamlText)).toThrow(/tier/i);
   });
 });
 

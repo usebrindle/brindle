@@ -38,7 +38,7 @@ The LLD layout (`core/`, `adapters/`, `extensions/`) lives in-tree; new work sho
 
 A contribution that puts platform-specific code in `core/`, or executes content from a pull request head, will be asked to change. See [ADR 0001](docs/adrs/0001-no-pr-head-execution.md) and [ADR 0004](docs/adrs/0004-pure-criteria-over-hydrated-context.md) for the constraints that shape this.
 
-Publishing merge-risk results on GitHub (`GitHubAdapter.writeResult`) uses **Check Runs** and optionally **PR comments** via Octokit. The token used in CI needs permission to create checks on the repository and, if comments are enabled, to post issue comments on the pull request (see [ADR 0003](docs/adrs/0003-merge-risk-check-conclusion.md) and slice 09 for native auto-merge scopes).
+Publishing merge-risk results on GitHub (`GitHubAdapter.writeResult`) uses **Check Runs** and optionally **PR comments** via Octokit (see [ADR 0003](docs/adrs/0003-merge-risk-check-conclusion.md)). When `.merge-risk.yml` enables **native auto-merge** (`auto_merge.enabled: true`), the Action also calls GitHub’s **`enablePullRequestAutoMerge`** GraphQL mutation (never the merge REST endpoint; see [ADR 0002](docs/adrs/0002-native-auto-merge.md)). The workflow token then needs **`contents: write`** in addition to **`checks: write`** and **`pull-requests: write`**, and the repository must allow auto-merge in GitHub settings.
 
 ## TypeScript style
 
