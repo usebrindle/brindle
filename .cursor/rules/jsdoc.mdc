@@ -10,7 +10,7 @@ When adding or changing TypeScript in this repo:
 
 - Put a **file-level** `/** ... */` block at the top of non-trivial modules (what the file owns, link to LLD or ADR when it is contract-shaping).
 - **`export` symbols** (functions, constants, classes) that callers use: add **`/** ... */`** with **`@param`** for each parameter and **`@returns`** when the return value is not obvious from the name alone.
-- **`export interface` / `export type`**: document the **intent** and **invariants** (what callers may assume, what implementors must satisfy). Use `@see` for ADRs or the LLD.
+- **`export interface` / `export type`**: document the **intent** and **invariants** (what callers may assume, what implementors must satisfy). Use `@see` for ADRs or the LLD. Put criterion or module **options** types in a sibling **`*.types.ts`** (same stem as the `.ts` file), not mixed into the runtime module—see the [TypeScript style rule](typescript-style.mdc).
 - **Interface methods** (for example `PlatformAdapter`): one short line per method is enough when the name is clear; add `@returns` when the promise resolves to a discriminated outcome.
 - **Tests** do not require JSDoc unless a helper is shared and non-obvious.
 
