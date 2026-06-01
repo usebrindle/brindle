@@ -192,11 +192,12 @@ const computeBreakdown = (
 
 const sortedMutatorEntries = (
   mutatorConfig: ScoringConfig["mutators"],
-): [string, MutatorConfiguration][] =>
-  Object.entries(mutatorConfig ?? {}).sort(([a], [b]) => a.localeCompare(b)) as [
-    string,
-    MutatorConfiguration,
-  ][];
+): [string, MutatorConfiguration][] => {
+  const byId: Record<string, MutatorConfiguration> = mutatorConfig ?? {};
+  return Object.keys(byId)
+    .sort((a, b) => a.localeCompare(b))
+    .map((id): [string, MutatorConfiguration] => [id, byId[id]]);
+};
 
 const assertValidMutatorFactor = (id: string, factor: number): void => {
   if (Number.isFinite(factor) && factor > 0) return;
