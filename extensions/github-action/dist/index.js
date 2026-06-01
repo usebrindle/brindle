@@ -39953,6 +39953,7 @@ const mergeMethodFromYamlString = (methodRaw) => {
     }
     throw new MergeRiskConfigError(`auto_merge.method must be squash, merge, or rebase (got ${JSON.stringify(methodRaw)}).`);
 };
+/** Parses optional `auto_merge` from a parsed root mapping (defensive checks for non-object shapes). */
 const parseMergeRiskAutoMergeSection = (rootMapping) => {
     const raw = rootMapping.auto_merge;
     if (raw === undefined || raw === null) {
