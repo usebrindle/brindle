@@ -13,6 +13,7 @@ export default defineConfig({
         "**/node_modules/**",
         "core/types.ts",
         "core/scorer.types.ts",
+        "core/criteria/diffSize.types.ts",
         "**/*.config.ts",
       ],
     },
