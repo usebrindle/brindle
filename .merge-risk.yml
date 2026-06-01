@@ -5,7 +5,8 @@ criteria:
   diff_size:
     weight: 100
     options:
-      max_lines_for_cap: 200
+      # Line churn vs cap → raw score; calibrate so typical PRs map to tiers by repo norms (not tiny caps).
+      max_lines_for_cap: 800
 
 # Optional native auto-merge (ADR 0002). Requires workflow `contents: write` and repo auto-merge enabled.
 # auto_merge:

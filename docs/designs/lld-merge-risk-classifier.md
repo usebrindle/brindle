@@ -215,7 +215,7 @@ Built-in criteria, the coverage adapter, mutators, declarative rules, and the co
 
 ## Reporting Flow
 
-`core/report.ts` builds a platform-neutral `RiskReport` from a `ScoreResult`. It produces the comment markdown, selects the check conclusion from the tier and the `fail-on-high` setting, and records the auto-merge outcome. The adapter then renders this report using whatever the platform offers.
+`core/report.ts` builds a platform-neutral `RiskReport` from a `ScoreResult`. It produces the comment markdown, selects the check conclusion from the tier, optional `fail-on-high`, and optional **informational** mode (always `success` on the check while tier stays in markdown), and records the auto-merge outcome. The adapter then renders this report using whatever the platform offers.
 
 On GitHub the adapter writes a Check Run and an optional PR comment. On GitLab the adapter writes a merge request note and a pipeline status or external status check. On Bitbucket the adapter writes a report through the Code Insights API and a PR comment. The neutral `RiskReport` is identical in all three cases. Only the rendering differs.
 
