@@ -1,0 +1,29 @@
+name: Brindle merge risk
+description: >
+  Score a pull request from base-branch .merge-risk.yml (ADR 0001), then publish a Check Run
+  and optional PR comment via the GitHub adapter.
+branding:
+  icon: shield
+  color: gray-dark
+
+inputs:
+  github_token:
+    description: >
+      Token with contents:read (for config on the base ref), checks:write, and pull-requests:write
+      as required by your workflow permissions.
+    required: false
+    default: ${{ github.token }}
+  merge_risk_file_path:
+    description: Path to the merge-risk YAML file in the repository (read from the pull request base ref).
+    required: false
+    default: .merge-risk.yml
+  skip_when_merge_risk_missing_on_base:
+    description: >
+      When true, exit successfully if merge_risk_file_path returns 404 on the base ref (e.g. the PR that
+      introduces .merge-risk.yml before it exists on main). Never reads config from the PR head (ADR 0001).
+    required: false
+    default: "false"
+
+runs:
+  using: node20
+  main: dist/index.js
