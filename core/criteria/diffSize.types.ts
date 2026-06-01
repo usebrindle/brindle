@@ -4,6 +4,7 @@
  * Lives beside {@link ./diffSize.js} but not inside it, so the criterion file stays runtime-only.
  *
  * @see docs/designs/lld-merge-risk-classifier.md
+ * @see docs/adrs/0004-pure-criteria-over-hydrated-context.md
  */
 export type DiffSizeOptions = {
   /**

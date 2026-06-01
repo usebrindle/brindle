@@ -1,0 +1,39 @@
+---
+description: Brindle naming — prefer verbose, intention-revealing identifiers
+globs: "**/*.ts"
+alwaysApply: false
+---
+
+# Naming (Brindle)
+
+When writing or editing TypeScript in this repo, **bias toward long, explicit names** for locals, parameters, and helpers. Call sites should read like plain language; the type system already carries structure—names should carry **meaning**.
+
+## Principles
+
+- **Spell things out** instead of truncating: prefer `mutatorConfiguration` over `mcfg`, `criterionResolution` over `res`, `implementation` over `impl` when either fits without being misleading.
+- **Avoid single-letter and role-only names** (`t`, `n`, `x`, `tmp`, `obj`) except in the smallest scope where the type and use are obvious (for example a one-line `map` over a primitive where the callback parameter has no domain semantics).
+- **Reuse domain vocabulary** from the LLD and `core/types.ts` (`pullRequestContext`, `criterionConfiguration`, `mutatorConfiguration`) so the same concept is named the same way across files.
+- **Established type names** may keep acronyms that are part of the public model (`PRContext`, `SHA` in field names) when renaming would churn the API; still prefer **verbose locals** at use sites (`context` or `pullRequestContext`, not `ctx`, when it clarifies which context).
+
+## Examples
+
+```typescript
+// ❌ Cryptic / overloaded
+const apply = (id: string, mcfg: MutatorConfiguration, ctx: PRContext) => {
+  const r = impl?.apply(ctx, mcfg.options);
+};
+
+// ✅ Intention-revealing
+const applyOneMutator = (
+  mutatorId: string,
+  mutatorConfiguration: MutatorConfiguration,
+  pullRequestContext: PRContext,
+) => {
+  const factor = mutatorImplementation?.apply(
+    pullRequestContext,
+    mutatorConfiguration.options,
+  );
+};
+```
+
+Keep this aligned with [CONTRIBUTING.md](CONTRIBUTING.md) § **TypeScript style** and the companion [TypeScript style rule](typescript-style.mdc).
