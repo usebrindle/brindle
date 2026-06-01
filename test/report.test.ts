@@ -123,4 +123,34 @@ describe("buildMergeRiskCommentMarkdown", () => {
     expect(markdown).toContain("junior");
     expect(markdown).toContain("diff_size");
   });
+
+  it("formats fractional values with one decimal in markdown", () => {
+    const scoreResult: ScoreResult = {
+      score: 41.55,
+      tier: "MEDIUM",
+      breakdown: [
+        {
+          name: "A",
+          score: 33.33,
+          weight: 50,
+          weighted: 16.67,
+          justification: "j",
+        },
+      ],
+      mutatorsApplied: [],
+      disabledCriteria: [],
+    };
+    const markdown = buildMergeRiskCommentMarkdown(scoreResult);
+    expect(markdown).toContain("41.6");
+    expect(markdown).toContain("33.3");
+    expect(markdown).toContain("16.7");
+  });
+
+  it("includes only mutator line when disabled criteria list is empty", () => {
+    const markdown = buildMergeRiskCommentMarkdown(
+      scoreResultFixture({ mutatorsApplied: ["m1"], disabledCriteria: [] }),
+    );
+    expect(markdown).toContain("m1");
+    expect(markdown).not.toContain("Criteria disabled");
+  });
 });

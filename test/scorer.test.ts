@@ -206,6 +206,50 @@ describe("scoreWithRegistries", () => {
       ),
     ).toThrow(/invalid factor/);
   });
+
+  it("skips mutators disabled in config", () => {
+    const baselineCriterion: Criterion = {
+      name: "C",
+      evaluate: () => ({ score: 10, justification: "c" }),
+    };
+    const neverAppliedMutator: Mutator = {
+      name: "skip",
+      apply: () => 100,
+    };
+    const config: ScoringConfig = {
+      thresholds,
+      criteria: { c: { weight: 100 } },
+      mutators: { skip: { enabled: false } },
+    };
+    const scoreResult = scoreWithRegistries(
+      minimalContext(),
+      config,
+      { c: baselineCriterion },
+      { skip: neverAppliedMutator },
+    );
+    expect(scoreResult.mutatorsApplied).toEqual([]);
+    expect(scoreResult.score).toBe(10);
+  });
+
+  it("skips mutators missing from the implementation registry", () => {
+    const baselineCriterion: Criterion = {
+      name: "C",
+      evaluate: () => ({ score: 10, justification: "c" }),
+    };
+    const config: ScoringConfig = {
+      thresholds,
+      criteria: { c: { weight: 100 } },
+      mutators: { ghost: {} },
+    };
+    const scoreResult = scoreWithRegistries(
+      minimalContext(),
+      config,
+      { c: baselineCriterion },
+      {},
+    );
+    expect(scoreResult.mutatorsApplied).toEqual([]);
+    expect(scoreResult.score).toBe(10);
+  });
 });
 
 describe("tier boundaries", () => {
