@@ -27,3 +27,6 @@ jobs:
 
       - name: Test
         run: npm run test -- --coverage
+
+      - name: Verify GitHub Action bundle (ncc drift)
+        run: npm run build:github-action && git diff --exit-code extensions/github-action/dist
