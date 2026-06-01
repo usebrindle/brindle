@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://brindle.dev/schema/merge-risk-config.schema.json",
+  "title": "Merge risk scoring config (subset)",
+  "description": "YAML shape under .merge-risk.yml consumed by the scorer. Additional top-level keys are allowed for forward compatibility.",
+  "type": "object",
+  "required": ["thresholds", "criteria"],
+  "additionalProperties": true,
+  "properties": {
+    "thresholds": {
+      "type": "object",
+      "required": ["low", "medium"],
+      "additionalProperties": true,
+      "properties": {
+        "low": { "type": "number" },
+        "medium": { "type": "number" }
+      }
+    },
+    "criteria": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["weight"],
+        "additionalProperties": true,
+        "properties": {
+          "enabled": { "type": "boolean" },
+          "weight": { "type": "number" },
+          "options": {}
+        }
+      }
+    },
+    "mutators": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "enabled": { "type": "boolean" },
+          "options": {}
+        }
+      }
+    }
+  }
+}
