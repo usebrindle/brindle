@@ -16,6 +16,11 @@ export type MergeMethod = "squash" | "merge" | "rebase";
 export type AutoMergeOutcome =
   | "skipped"
   | "not_eligible"
+  /**
+   * Core-only: tier qualifies under policy and the adapter should attempt native auto-merge.
+   * The adapter replaces this with `enabled` or `setting_off` after the platform call (ADR 0002).
+   */
+  | "eligible"
   | "enabled"
   | "unsupported"
   | "setting_off";
