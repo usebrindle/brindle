@@ -137,6 +137,7 @@ Result … human review recommended, change touches authentication paths.
 
 - [x] Core scoring engine
 - [x] GitHub Action … score, comment, check run (path action + committed `ncc` bundle)
+- [ ] Extension testing … Vitest coverage for `extensions/**/*.ts` (and tests under `test/`), plus optional Sonar `sonar.sources` alignment once `lcov` includes that tree
 - [ ] Native auto-merge on low-risk changes
 - [ ] Coverage formats … Istanbul, then lcov and Cobertura
 - [ ] GitLab CI component
