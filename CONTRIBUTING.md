@@ -21,13 +21,13 @@ On **commit**, **Husky** runs **lint-staged** on staged `*.{ts,tsx}`: **`eslint 
 
 Brindle is platform-agnostic at its core. The split matters, so keep contributions in the right layer.
 
-Target layout (from the [LLD](docs/designs/lld-merge-risk-classifier.md); directories will appear as the scaffold lands):
+Target layout (from the [LLD](docs/designs/lld-merge-risk-classifier.md)):
 
 - `core/` … the platform-agnostic scoring engine, criteria, mutators, coverage adapters, config, and reporting model. Depends on no platform SDK. This is what makes Brindle portable across GitHub, GitLab, and Bitbucket. See [ADR 0007](docs/adrs/0007-platform-adapter-boundary.md).
 - `adapters/` … one implementation of `PlatformAdapter` per platform. The only place that knows which platform it is talking to.
 - `extensions/` … the native CI wrapper per platform (GitHub Action first).
 
-Until that layout exists in-tree, the repo may still hold a minimal root `src/` and `test/`; new work should follow the LLD so we do not paint ourselves into a GitHub-shaped corner.
+The LLD layout (`core/`, `adapters/`, `extensions/`) lives in-tree; new work should stay in the right layer so we do not paint ourselves into a GitHub-shaped corner.
 
 A contribution that puts platform-specific code in `core/`, or executes content from a pull request head, will be asked to change. See [ADR 0001](docs/adrs/0001-no-pr-head-execution.md) and [ADR 0004](docs/adrs/0004-pure-criteria-over-hydrated-context.md) for the constraints that shape this.
 

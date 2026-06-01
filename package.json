@@ -8,6 +8,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "build:core": "npm run typecheck",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

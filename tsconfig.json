@@ -13,6 +13,12 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts"]
+  "include": [
+    "core/**/*.ts",
+    "adapters/**/*.ts",
+    "extensions/**/*.ts",
+    "test/**/*.ts",
+    "vitest.config.ts"
+  ]
 }
 
