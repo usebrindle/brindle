@@ -61,7 +61,7 @@ const autoMergeOutcomeFromReportPolicy = (
 };
 
 const escapeMarkdownTableCell = (rawText: string): string =>
-  rawText.replaceAll("|", "\\|").replaceAll("\n", " ").trim();
+  rawText.replaceAll("|", String.raw`\|`).replaceAll("\n", " ").trim();
 
 const formatNumberForDisplay = (numericValue: number): string => {
   const roundedToTenth = Math.round(numericValue * 10) / 10;
