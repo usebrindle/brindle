@@ -20,13 +20,15 @@ The Action reports via the Check Runs API.
 
 Tier maps to conclusion as follows. LOW maps to `success`. MEDIUM maps to `neutral`. HIGH maps to `action_required` by default, or to `failure` when `fail-on-high` is true so it blocks merge under branch protection.
 
+The bundled GitHub Action adds an **informational check** mode (`informational_check_conclusion`, default **true**): every tier maps to check conclusion `success` while the verdict and score breakdown still appear in the check body and PR comment. That keeps required checks and the Actions job green when merge risk is advisory only. Set `informational_check_conclusion` to **false** (and optionally `fail_on_high: true`) to restore strict ADR conclusions for branch-protection gates.
+
 The full per-criterion breakdown table is written into the Check Run output so it is visible even when PR comments are disabled.
 
 ## Consequences
 
-Positive. The three-tier signal maps cleanly onto distinct conclusions. A MEDIUM result is honestly neutral rather than a misleading success.
+Positive. The three-tier signal maps cleanly onto distinct conclusions. A MEDIUM result is honestly neutral rather than a misleading success when strict mapping is enabled.
 
-Positive. Teams get a real branch-protection gate by requiring the check and setting `fail-on-high`.
+Positive. Teams get a real branch-protection gate by requiring the check, turning **informational** mode off, and setting `fail-on-high` when they want HIGH to map to `failure`.
 
 Positive. The breakdown lives in the Checks tab regardless of comment settings, which keeps the audit trail intact.
 

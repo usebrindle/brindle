@@ -10,6 +10,7 @@ import type { ScoreResult } from "../core/types.js";
 
 const baseReportOptions = (): BuildRiskReportOptions => ({
   failOnHigh: false,
+  informationalCheckConclusion: false,
   autoMergePolicy: { enabled: true, maxEligibleTier: "HIGH" },
   nativeAutoMergeSupported: true,
 });
@@ -33,18 +34,35 @@ const scoreResultFixture = (overrides: Partial<ScoreResult> = {}): ScoreResult =
 
 describe("checkConclusionForTier", () => {
   it("maps LOW to success", () => {
-    expect(checkConclusionForTier("LOW", false)).toBe("success");
-    expect(checkConclusionForTier("LOW", true)).toBe("success");
+    expect(checkConclusionForTier("LOW", { failOnHigh: false, informationalCheckConclusion: false })).toBe(
+      "success",
+    );
+    expect(checkConclusionForTier("LOW", { failOnHigh: true, informationalCheckConclusion: false })).toBe("success");
   });
 
-  it("maps MEDIUM to neutral", () => {
-    expect(checkConclusionForTier("MEDIUM", false)).toBe("neutral");
-    expect(checkConclusionForTier("MEDIUM", true)).toBe("neutral");
+  it("maps MEDIUM to neutral when not informational", () => {
+    expect(checkConclusionForTier("MEDIUM", { failOnHigh: false, informationalCheckConclusion: false })).toBe(
+      "neutral",
+    );
+    expect(checkConclusionForTier("MEDIUM", { failOnHigh: true, informationalCheckConclusion: false })).toBe(
+      "neutral",
+    );
   });
 
-  it("maps HIGH to action_required unless fail-on-high", () => {
-    expect(checkConclusionForTier("HIGH", false)).toBe("action_required");
-    expect(checkConclusionForTier("HIGH", true)).toBe("failure");
+  it("maps HIGH to action_required unless fail-on-high when not informational", () => {
+    expect(checkConclusionForTier("HIGH", { failOnHigh: false, informationalCheckConclusion: false })).toBe(
+      "action_required",
+    );
+    expect(checkConclusionForTier("HIGH", { failOnHigh: true, informationalCheckConclusion: false })).toBe(
+      "failure",
+    );
+  });
+
+  it("maps every tier to success when informational", () => {
+    const informational = { failOnHigh: true, informationalCheckConclusion: true };
+    expect(checkConclusionForTier("LOW", informational)).toBe("success");
+    expect(checkConclusionForTier("MEDIUM", informational)).toBe("success");
+    expect(checkConclusionForTier("HIGH", informational)).toBe("success");
   });
 });
 
@@ -60,6 +78,15 @@ describe("buildRiskReport", () => {
     expect(report.commentMarkdown).toContain("| Diff size |");
     expect(report.checkConclusion).toBe("neutral");
     expect(report.autoMergeOutcome).toBe("eligible");
+  });
+
+  it("uses success check conclusion when informationalCheckConclusion is true", () => {
+    const scoreResult = scoreResultFixture({ tier: "MEDIUM" });
+    const report = buildRiskReport(scoreResult, {
+      ...baseReportOptions(),
+      informationalCheckConclusion: true,
+    });
+    expect(report.checkConclusion).toBe("success");
   });
 
   it("sets auto-merge to skipped when disabled in policy", () => {
