@@ -7,6 +7,7 @@
  */
 import { GraphqlResponseError } from "@octokit/graphql";
 
+import { IstanbulCoverageParseError, parseIstanbulCoverageJson } from "../../core/coverage/istanbul.js";
 import type { AutoMergeOutcome, MergeMethod, PRContext, RiskReport } from "../../core/types.js";
 import type { PlatformAdapter } from "../PlatformAdapter.js";
 
@@ -52,12 +53,37 @@ export class GitHubAdapter implements PlatformAdapter {
     this.lastPullRequestHeadSha = pullSnapshot.headSha;
     this.lastPullRequestNodeId = pullSnapshot.pullRequestNodeId;
     const fileSnapshots = await githubApiClient.listPullRequestFiles(pullRequestLookup);
+
+    const hydration = this.githubAdapterDependencies.istanbulCoverageHydration;
+    let coverageReport: PRContext["coverage"];
+    if (
+      hydration?.shouldHydrate === true &&
+      hydration.repositoryRelativePath.trim() !== ""
+    ) {
+      const rawCoverageJson = await githubApiClient.getRepositoryFileTextAtRef({
+        repositoryOwner: pullRequestLookup.repositoryOwner,
+        repositoryName: pullRequestLookup.repositoryName,
+        path: hydration.repositoryRelativePath.trim(),
+        ref: pullSnapshot.headSha,
+      });
+      if (rawCoverageJson !== null && rawCoverageJson.trim() !== "") {
+        try {
+          coverageReport = parseIstanbulCoverageJson(rawCoverageJson);
+        } catch (cause: unknown) {
+          if (!(cause instanceof IstanbulCoverageParseError)) {
+            throw cause;
+          }
+        }
+      }
+    }
+
     return mapGitHubPullAndFilesToPRContext(
       pullRequestLookup.repositoryOwner,
       pullRequestLookup.repositoryName,
       pullRequestLookup.pullRequestNumber,
       pullSnapshot,
       fileSnapshots,
+      coverageReport,
     );
   }
 
