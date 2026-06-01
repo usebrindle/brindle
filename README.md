@@ -19,7 +19,7 @@
 
 ## The problem
 
-AI made writing code fast. It did not make reviewing it fast. Once a team adopts AI coding tools, pull request volume climbs and review becomes the bottleneck. Teams like Super.com and Cloudflare have written about this and reached the same conclusion … most changes do not need a human reading every line, but some absolutely do. The hard part is knowing which is which, consistently and on every change.
+AI made writing code fast. It did not make reviewing it fast. Once a team adopts AI coding tools, pull request volume climbs and review becomes the bottleneck. Teams have written about this and reached the same conclusion … most changes do not need a human reading every line, but some absolutely do. The hard part is knowing which is which, consistently and on every change.
 
 ## What Brindle does
 
