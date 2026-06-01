@@ -316,3 +316,24 @@ describe("missing criterion implementation", () => {
     expect(scoreResult.tier).toBe("LOW");
   });
 });
+
+describe("score with built-in test_coverage", () => {
+  it("includes test_coverage in the breakdown alongside other criteria", () => {
+    const config: ScoringConfig = {
+      thresholds,
+      criteria: {
+        diff_size: { weight: 50, options: { max_lines_for_cap: 100 } },
+        test_coverage: { weight: 50, options: { minimum_percent: 80 } },
+      },
+    };
+    const context = minimalContext({
+      totalAdditions: 5,
+      totalDeletions: 5,
+      coverage: { linesCovered: 50, linesTotal: 100 },
+    });
+    const scoreResult = score(context, config);
+    const names = scoreResult.breakdown.map((row) => row.name);
+    expect(names).toContain("Test coverage (Istanbul)");
+    expect(names).toContain("Diff size");
+  });
+});

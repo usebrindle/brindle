@@ -1,4 +1,5 @@
 import { request } from "@octokit/request";
+import { RequestError } from "@octokit/request-error";
 import type { Octokit } from "@octokit/rest";
 import { describe, expect, it, vi } from "vitest";
 
@@ -276,5 +277,94 @@ describe("createOctokitGithubApiClient", () => {
     expect((graphqlBodies[0] as { variables?: { pullRequestId?: string } }).variables?.pullRequestId).toBe(
       "node-pr-9",
     );
+  });
+
+  it("returns null from getRepositoryFileTextAtRef when GitHub returns 404", async () => {
+    const reposGetContent = vi.fn().mockRejectedValue(
+      new RequestError("Not Found", 404, {
+        request: { method: "GET", url: "https://api.github.com/repos/o/r/contents/x", headers: {} },
+      }),
+    );
+    const octokit = {
+      rest: {
+        pulls: { get: vi.fn(), listFiles: vi.fn() },
+        checks: { create: vi.fn() },
+        issues: { createComment: vi.fn() },
+        repos: { getContent: reposGetContent },
+      },
+      paginate: vi.fn(),
+    } as unknown as Octokit;
+
+    const githubApiClient = createOctokitGithubApiClient(octokit);
+    await expect(
+      githubApiClient.getRepositoryFileTextAtRef({
+        repositoryOwner: "o",
+        repositoryName: "r",
+        path: "coverage.json",
+        ref: "abc",
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it("returns UTF-8 file contents from getRepositoryFileTextAtRef", async () => {
+    const payload = '{"hello":"world"}';
+    const reposGetContent = vi.fn().mockResolvedValue({
+      data: {
+        type: "file",
+        encoding: "base64",
+        content: Buffer.from(payload, "utf8").toString("base64"),
+      },
+    });
+    const octokit = {
+      rest: {
+        pulls: { get: vi.fn(), listFiles: vi.fn() },
+        checks: { create: vi.fn() },
+        issues: { createComment: vi.fn() },
+        repos: { getContent: reposGetContent },
+      },
+      paginate: vi.fn(),
+    } as unknown as Octokit;
+
+    const githubApiClient = createOctokitGithubApiClient(octokit);
+    await expect(
+      githubApiClient.getRepositoryFileTextAtRef({
+        repositoryOwner: "o",
+        repositoryName: "r",
+        path: "report.json",
+        ref: "main",
+      }),
+    ).resolves.toBe(payload);
+    expect(reposGetContent).toHaveBeenCalledWith({
+      owner: "o",
+      repo: "r",
+      path: "report.json",
+      ref: "main",
+    });
+  });
+
+  it("rethrows getRepositoryFileTextAtRef when GitHub returns a non-404 error", async () => {
+    const serverError = new RequestError("Internal Error", 500, {
+      request: { method: "GET", url: "https://api.github.com/repos/o/r/contents/x", headers: {} },
+    });
+    const reposGetContent = vi.fn().mockRejectedValue(serverError);
+    const octokit = {
+      rest: {
+        pulls: { get: vi.fn(), listFiles: vi.fn() },
+        checks: { create: vi.fn() },
+        issues: { createComment: vi.fn() },
+        repos: { getContent: reposGetContent },
+      },
+      paginate: vi.fn(),
+    } as unknown as Octokit;
+
+    const githubApiClient = createOctokitGithubApiClient(octokit);
+    await expect(
+      githubApiClient.getRepositoryFileTextAtRef({
+        repositoryOwner: "o",
+        repositoryName: "r",
+        path: "x",
+        ref: "main",
+      }),
+    ).rejects.toBe(serverError);
   });
 });

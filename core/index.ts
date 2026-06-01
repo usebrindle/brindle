@@ -28,3 +28,4 @@ export {
   checkConclusionForTier,
 } from "./report.js";
 export type { BuildRiskReportOptions } from "./report.types.js";
+export { IstanbulCoverageParseError, parseIstanbulCoverageJson } from "./coverage/istanbul.js";

@@ -4,7 +4,7 @@
  * @see docs/adrs/0004-pure-criteria-over-hydrated-context.md
  * @see docs/adrs/0007-platform-adapter-boundary.md
  */
-import type { ChangedFile, PRContext } from "../../core/types.js";
+import type { ChangedFile, CoverageReport, PRContext } from "../../core/types.js";
 
 import type { GitHubPullFileSnapshot, GitHubPullSnapshot } from "./githubAdapter.types.js";
 
@@ -35,6 +35,7 @@ export const mapGitHubPullAndFilesToPRContext = (
   pullRequestNumber: number,
   pullSnapshot: GitHubPullSnapshot,
   fileSnapshots: GitHubPullFileSnapshot[],
+  coverageReport?: CoverageReport,
 ): PRContext => {
   const changedFiles = changedFilesFromSnapshots(fileSnapshots);
   return {
@@ -50,5 +51,6 @@ export const mapGitHubPullAndFilesToPRContext = (
     files: changedFiles,
     totalAdditions: sumAdditions(changedFiles),
     totalDeletions: sumDeletions(changedFiles),
+    ...(coverageReport === undefined ? {} : { coverage: coverageReport }),
   };
 };

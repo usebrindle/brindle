@@ -34,6 +34,16 @@ export type GitHubPullRequestLookup = {
   pullRequestNumber: number;
 };
 
+/** Read a single text file at an arbitrary ref (used for Istanbul coverage on the PR head; not used for merge-risk config). */
+export type GetRepositoryFileTextAtRefInput = {
+  repositoryOwner: string;
+  repositoryName: string;
+  /** Repository-root-relative path (e.g. `coverage/coverage-final.json`). */
+  path: string;
+  /** Git ref (commit SHA, branch, or tag) passed to the Contents API. */
+  ref: string;
+};
+
 /** Input for {@link GitHubApiClient.createMergeRiskCheckRun} (maps to `rest.checks.create`). */
 export type CreateMergeRiskCheckRunInput = {
   repositoryOwner: string;
@@ -70,6 +80,11 @@ export type EnableNativePullRequestAutoMergeInput = {
 export type GitHubApiClient = {
   getPullRequest(lookup: GitHubPullRequestLookup): Promise<GitHubPullSnapshot>;
   listPullRequestFiles(lookup: GitHubPullRequestLookup): Promise<GitHubPullFileSnapshot[]>;
+  /**
+   * Reads a UTF-8 file via Contents API. Returns `null` when the path is missing (404).
+   * Callers use this for CI artifacts such as Istanbul coverage (ADR 0005), not for `.merge-risk.yml` on the base ref.
+   */
+  getRepositoryFileTextAtRef(input: GetRepositoryFileTextAtRefInput): Promise<string | null>;
   createMergeRiskCheckRun(input: CreateMergeRiskCheckRunInput): Promise<void>;
   createPullRequestComment(input: CreatePullRequestCommentInput): Promise<void>;
   enableNativePullRequestAutoMerge(input: EnableNativePullRequestAutoMergeInput): Promise<void>;
@@ -90,4 +105,13 @@ export type GitHubAdapterDependencies = {
   postRiskSummaryComment?: boolean;
   /** Display name for the GitHub Check Run; defaults to `"Merge risk"`. */
   mergeRiskCheckRunName?: string;
+  /**
+   * When `shouldHydrate` is true, {@link GitHubAdapter.buildContext} fetches `repositoryRelativePath`
+   * at the pull request **head** ref and parses Istanbul `coverage-final`-style JSON into `PRContext.coverage`.
+   * Omitted or `shouldHydrate: false` skips the Contents API call (ADR 0005: parse artifacts only when the criterion is in play).
+   */
+  istanbulCoverageHydration?: {
+    repositoryRelativePath: string;
+    shouldHydrate: boolean;
+  };
 };
