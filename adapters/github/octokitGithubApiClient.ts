@@ -4,13 +4,16 @@
  * @see docs/adrs/0007-platform-adapter-boundary.md
  */
 import { withCustomRequest } from "@octokit/graphql";
+import { RequestError } from "@octokit/request-error";
 import { Octokit } from "@octokit/rest";
 
 import type { MergeMethod } from "../../core/types.js";
+import { decodeGithubRepositoryContentFile } from "./decodeGithubRepositoryContentFile.js";
 import type {
   CreateMergeRiskCheckRunInput,
   CreatePullRequestCommentInput,
   EnableNativePullRequestAutoMergeInput,
+  GetRepositoryFileTextAtRefInput,
   GitHubApiClient,
   GitHubPullFileSnapshot,
   GitHubPullRequestLookup,
@@ -91,6 +94,23 @@ export const createOctokitGithubApiClient = (octokit: Octokit): GitHubApiClient 
       additions: row.additions,
       deletions: row.deletions,
     }));
+  },
+
+  async getRepositoryFileTextAtRef(input: GetRepositoryFileTextAtRefInput): Promise<string | null> {
+    try {
+      const { data } = await octokit.rest.repos.getContent({
+        owner: input.repositoryOwner,
+        repo: input.repositoryName,
+        path: input.path,
+        ref: input.ref,
+      });
+      return decodeGithubRepositoryContentFile(data, input.path);
+    } catch (cause: unknown) {
+      if (cause instanceof RequestError && cause.status === 404) {
+        return null;
+      }
+      throw cause;
+    }
   },
 
   async createMergeRiskCheckRun(input: CreateMergeRiskCheckRunInput): Promise<void> {

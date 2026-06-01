@@ -31354,7 +31354,7 @@ module.exports = {
 __nccwpck_require__.a(module, async (__webpack_handle_async_dependencies__, __webpack_async_result__) => { try {
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0__ = __nccwpck_require__(7484);
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__nccwpck_require__.n(_actions_core__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(2611);
+/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(9463);
 /**
  * GitHub Actions entry: scores the pull request from base-branch config and publishes results.
  *
@@ -31375,7 +31375,7 @@ __webpack_async_result__();
 
 /***/ }),
 
-/***/ 2611:
+/***/ 9463:
 /***/ ((__unused_webpack_module, __webpack_exports__, __nccwpck_require__) => {
 
 
@@ -35375,6 +35375,32 @@ const dist_src_Octokit = Octokit.plugin(requestLog, legacyRestEndpointMethods, p
 );
 
 
+;// CONCATENATED MODULE: ./adapters/github/decodeGithubRepositoryContentFile.ts
+/**
+ * Decodes a GitHub Contents API file payload (`repos.getContent` on a file) to UTF-8 text.
+ *
+ * @see docs/adrs/0001-no-pr-head-execution.md
+ */
+const decodeGithubRepositoryContentFile = (contentsApiResponse, requestedFilePath) => {
+    if (Array.isArray(contentsApiResponse)) {
+        throw new Error(`${requestedFilePath} is a directory, not a file.`);
+    }
+    if (typeof contentsApiResponse !== "object" || contentsApiResponse === null) {
+        throw new Error(`Unexpected response when reading ${requestedFilePath}.`);
+    }
+    const fileRecord = contentsApiResponse;
+    if (fileRecord.type !== "file") {
+        throw new Error(`${requestedFilePath} is not a file (type=${String(fileRecord.type)}).`);
+    }
+    const encoding = fileRecord.encoding;
+    const base64Content = fileRecord.content;
+    if (encoding !== "base64" || typeof base64Content !== "string") {
+        throw new Error(`${requestedFilePath} could not be read as base64-encoded file content.`);
+    }
+    const normalizedBase64 = base64Content.replace(/\s/g, "");
+    return Buffer.from(normalizedBase64, "base64").toString("utf8");
+};
+
 ;// CONCATENATED MODULE: ./node_modules/@octokit/graphql/dist-bundle/index.js
 // pkg/dist-src/index.js
 
@@ -35502,12 +35528,227 @@ function dist_bundle_withCustomRequest(customRequest) {
 }
 
 
+;// CONCATENATED MODULE: ./core/coverage/istanbul.ts
+/**
+ * Parses Istanbul / NYC `coverage-final.json` (per-file statement maps) into a neutral {@link CoverageReport}.
+ *
+ * {@link CoverageReport.linesCovered} and {@link CoverageReport.linesTotal} carry **statement** hit counts
+ * from Istanbul's `s` map (field names match the neutral type for simplicity). See the `test_coverage` criterion.
+ *
+ * @see docs/adrs/0005-read-findings-not-run-tools.md
+ * @see docs/designs/lld-merge-risk-classifier.md
+ */
+/** Raised when JSON is not a usable Istanbul coverage-final document. */
+class IstanbulCoverageParseError extends Error {
+    constructor(message, options) {
+        super(message, options);
+        this.name = "IstanbulCoverageParseError";
+    }
+}
+const isPlainRecord = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
+/**
+ * @param jsonText - UTF-8 JSON text of an Istanbul `coverage-final` object (map of absolute path → file coverage).
+ * @returns Aggregated statement hit counts as {@link CoverageReport} fields.
+ */
+const parseIstanbulCoverageJson = (jsonText) => {
+    let parsed;
+    try {
+        parsed = JSON.parse(jsonText);
+    }
+    catch (cause) {
+        throw new IstanbulCoverageParseError("Istanbul coverage JSON could not be parsed.", { cause });
+    }
+    if (!isPlainRecord(parsed)) {
+        throw new IstanbulCoverageParseError("Istanbul coverage must be a JSON object at the root.");
+    }
+    let statementsTotal = 0;
+    let statementsCovered = 0;
+    for (const fileKey of Object.keys(parsed)) {
+        const fileEntry = parsed[fileKey];
+        if (!isPlainRecord(fileEntry)) {
+            continue;
+        }
+        const fileCoverage = fileEntry;
+        const hitMap = fileCoverage.s;
+        if (!isPlainRecord(hitMap)) {
+            continue;
+        }
+        for (const statementId of Object.keys(hitMap)) {
+            statementsTotal += 1;
+            const hits = hitMap[statementId];
+            if (typeof hits === "number" && hits > 0) {
+                statementsCovered += 1;
+            }
+        }
+    }
+    if (statementsTotal === 0) {
+        throw new IstanbulCoverageParseError("Istanbul coverage document contains no statement counters (`s` maps are empty or missing).");
+    }
+    return {
+        linesCovered: statementsCovered,
+        linesTotal: statementsTotal,
+    };
+};
+
+;// CONCATENATED MODULE: ./adapters/github/mapGitHubPullToPrContext.ts
+const changedFilesFromSnapshots = (fileSnapshots) => fileSnapshots.map((fileSnapshot) => ({
+    path: fileSnapshot.path,
+    status: fileSnapshot.status,
+    additions: fileSnapshot.additions,
+    deletions: fileSnapshot.deletions,
+}));
+const sumAdditions = (changedFiles) => changedFiles.reduce((runningTotal, file) => runningTotal + file.additions, 0);
+const sumDeletions = (changedFiles) => changedFiles.reduce((runningTotal, file) => runningTotal + file.deletions, 0);
+/**
+ * @param repositoryOwner - GitHub org or user login owning the repo.
+ * @param repositoryName - Repository name without owner.
+ * @param pullRequestNumber - GitHub pull request number.
+ * @param pullSnapshot - Fields read from the pull request resource.
+ * @param fileSnapshots - Rows from the pull request files listing (caller paginates).
+ */
+const mapGitHubPullAndFilesToPRContext = (repositoryOwner, repositoryName, pullRequestNumber, pullSnapshot, fileSnapshots, coverageReport) => {
+    const changedFiles = changedFilesFromSnapshots(fileSnapshots);
+    return {
+        repoSlug: `${repositoryOwner}/${repositoryName}`,
+        changeNumber: pullRequestNumber,
+        headSha: pullSnapshot.headSha,
+        baseRef: pullSnapshot.baseRefName,
+        author: pullSnapshot.authorLogin,
+        title: pullSnapshot.title,
+        body: pullSnapshot.body,
+        labels: pullSnapshot.labelNames,
+        createdAt: pullSnapshot.createdAtIso,
+        files: changedFiles,
+        totalAdditions: sumAdditions(changedFiles),
+        totalDeletions: sumDeletions(changedFiles),
+        ...(coverageReport !== undefined ? { coverage: coverageReport } : {}),
+    };
+};
+
+;// CONCATENATED MODULE: ./adapters/github/GitHubAdapter.ts
+/**
+ * GitHub implementation of {@link PlatformAdapter}: hydrates {@link PRContext} from the REST API.
+ *
+ * @see docs/adrs/0001-no-pr-head-execution.md
+ * @see docs/adrs/0002-native-auto-merge.md
+ * @see docs/adrs/0007-platform-adapter-boundary.md
+ */
+
+
+
+const mapGithubNativeAutoMergeFailureToOutcome = (cause) => {
+    if (cause instanceof dist_bundle_GraphqlResponseError) {
+        return "setting_off";
+    }
+    if (cause instanceof Error) {
+        const lowered = cause.message.toLowerCase();
+        if (lowered.includes("403") || lowered.includes("401")) {
+            return "setting_off";
+        }
+    }
+    throw cause;
+};
+class GitHubAdapter {
+    githubAdapterDependencies;
+    /** Set in {@link GitHubAdapter.buildContext} for {@link GitHubAdapter.writeResult} (check run `head_sha`). */
+    lastPullRequestHeadSha;
+    /** Set in {@link GitHubAdapter.buildContext} for {@link GitHubAdapter.enableAutoMerge} (GraphQL `pullRequestId`). */
+    lastPullRequestNodeId;
+    constructor(githubAdapterDependencies) {
+        this.githubAdapterDependencies = githubAdapterDependencies;
+        this.lastPullRequestHeadSha = undefined;
+        this.lastPullRequestNodeId = undefined;
+    }
+    async buildContext() {
+        const pullRequestLookup = {
+            repositoryOwner: this.githubAdapterDependencies.repositoryOwner,
+            repositoryName: this.githubAdapterDependencies.repositoryName,
+            pullRequestNumber: this.githubAdapterDependencies.pullRequestNumber,
+        };
+        const { githubApiClient } = this.githubAdapterDependencies;
+        const pullSnapshot = await githubApiClient.getPullRequest(pullRequestLookup);
+        this.lastPullRequestHeadSha = pullSnapshot.headSha;
+        this.lastPullRequestNodeId = pullSnapshot.pullRequestNodeId;
+        const fileSnapshots = await githubApiClient.listPullRequestFiles(pullRequestLookup);
+        const hydration = this.githubAdapterDependencies.istanbulCoverageHydration;
+        let coverageReport;
+        if (hydration?.shouldHydrate === true &&
+            hydration.repositoryRelativePath.trim() !== "") {
+            const rawCoverageJson = await githubApiClient.getRepositoryFileTextAtRef({
+                repositoryOwner: pullRequestLookup.repositoryOwner,
+                repositoryName: pullRequestLookup.repositoryName,
+                path: hydration.repositoryRelativePath.trim(),
+                ref: pullSnapshot.headSha,
+            });
+            if (rawCoverageJson !== null && rawCoverageJson.trim() !== "") {
+                try {
+                    coverageReport = parseIstanbulCoverageJson(rawCoverageJson);
+                }
+                catch (cause) {
+                    if (!(cause instanceof IstanbulCoverageParseError)) {
+                        throw cause;
+                    }
+                }
+            }
+        }
+        return mapGitHubPullAndFilesToPRContext(pullRequestLookup.repositoryOwner, pullRequestLookup.repositoryName, pullRequestLookup.pullRequestNumber, pullSnapshot, fileSnapshots, coverageReport);
+    }
+    async writeResult(report) {
+        const headSha = this.lastPullRequestHeadSha;
+        if (headSha === undefined) {
+            throw new Error("GitHubAdapter.writeResult requires buildContext() first so the PR head SHA is available for the check run.");
+        }
+        const { githubApiClient, repositoryOwner, repositoryName, pullRequestNumber } = this.githubAdapterDependencies;
+        const checkName = this.githubAdapterDependencies.mergeRiskCheckRunName ?? "Merge risk";
+        await githubApiClient.createMergeRiskCheckRun({
+            repositoryOwner,
+            repositoryName,
+            headSha,
+            name: checkName,
+            conclusion: report.checkConclusion,
+            summaryMarkdown: report.commentMarkdown,
+        });
+        const shouldPostComment = this.githubAdapterDependencies.postRiskSummaryComment !== false;
+        const commentBody = report.commentMarkdown.trim();
+        if (shouldPostComment && commentBody.length > 0) {
+            await githubApiClient.createPullRequestComment({
+                repositoryOwner,
+                repositoryName,
+                pullRequestNumber,
+                body: report.commentMarkdown,
+            });
+        }
+    }
+    async enableAutoMerge(method) {
+        const pullRequestNodeId = this.lastPullRequestNodeId;
+        if (pullRequestNodeId === undefined || pullRequestNodeId === "") {
+            throw new Error("GitHubAdapter.enableAutoMerge requires buildContext() first and a non-empty pull request node_id from GitHub.");
+        }
+        const { githubApiClient, repositoryOwner, repositoryName, pullRequestNumber } = this.githubAdapterDependencies;
+        try {
+            await githubApiClient.enableNativePullRequestAutoMerge({
+                repositoryOwner,
+                repositoryName,
+                pullRequestNumber,
+                pullRequestNodeId,
+                mergeMethod: method,
+            });
+            return "enabled";
+        }
+        catch (cause) {
+            return mapGithubNativeAutoMergeFailureToOutcome(cause);
+        }
+    }
+}
+
 ;// CONCATENATED MODULE: ./adapters/github/octokitGithubApiClient.ts
 /**
  * {@link GitHubApiClient} backed by `@octokit/rest` (reads for context, check runs and PR comments for results).
  *
  * @see docs/adrs/0007-platform-adapter-boundary.md
  */
+
+
 
 
 /** GitHub `checks` API `output.summary` maximum length (characters). */
@@ -35572,6 +35813,23 @@ const createOctokitGithubApiClient = (octokit) => ({
             deletions: row.deletions,
         }));
     },
+    async getRepositoryFileTextAtRef(input) {
+        try {
+            const { data } = await octokit.rest.repos.getContent({
+                owner: input.repositoryOwner,
+                repo: input.repositoryName,
+                path: input.path,
+                ref: input.ref,
+            });
+            return decodeGithubRepositoryContentFile(data, input.path);
+        }
+        catch (cause) {
+            if (cause instanceof RequestError && cause.status === 404) {
+                return null;
+            }
+            throw cause;
+        }
+    },
     async createMergeRiskCheckRun(input) {
         await octokit.rest.checks.create({
             owner: input.repositoryOwner,
@@ -35606,133 +35864,10 @@ const createOctokitGithubApiClient = (octokit) => ({
     },
 });
 
-;// CONCATENATED MODULE: ./adapters/github/mapGitHubPullToPrContext.ts
-const changedFilesFromSnapshots = (fileSnapshots) => fileSnapshots.map((fileSnapshot) => ({
-    path: fileSnapshot.path,
-    status: fileSnapshot.status,
-    additions: fileSnapshot.additions,
-    deletions: fileSnapshot.deletions,
-}));
-const sumAdditions = (changedFiles) => changedFiles.reduce((runningTotal, file) => runningTotal + file.additions, 0);
-const sumDeletions = (changedFiles) => changedFiles.reduce((runningTotal, file) => runningTotal + file.deletions, 0);
-/**
- * @param repositoryOwner - GitHub org or user login owning the repo.
- * @param repositoryName - Repository name without owner.
- * @param pullRequestNumber - GitHub pull request number.
- * @param pullSnapshot - Fields read from the pull request resource.
- * @param fileSnapshots - Rows from the pull request files listing (caller paginates).
- */
-const mapGitHubPullAndFilesToPRContext = (repositoryOwner, repositoryName, pullRequestNumber, pullSnapshot, fileSnapshots) => {
-    const changedFiles = changedFilesFromSnapshots(fileSnapshots);
-    return {
-        repoSlug: `${repositoryOwner}/${repositoryName}`,
-        changeNumber: pullRequestNumber,
-        headSha: pullSnapshot.headSha,
-        baseRef: pullSnapshot.baseRefName,
-        author: pullSnapshot.authorLogin,
-        title: pullSnapshot.title,
-        body: pullSnapshot.body,
-        labels: pullSnapshot.labelNames,
-        createdAt: pullSnapshot.createdAtIso,
-        files: changedFiles,
-        totalAdditions: sumAdditions(changedFiles),
-        totalDeletions: sumDeletions(changedFiles),
-    };
-};
-
-;// CONCATENATED MODULE: ./adapters/github/GitHubAdapter.ts
-/**
- * GitHub implementation of {@link PlatformAdapter}: hydrates {@link PRContext} from the REST API.
- *
- * @see docs/adrs/0001-no-pr-head-execution.md
- * @see docs/adrs/0002-native-auto-merge.md
- * @see docs/adrs/0007-platform-adapter-boundary.md
- */
+;// CONCATENATED MODULE: ./adapters/index.ts
 
 
-const mapGithubNativeAutoMergeFailureToOutcome = (cause) => {
-    if (cause instanceof dist_bundle_GraphqlResponseError) {
-        return "setting_off";
-    }
-    if (cause instanceof Error) {
-        const lowered = cause.message.toLowerCase();
-        if (lowered.includes("403") || lowered.includes("401")) {
-            return "setting_off";
-        }
-    }
-    throw cause;
-};
-class GitHubAdapter {
-    githubAdapterDependencies;
-    /** Set in {@link GitHubAdapter.buildContext} for {@link GitHubAdapter.writeResult} (check run `head_sha`). */
-    lastPullRequestHeadSha;
-    /** Set in {@link GitHubAdapter.buildContext} for {@link GitHubAdapter.enableAutoMerge} (GraphQL `pullRequestId`). */
-    lastPullRequestNodeId;
-    constructor(githubAdapterDependencies) {
-        this.githubAdapterDependencies = githubAdapterDependencies;
-        this.lastPullRequestHeadSha = undefined;
-        this.lastPullRequestNodeId = undefined;
-    }
-    async buildContext() {
-        const pullRequestLookup = {
-            repositoryOwner: this.githubAdapterDependencies.repositoryOwner,
-            repositoryName: this.githubAdapterDependencies.repositoryName,
-            pullRequestNumber: this.githubAdapterDependencies.pullRequestNumber,
-        };
-        const { githubApiClient } = this.githubAdapterDependencies;
-        const pullSnapshot = await githubApiClient.getPullRequest(pullRequestLookup);
-        this.lastPullRequestHeadSha = pullSnapshot.headSha;
-        this.lastPullRequestNodeId = pullSnapshot.pullRequestNodeId;
-        const fileSnapshots = await githubApiClient.listPullRequestFiles(pullRequestLookup);
-        return mapGitHubPullAndFilesToPRContext(pullRequestLookup.repositoryOwner, pullRequestLookup.repositoryName, pullRequestLookup.pullRequestNumber, pullSnapshot, fileSnapshots);
-    }
-    async writeResult(report) {
-        const headSha = this.lastPullRequestHeadSha;
-        if (headSha === undefined) {
-            throw new Error("GitHubAdapter.writeResult requires buildContext() first so the PR head SHA is available for the check run.");
-        }
-        const { githubApiClient, repositoryOwner, repositoryName, pullRequestNumber } = this.githubAdapterDependencies;
-        const checkName = this.githubAdapterDependencies.mergeRiskCheckRunName ?? "Merge risk";
-        await githubApiClient.createMergeRiskCheckRun({
-            repositoryOwner,
-            repositoryName,
-            headSha,
-            name: checkName,
-            conclusion: report.checkConclusion,
-            summaryMarkdown: report.commentMarkdown,
-        });
-        const shouldPostComment = this.githubAdapterDependencies.postRiskSummaryComment !== false;
-        const commentBody = report.commentMarkdown.trim();
-        if (shouldPostComment && commentBody.length > 0) {
-            await githubApiClient.createPullRequestComment({
-                repositoryOwner,
-                repositoryName,
-                pullRequestNumber,
-                body: report.commentMarkdown,
-            });
-        }
-    }
-    async enableAutoMerge(method) {
-        const pullRequestNodeId = this.lastPullRequestNodeId;
-        if (pullRequestNodeId === undefined || pullRequestNodeId === "") {
-            throw new Error("GitHubAdapter.enableAutoMerge requires buildContext() first and a non-empty pull request node_id from GitHub.");
-        }
-        const { githubApiClient, repositoryOwner, repositoryName, pullRequestNumber } = this.githubAdapterDependencies;
-        try {
-            await githubApiClient.enableNativePullRequestAutoMerge({
-                repositoryOwner,
-                repositoryName,
-                pullRequestNumber,
-                pullRequestNodeId,
-                mergeMethod: method,
-            });
-            return "enabled";
-        }
-        catch (cause) {
-            return mapGithubNativeAutoMergeFailureToOutcome(cause);
-        }
-    }
-}
+
 
 ;// CONCATENATED MODULE: ./core/criteria/diffSize.ts
 const DEFAULT_CAP_LINES = 400;
@@ -35783,13 +35918,71 @@ const diffSizeCriterion = {
     },
 };
 
+;// CONCATENATED MODULE: ./core/criteria/testCoverage.ts
+const DEFAULT_MINIMUM_PERCENT = 80;
+const minimumPercentFromOptions = (options) => {
+    if (options === null || options === undefined)
+        return DEFAULT_MINIMUM_PERCENT;
+    if (typeof options !== "object" || Array.isArray(options))
+        return DEFAULT_MINIMUM_PERCENT;
+    const record = options;
+    const raw = record.minimum_percent;
+    if (typeof raw !== "number" || !Number.isFinite(raw) || raw <= 0 || raw > 100) {
+        return DEFAULT_MINIMUM_PERCENT;
+    }
+    return raw;
+};
+const coveragePercent = (context) => {
+    const coverage = context.coverage;
+    if (coverage === undefined ||
+        typeof coverage.linesTotal !== "number" ||
+        typeof coverage.linesCovered !== "number" ||
+        coverage.linesTotal <= 0) {
+        return undefined;
+    }
+    return (coverage.linesCovered / coverage.linesTotal) * 100;
+};
+/**
+ * Criterion registered under YAML key `test_coverage`. Requires {@link PRContext.coverage} from an Istanbul report.
+ */
+const testCoverageCriterion = {
+    name: "Test coverage (Istanbul)",
+    isEnabled: (context) => coveragePercent(context) !== undefined,
+    evaluate: (context, options) => {
+        const actualPercent = coveragePercent(context);
+        if (actualPercent === undefined) {
+            return {
+                score: 0,
+                justification: "No Istanbul coverage data on the change context.",
+                selfDisable: true,
+            };
+        }
+        const minimumPercent = minimumPercentFromOptions(options);
+        if (actualPercent >= minimumPercent) {
+            return {
+                score: 0,
+                justification: `Statement coverage ${actualPercent.toFixed(1)}% meets minimum ${minimumPercent}%.`,
+                detail: { actualPercent, minimumPercent },
+            };
+        }
+        const rawScore = Math.min(100, Math.max(0, ((minimumPercent - actualPercent) / minimumPercent) * 100));
+        return {
+            score: rawScore,
+            justification: `Statement coverage ${actualPercent.toFixed(1)}% is below minimum ${minimumPercent}%.`,
+            detail: { actualPercent, minimumPercent },
+        };
+    },
+};
+
 ;// CONCATENATED MODULE: ./core/criteria/builtins.ts
+
 
 /**
  * Map from YAML criterion id (e.g. `diff_size`) to implementation. Consumers rely on stable ids across releases.
  */
 const builtInCriteria = {
     diff_size: diffSizeCriterion,
+    test_coverage: testCoverageCriterion,
 };
 
 ;// CONCATENATED MODULE: ./core/mutators/builtins.ts
@@ -40126,6 +40319,7 @@ const BRINDLE_VERSION = "0.0.0";
 
 
 
+
 ;// CONCATENATED MODULE: ./extensions/github-action/runMergeRiskGithubAction.ts
 /**
  * Loads merge-risk config from the PR base ref (Contents API), scores, then writes check + comment.
@@ -40133,6 +40327,7 @@ const BRINDLE_VERSION = "0.0.0";
  * @see docs/adrs/0001-no-pr-head-execution.md
  * @see docs/adrs/0002-native-auto-merge.md
  */
+
 
 
 
@@ -40188,25 +40383,6 @@ const readPullRequestNumberAndBaseRefFromEvent = (githubEventPayload) => {
     }
     return { pullRequestNumber, baseRefName };
 };
-const decodeGithubContentsApiFileBody = (contentsApiResponse, requestedFilePath) => {
-    if (Array.isArray(contentsApiResponse)) {
-        throw new Error(`${requestedFilePath} on the base ref is a directory, not a file.`);
-    }
-    if (typeof contentsApiResponse !== "object" || contentsApiResponse === null) {
-        throw new Error(`Unexpected response when reading ${requestedFilePath} from the base ref.`);
-    }
-    const fileRecord = contentsApiResponse;
-    if (fileRecord.type !== "file") {
-        throw new Error(`${requestedFilePath} on the base ref is not a file (type=${String(fileRecord.type)}).`);
-    }
-    const encoding = fileRecord.encoding;
-    const base64Content = fileRecord.content;
-    if (encoding !== "base64" || typeof base64Content !== "string") {
-        throw new Error(`${requestedFilePath} could not be read as base64-encoded file content.`);
-    }
-    const normalizedBase64 = base64Content.replace(/\s/g, "");
-    return Buffer.from(normalizedBase64, "base64").toString("utf8");
-};
 const isGithubContentsApiNotFoundError = (error) => {
     if (typeof error !== "object" || error === null) {
         return false;
@@ -40223,7 +40399,7 @@ const fetchMergeRiskYamlTextFromGithubBaseRef = async (options) => {
             path: mergeRiskFilePath,
             ref: baseRefName,
         });
-        return decodeGithubContentsApiFileBody(data, mergeRiskFilePath);
+        return decodeGithubRepositoryContentFile(data, mergeRiskFilePath);
     }
     catch (cause) {
         if (skipWhenMergeRiskFileMissingOnBase && isGithubContentsApiNotFoundError(cause)) {
@@ -40281,12 +40457,20 @@ const runMergeRiskGithubAction = async () => {
         throw cause;
     }
     const { scoringConfig, autoMerge } = mergeRiskRepositoryYaml;
+    const coverageReportPath = (0,core.getInput)("coverage_report_path").trim();
+    const testCoverageCriterionConfig = scoringConfig.criteria.test_coverage;
+    const shouldHydrateIstanbulCoverage = coverageReportPath !== "" &&
+        testCoverageCriterionConfig !== undefined &&
+        testCoverageCriterionConfig.enabled !== false;
     const githubApiClient = createOctokitGithubApiClient(octokit);
     const githubAdapter = new GitHubAdapter({
         githubApiClient,
         repositoryOwner,
         repositoryName,
         pullRequestNumber,
+        istanbulCoverageHydration: shouldHydrateIstanbulCoverage
+            ? { repositoryRelativePath: coverageReportPath, shouldHydrate: true }
+            : undefined,
     });
     const pullRequestContext = await githubAdapter.buildContext();
     const scoreResult = score(pullRequestContext, scoringConfig);

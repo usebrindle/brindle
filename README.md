@@ -13,7 +13,7 @@
 
 </div>
 
-> **Status … early development.** The scoring engine and GitHub Action path (`extensions/github-action`) run on pull requests when `.merge-risk.yml` is on the base branch. Native auto-merge is not wired yet (slice 09). Watch or star the repo to follow along, and see the [design docs](docs/designs/) and [ADRs](docs/adrs/) for the thinking behind it.
+> **Status … early development.** The scoring engine and GitHub Action path (`extensions/github-action`) run on pull requests when `.merge-risk.yml` is on the base branch. Optional **Istanbul** coverage scoring reads a CI-produced `coverage-final`-style JSON file from the PR head when you enable `criteria.test_coverage` and set the Action `coverage_report_path` input (ADR 0005). Native auto-merge is available when configured in YAML (ADR 0002). Watch or star the repo to follow along, and see the [design docs](docs/designs/) and [ADRs](docs/adrs/) for the thinking behind it.
 
 ---
 
@@ -54,6 +54,8 @@ jobs:
       - uses: ./extensions/github-action
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          # Optional: Istanbul coverage-final JSON on the PR head (see ADR 0005). Requires criteria.test_coverage in .merge-risk.yml.
+          # coverage_report_path: coverage/coverage-final.json
 ```
 
 For a published version, replace the path with `uses: usebrindle/brindle/extensions/github-action@vX` once tags exist.
@@ -71,10 +73,10 @@ criteria:
       max_lines_for_cap: 200
 ```
 
-The example below shows additional criteria planned in the LLD; only built-ins shipped in this repo apply today.
+The example below shows additional criteria planned in the LLD; only built-ins shipped in this repo apply today (`diff_size`, `test_coverage` with Istanbul reports).
 
 ```yaml
-# .merge-risk.yml — fuller example (criteria beyond diff_size ship over time)
+# .merge-risk.yml — fuller example (criteria beyond shipped built-ins are placeholders)
 thresholds:
   low: 30
   medium: 60
@@ -82,6 +84,10 @@ thresholds:
 criteria:
   diff_size:
     weight: 20
+  test_coverage:
+    weight: 20
+    options:
+      minimum_percent: 80
   file_patterns:
     weight: 25
     options:
@@ -137,9 +143,10 @@ Result … human review recommended, change touches authentication paths.
 
 - [x] Core scoring engine
 - [x] GitHub Action … score, comment, check run (path action + committed `ncc` bundle)
+- [x] Istanbul coverage … parse CI `coverage-final` JSON into scoring (`test_coverage` criterion, gated Contents API fetch in the GitHub adapter)
 - [ ] Extension testing … Vitest coverage for `extensions/**/*.ts` (and tests under `test/`), plus optional Sonar `sonar.sources` alignment once `lcov` includes that tree
 - [x] Native auto-merge on low-risk changes
-- [ ] Coverage formats … Istanbul, then lcov and Cobertura
+- [ ] Coverage formats … lcov and Cobertura (after Istanbul)
 - [ ] GitLab CI component
 - [ ] Bitbucket Pipe
 

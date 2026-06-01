@@ -45,6 +45,7 @@ const createMockGithubApiClient = (
 ): GitHubApiClient => ({
   getPullRequest: async () => samplePullSnapshot(),
   listPullRequestFiles: async () => [],
+  getRepositoryFileTextAtRef: vi.fn().mockResolvedValue(null),
   createMergeRiskCheckRun: vi.fn().mockResolvedValue(undefined),
   createPullRequestComment: vi.fn().mockResolvedValue(undefined),
   enableNativePullRequestAutoMerge: vi.fn().mockResolvedValue(undefined),
@@ -87,6 +88,18 @@ describe("mapGitHubPullAndFilesToPRContext", () => {
     expect(pullContext.totalAdditions).toBe(0);
     expect(pullContext.totalDeletions).toBe(0);
   });
+
+  it("attaches coverage when a sixth argument is provided", () => {
+    const pullContext = mapGitHubPullAndFilesToPRContext(
+      "acme",
+      "demo",
+      1,
+      samplePullSnapshot(),
+      [],
+      { linesCovered: 9, linesTotal: 10 },
+    );
+    expect(pullContext.coverage).toEqual({ linesCovered: 9, linesTotal: 10 });
+  });
 });
 
 describe("GitHubAdapter.buildContext", () => {
@@ -104,6 +117,60 @@ describe("GitHubAdapter.buildContext", () => {
     expect(pullContext.repoSlug).toBe("acme/demo");
     expect(pullContext.changeNumber).toBe(7);
     expect(pullContext.totalAdditions).toBe(13);
+  });
+
+  it("hydrates coverage from Istanbul JSON at the PR head ref when istanbulCoverageHydration is on", async () => {
+    const minimalIstanbul = JSON.stringify({
+      "/x.ts": {
+        path: "/x.ts",
+        statementMap: {
+          "0": { start: { line: 1, column: 0 }, end: { line: 1, column: 1 } },
+        },
+        fnMap: {},
+        branchMap: {},
+        s: { "0": 1 },
+        f: {},
+        b: {},
+      },
+    });
+    const getRepositoryFileTextAtRef = vi.fn().mockResolvedValue(minimalIstanbul);
+    const githubAdapter = new GitHubAdapter({
+      githubApiClient: createMockGithubApiClient({
+        listPullRequestFiles: async () => sampleFileSnapshots(),
+        getRepositoryFileTextAtRef,
+      }),
+      repositoryOwner: "acme",
+      repositoryName: "demo",
+      pullRequestNumber: 7,
+      istanbulCoverageHydration: {
+        repositoryRelativePath: "coverage/coverage-final.json",
+        shouldHydrate: true,
+      },
+    });
+    const pullContext = await githubAdapter.buildContext();
+    expect(pullContext.coverage).toEqual({ linesCovered: 1, linesTotal: 1 });
+    expect(getRepositoryFileTextAtRef).toHaveBeenCalledWith({
+      repositoryOwner: "acme",
+      repositoryName: "demo",
+      path: "coverage/coverage-final.json",
+      ref: "headdeadbeef",
+    });
+  });
+
+  it("does not call getRepositoryFileTextAtRef when istanbulCoverageHydration is absent", async () => {
+    const getRepositoryFileTextAtRef = vi.fn().mockResolvedValue(null);
+    const mockGithubApiClient = createMockGithubApiClient({
+      listPullRequestFiles: async () => sampleFileSnapshots(),
+      getRepositoryFileTextAtRef,
+    });
+    const githubAdapter = new GitHubAdapter({
+      githubApiClient: mockGithubApiClient,
+      repositoryOwner: "acme",
+      repositoryName: "demo",
+      pullRequestNumber: 7,
+    });
+    await githubAdapter.buildContext();
+    expect(getRepositoryFileTextAtRef).not.toHaveBeenCalled();
   });
 });
 

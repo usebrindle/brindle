@@ -9,6 +9,7 @@ import { readFile } from "node:fs/promises";
 
 import { Octokit } from "@octokit/rest";
 
+import { decodeGithubRepositoryContentFile } from "../../adapters/github/decodeGithubRepositoryContentFile.js";
 import { GitHubAdapter, createOctokitGithubApiClient } from "../../adapters/index.js";
 import {
   buildRiskReport,
@@ -84,29 +85,6 @@ const readPullRequestNumberAndBaseRefFromEvent = (
   return { pullRequestNumber, baseRefName };
 };
 
-const decodeGithubContentsApiFileBody = (
-  contentsApiResponse: unknown,
-  requestedFilePath: string,
-): string => {
-  if (Array.isArray(contentsApiResponse)) {
-    throw new Error(`${requestedFilePath} on the base ref is a directory, not a file.`);
-  }
-  if (typeof contentsApiResponse !== "object" || contentsApiResponse === null) {
-    throw new Error(`Unexpected response when reading ${requestedFilePath} from the base ref.`);
-  }
-  const fileRecord = contentsApiResponse as Record<string, unknown>;
-  if (fileRecord.type !== "file") {
-    throw new Error(`${requestedFilePath} on the base ref is not a file (type=${String(fileRecord.type)}).`);
-  }
-  const encoding = fileRecord.encoding;
-  const base64Content = fileRecord.content;
-  if (encoding !== "base64" || typeof base64Content !== "string") {
-    throw new Error(`${requestedFilePath} could not be read as base64-encoded file content.`);
-  }
-  const normalizedBase64 = base64Content.replace(/\s/g, "");
-  return Buffer.from(normalizedBase64, "base64").toString("utf8");
-};
-
 const isGithubContentsApiNotFoundError = (error: unknown): boolean => {
   if (typeof error !== "object" || error === null) {
     return false;
@@ -139,7 +117,7 @@ const fetchMergeRiskYamlTextFromGithubBaseRef = async (options: {
       path: mergeRiskFilePath,
       ref: baseRefName,
     });
-    return decodeGithubContentsApiFileBody(data, mergeRiskFilePath);
+    return decodeGithubRepositoryContentFile(data, mergeRiskFilePath);
   } catch (cause: unknown) {
     if (skipWhenMergeRiskFileMissingOnBase && isGithubContentsApiNotFoundError(cause)) {
       return null;
@@ -210,6 +188,13 @@ export const runMergeRiskGithubAction = async (): Promise<void> => {
 
   const { scoringConfig, autoMerge } = mergeRiskRepositoryYaml;
 
+  const coverageReportPath = getInput("coverage_report_path").trim();
+  const testCoverageCriterionConfig = scoringConfig.criteria.test_coverage;
+  const shouldHydrateIstanbulCoverage =
+    coverageReportPath !== "" &&
+    testCoverageCriterionConfig !== undefined &&
+    testCoverageCriterionConfig.enabled !== false;
+
   const githubApiClient = createOctokitGithubApiClient(octokit);
 
   const githubAdapter = new GitHubAdapter({
@@ -217,6 +202,9 @@ export const runMergeRiskGithubAction = async (): Promise<void> => {
     repositoryOwner,
     repositoryName,
     pullRequestNumber,
+    istanbulCoverageHydration: shouldHydrateIstanbulCoverage
+      ? { repositoryRelativePath: coverageReportPath, shouldHydrate: true }
+      : undefined,
   });
 
   const pullRequestContext = await githubAdapter.buildContext();
