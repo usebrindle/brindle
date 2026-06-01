@@ -50,3 +50,9 @@ The Contents API always reads **`merge_risk_file_path` from the pull request bas
 ## First-time enablement
 
 After `.merge-risk.yml` exists on the default branch, omit **`skip_when_merge_risk_missing_on_base`** or set it to **`false`** so a missing or mistyped config path fails the job again.
+
+### Check conclusion policy (ADR 0003)
+
+- **`informational_check_conclusion`** (default **true**): the Check Run conclusion is always **`success`** so the workflow job and required checks stay green; MEDIUM/HIGH remain visible in the check summary and PR comment.
+- Set **`informational_check_conclusion: false`** to use **`neutral`** / **`action_required`** / **`failure`** tier mapping again.
+- **`fail_on_high`** (default **false**): when informational mode is off, maps HIGH to **`failure`** instead of **`action_required`** so branch protection can block merges on HIGH only.

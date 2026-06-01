@@ -30,6 +30,19 @@ inputs:
       the action fetches and parses this file only then (ADR 0005). Leave empty to skip the Contents API call.
     required: false
     default: ""
+  informational_check_conclusion:
+    description: >
+      When true (default), the published Check Run always uses conclusion success so the job and required checks
+      stay green; MEDIUM/HIGH still appear in the check body and PR comment. Set false for ADR 0003 semantics
+      (neutral for MEDIUM; HIGH is action_required unless fail_on_high is true).
+    required: false
+    default: "true"
+  fail_on_high:
+    description: >
+      When true and informational_check_conclusion is false, HIGH maps to check conclusion failure instead of
+      action_required (ADR 0003). Ignored when informational_check_conclusion is true.
+    required: false
+    default: "false"
 
 runs:
   using: node20
