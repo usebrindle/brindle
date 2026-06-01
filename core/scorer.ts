@@ -11,11 +11,9 @@ import type {
   ScoringConfig,
 } from "./types.js";
 
-function clampScore(n: number): number {
-  return Math.min(100, Math.max(0, n));
-}
+const clampScore = (n: number): number => Math.min(100, Math.max(0, n));
 
-function assertValidThresholds(t: ScoringConfig["thresholds"]): void {
+const assertValidThresholds = (t: ScoringConfig["thresholds"]): void => {
   const { low, medium } = t;
   if (
     !Number.isFinite(low) ||
@@ -28,16 +26,16 @@ function assertValidThresholds(t: ScoringConfig["thresholds"]): void {
       `Invalid thresholds: expected 0 <= low < medium <= 100, got low=${low}, medium=${medium}`,
     );
   }
-}
+};
 
-function tierForScore(
-  score: number,
+const tierForScore = (
+  value: number,
   thresholds: ScoringConfig["thresholds"],
-): "LOW" | "MEDIUM" | "HIGH" {
-  if (score <= thresholds.low) return "LOW";
-  if (score <= thresholds.medium) return "MEDIUM";
+): "LOW" | "MEDIUM" | "HIGH" => {
+  if (value <= thresholds.low) return "LOW";
+  if (value <= thresholds.medium) return "MEDIUM";
   return "HIGH";
-}
+};
 
 type ActiveCriterion = {
   id: string;
@@ -47,31 +45,18 @@ type ActiveCriterion = {
   evaluated: CriterionResult;
 };
 
-/**
- * Pure scoring engine. Same inputs always yield the same result shape.
- * @see docs/designs/lld-merge-risk-classifier.md
- */
-export function score(context: PRContext, config: ScoringConfig): ScoreResult {
-  return scoreWithRegistries(context, config, builtInCriteria, builtInMutators);
-}
+const sortedCriterionIds = (criteria: ScoringConfig["criteria"]): string[] =>
+  Object.keys(criteria).sort((a, b) => a.localeCompare(b));
 
-/**
- * Like {@link score} but with explicit registries (tests and future plugin wiring).
- */
-export function scoreWithRegistries(
+const collectActiveCriteria = (
   context: PRContext,
   config: ScoringConfig,
   criteria: Record<string, Criterion>,
-  mutators: Record<string, Mutator>,
-): ScoreResult {
-  assertValidThresholds(config.thresholds);
-
+): { actives: ActiveCriterion[]; disabledCriteria: string[] } => {
   const disabledCriteria: string[] = [];
   const actives: ActiveCriterion[] = [];
 
-  const criterionIds = Object.keys(config.criteria).sort((a, b) => a.localeCompare(b));
-
-  for (const id of criterionIds) {
+  for (const id of sortedCriterionIds(config.criteria)) {
     const entry = config.criteria[id];
     if (entry === undefined) continue;
 
@@ -106,28 +91,29 @@ export function scoreWithRegistries(
     });
   }
 
-  if (actives.length === 0) {
-    return {
-      score: 0,
-      tier: tierForScore(0, config.thresholds),
-      breakdown: [],
-      mutatorsApplied: [],
-      disabledCriteria,
-    };
-  }
+  return { actives, disabledCriteria };
+};
 
-  const weightSum = actives.reduce((s, a) => s + a.configWeight, 0);
-  if (weightSum <= 0) {
-    throw new Error("Sum of active criterion weights must be positive");
-  }
+const emptyScoreResult = (
+  thresholds: ScoringConfig["thresholds"],
+  disabledCriteria: string[],
+): ScoreResult => ({
+  score: 0,
+  tier: tierForScore(0, thresholds),
+  breakdown: [],
+  mutatorsApplied: [],
+  disabledCriteria,
+});
 
-  actives.sort((a, b) => a.id.localeCompare(b.id));
-
+const computeBreakdown = (
+  actives: ActiveCriterion[],
+  weightSum: number,
+): { breakdown: CriterionBreakdown[]; baseScore: number } => {
   const breakdown: CriterionBreakdown[] = [];
   let baseScore = 0;
 
   for (const a of actives) {
-    const evaluated = a.evaluated;
+    const { evaluated } = a;
     const raw = clampScore(evaluated.score);
     const normalizedWeight = (a.configWeight * 100) / weightSum;
     const weighted = raw * (normalizedWeight / 100);
@@ -142,14 +128,23 @@ export function scoreWithRegistries(
     });
   }
 
+  return { breakdown, baseScore };
+};
+
+const applyMutators = (
+  context: PRContext,
+  baseScore: number,
+  mutatorConfig: ScoringConfig["mutators"],
+  mutators: Record<string, Mutator>,
+): { score: number; mutatorsApplied: string[] } => {
   let running = clampScore(baseScore);
   const mutatorsApplied: string[] = [];
 
-  const mutatorEntries = Object.entries(config.mutators ?? {}).sort(([a], [b]) =>
+  const entries = Object.entries(mutatorConfig ?? {}).sort(([a], [b]) =>
     a.localeCompare(b),
   ) as [string, MutatorConfiguration][];
 
-  for (const [id, mcfg] of mutatorEntries) {
+  for (const [id, mcfg] of entries) {
     if (mcfg.enabled === false) continue;
     const impl = mutators[id];
     if (impl === undefined) continue;
@@ -163,12 +158,53 @@ export function scoreWithRegistries(
   }
 
   mutatorsApplied.sort((a, b) => a.localeCompare(b));
+  return { score: running, mutatorsApplied };
+};
+
+/**
+ * Pure scoring engine. Same inputs always yield the same result shape.
+ * @see docs/designs/lld-merge-risk-classifier.md
+ */
+export const score = (context: PRContext, config: ScoringConfig): ScoreResult =>
+  scoreWithRegistries(context, config, builtInCriteria, builtInMutators);
+
+/**
+ * Like {@link score} but with explicit registries (tests and future plugin wiring).
+ */
+export const scoreWithRegistries = (
+  context: PRContext,
+  config: ScoringConfig,
+  criteria: Record<string, Criterion>,
+  mutators: Record<string, Mutator>,
+): ScoreResult => {
+  assertValidThresholds(config.thresholds);
+
+  const { actives, disabledCriteria } = collectActiveCriteria(context, config, criteria);
+
+  if (actives.length === 0) {
+    return emptyScoreResult(config.thresholds, disabledCriteria);
+  }
+
+  const weightSum = actives.reduce((sum, a) => sum + a.configWeight, 0);
+  if (weightSum <= 0) {
+    throw new Error("Sum of active criterion weights must be positive");
+  }
+
+  actives.sort((a, b) => a.id.localeCompare(b.id));
+
+  const { breakdown, baseScore } = computeBreakdown(actives, weightSum);
+  const { score: finalScore, mutatorsApplied } = applyMutators(
+    context,
+    baseScore,
+    config.mutators,
+    mutators,
+  );
 
   return {
-    score: running,
-    tier: tierForScore(running, config.thresholds),
+    score: finalScore,
+    tier: tierForScore(finalScore, config.thresholds),
     breakdown,
     mutatorsApplied,
     disabledCriteria,
   };
-}
+};

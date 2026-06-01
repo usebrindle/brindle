@@ -9,23 +9,21 @@ import type {
   ScoringConfig,
 } from "../core/types.js";
 
-function minimalContext(overrides: Partial<PRContext> = {}): PRContext {
-  return {
-    repoSlug: "acme/widget",
-    changeNumber: 1,
-    headSha: "abc",
-    baseRef: "main",
-    author: "dev",
-    title: "Test",
-    body: "",
-    labels: [],
-    createdAt: "2026-01-01T00:00:00.000Z",
-    files: [],
-    totalAdditions: 0,
-    totalDeletions: 0,
-    ...overrides,
-  };
-}
+const minimalContext = (overrides: Partial<PRContext> = {}): PRContext => ({
+  repoSlug: "acme/widget",
+  changeNumber: 1,
+  headSha: "abc",
+  baseRef: "main",
+  author: "dev",
+  title: "Test",
+  body: "",
+  labels: [],
+  createdAt: "2026-01-01T00:00:00.000Z",
+  files: [],
+  totalAdditions: 0,
+  totalDeletions: 0,
+  ...overrides,
+});
 
 const thresholds = { low: 30, medium: 60 } as const;
 
