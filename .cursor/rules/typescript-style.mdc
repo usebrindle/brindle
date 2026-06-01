@@ -8,6 +8,7 @@ alwaysApply: false
 
 When changing TypeScript in this repo:
 
+- **Naming:** prefer **verbose, intention-revealing** identifiers for locals, parameters, and helpers (no cryptic abbreviations). See the companion [naming rule](naming.mdc); that matches [CONTRIBUTING.md](CONTRIBUTING.md) § **TypeScript style**.
 - **Single responsibility** per function: one clear job (one decision, one transform, or one effect). Prefer named helpers over one long pipeline.
 - **Short bodies**: aim for about **ten lines or fewer** of real logic per function; when a function grows, extract a helper instead of nesting more control flow.
 - Prefer **`const` arrow functions** at module scope unless hoisting, `this` binding, or `function*` genuinely reads clearer.
@@ -16,4 +17,4 @@ When changing TypeScript in this repo:
 
 **Documentation:** follow the companion [JSDoc rule](jsdoc.mdc) for exports and public contracts; that matches [CONTRIBUTING.md](CONTRIBUTING.md) § **Documentation (JSDoc)**.
 
-Keep this rule aligned with [CONTRIBUTING.md](CONTRIBUTING.md) § **TypeScript style**; update both when conventions change.
+Keep this rule aligned with [CONTRIBUTING.md](CONTRIBUTING.md) § **TypeScript style** (including naming); update both when conventions change.

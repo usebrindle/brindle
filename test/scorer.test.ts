@@ -37,11 +37,11 @@ describe("scoreWithRegistries", () => {
 
   it("returns zero LOW when no criteria remain active", () => {
     const config: ScoringConfig = { thresholds, criteria: {} };
-    const r = scoreWithRegistries(minimalContext(), config, {}, {});
-    expect(r.score).toBe(0);
-    expect(r.tier).toBe("LOW");
-    expect(r.breakdown).toEqual([]);
-    expect(r.mutatorsApplied).toEqual([]);
+    const scoreResult = scoreWithRegistries(minimalContext(), config, {}, {});
+    expect(scoreResult.score).toBe(0);
+    expect(scoreResult.tier).toBe("LOW");
+    expect(scoreResult.breakdown).toEqual([]);
+    expect(scoreResult.mutatorsApplied).toEqual([]);
   });
 
   it("throws when thresholds are invalid", () => {
@@ -55,11 +55,11 @@ describe("scoreWithRegistries", () => {
   });
 
   it("renormalizes weights and sums weighted scores", () => {
-    const a: Criterion = {
+    const criterionA: Criterion = {
       name: "A",
       evaluate: () => ({ score: 40, justification: "a" }),
     };
-    const b: Criterion = {
+    const criterionB: Criterion = {
       name: "B",
       evaluate: () => ({ score: 60, justification: "b" }),
     };
@@ -70,20 +70,25 @@ describe("scoreWithRegistries", () => {
         b: { weight: 50, options: {} },
       },
     };
-    const r = scoreWithRegistries(minimalContext(), config, { a, b }, {});
-    expect(r.score).toBeCloseTo(50, 10);
-    expect(r.tier).toBe("MEDIUM");
-    expect(r.breakdown).toHaveLength(2);
-    expect(r.breakdown[0]!.name).toBe("A");
-    expect(r.breakdown[0]!.weight).toBeCloseTo(50, 10);
+    const scoreResult = scoreWithRegistries(
+      minimalContext(),
+      config,
+      { a: criterionA, b: criterionB },
+      {},
+    );
+    expect(scoreResult.score).toBeCloseTo(50, 10);
+    expect(scoreResult.tier).toBe("MEDIUM");
+    expect(scoreResult.breakdown).toHaveLength(2);
+    expect(scoreResult.breakdown[0]!.name).toBe("A");
+    expect(scoreResult.breakdown[0]!.weight).toBeCloseTo(50, 10);
   });
 
   it("drops self-disabled criteria and redistributes weight", () => {
-    const a: Criterion = {
+    const selfDisablingCriterion: Criterion = {
       name: "A",
       evaluate: () => ({ score: 99, justification: "skip", selfDisable: true }),
     };
-    const b: Criterion = {
+    const remainingCriterion: Criterion = {
       name: "B",
       evaluate: () => ({ score: 80, justification: "b" }),
     };
@@ -94,20 +99,25 @@ describe("scoreWithRegistries", () => {
         b: { weight: 50 },
       },
     };
-    const r = scoreWithRegistries(minimalContext(), config, { a, b }, {});
-    expect(r.disabledCriteria).toContain("a");
-    expect(r.score).toBe(80);
-    expect(r.breakdown).toHaveLength(1);
-    expect(r.breakdown[0]!.weight).toBeCloseTo(100, 10);
+    const scoreResult = scoreWithRegistries(
+      minimalContext(),
+      config,
+      { a: selfDisablingCriterion, b: remainingCriterion },
+      {},
+    );
+    expect(scoreResult.disabledCriteria).toContain("a");
+    expect(scoreResult.score).toBe(80);
+    expect(scoreResult.breakdown).toHaveLength(1);
+    expect(scoreResult.breakdown[0]!.weight).toBeCloseTo(100, 10);
   });
 
   it("respects isEnabled and lists disabled config entries", () => {
-    const a: Criterion = {
+    const disabledByGateCriterion: Criterion = {
       name: "A",
       isEnabled: () => false,
       evaluate: () => ({ score: 0, justification: "never" }),
     };
-    const b: Criterion = {
+    const activeCriterion: Criterion = {
       name: "B",
       evaluate: () => ({ score: 40, justification: "b" }),
     };
@@ -118,21 +128,26 @@ describe("scoreWithRegistries", () => {
         b: { weight: 50 },
       },
     };
-    const r = scoreWithRegistries(minimalContext(), config, { a, b }, {});
-    expect(r.disabledCriteria).toContain("a");
-    expect(r.score).toBe(40);
+    const scoreResult = scoreWithRegistries(
+      minimalContext(),
+      config,
+      { a: disabledByGateCriterion, b: activeCriterion },
+      {},
+    );
+    expect(scoreResult.disabledCriteria).toContain("a");
+    expect(scoreResult.score).toBe(40);
   });
 
   it("applies mutators with deterministic ordering in mutatorsApplied", () => {
-    const c: Criterion = {
+    const singleCriterion: Criterion = {
       name: "C",
       evaluate: () => ({ score: 10, justification: "c" }),
     };
-    const mLate: Mutator = {
+    const mutatorRegisteredAsZ: Mutator = {
       name: "late",
       apply: () => 3,
     };
-    const mEarly: Mutator = {
+    const mutatorRegisteredAsA: Mutator = {
       name: "early",
       apply: () => 2,
     };
@@ -144,18 +159,18 @@ describe("scoreWithRegistries", () => {
         a: { options: {} },
       },
     };
-    const r = scoreWithRegistries(
+    const scoreResult = scoreWithRegistries(
       minimalContext(),
       config,
-      { c },
-      { z: mLate, a: mEarly },
+      { c: singleCriterion },
+      { z: mutatorRegisteredAsZ, a: mutatorRegisteredAsA },
     );
-    expect(r.score).toBe(60);
-    expect(r.mutatorsApplied).toEqual(["a", "z"]);
+    expect(scoreResult.score).toBe(60);
+    expect(scoreResult.mutatorsApplied).toEqual(["a", "z"]);
   });
 
   it("throws when active criterion weights sum to zero", () => {
-    const c: Criterion = {
+    const zeroWeightCriterion: Criterion = {
       name: "C",
       evaluate: () => ({ score: 10, justification: "c" }),
     };
@@ -163,17 +178,17 @@ describe("scoreWithRegistries", () => {
       thresholds,
       criteria: { c: { weight: 0 } },
     };
-    expect(() => scoreWithRegistries(minimalContext(), config, { c }, {})).toThrow(
-      /Sum of active criterion weights/,
-    );
+    expect(() =>
+      scoreWithRegistries(minimalContext(), config, { c: zeroWeightCriterion }, {}),
+    ).toThrow(/Sum of active criterion weights/);
   });
 
   it("throws when a mutator returns a non-positive factor", () => {
-    const c: Criterion = {
+    const baselineCriterion: Criterion = {
       name: "C",
       evaluate: () => ({ score: 10, justification: "c" }),
     };
-    const bad: Mutator = {
+    const zeroFactorMutator: Mutator = {
       name: "bad",
       apply: () => 0,
     };
@@ -182,9 +197,14 @@ describe("scoreWithRegistries", () => {
       criteria: { c: { weight: 100 } },
       mutators: { bad: {} },
     };
-    expect(() => scoreWithRegistries(minimalContext(), config, { c }, { bad })).toThrow(
-      /invalid factor/,
-    );
+    expect(() =>
+      scoreWithRegistries(
+        minimalContext(),
+        config,
+        { c: baselineCriterion },
+        { bad: zeroFactorMutator },
+      ),
+    ).toThrow(/invalid factor/);
   });
 });
 
@@ -200,43 +220,43 @@ describe("tier boundaries", () => {
   });
 
   it("score at low threshold is LOW", () => {
-    const r = scoreWithRegistries(
+    const scoreResult = scoreWithRegistries(
       minimalContext(),
       singleCriterionConfig,
       { c: criterionAt(30) },
       {},
     );
-    expect(r.tier).toBe("LOW");
+    expect(scoreResult.tier).toBe("LOW");
   });
 
   it("score just above low threshold is MEDIUM", () => {
-    const r = scoreWithRegistries(
+    const scoreResult = scoreWithRegistries(
       minimalContext(),
       singleCriterionConfig,
       { c: criterionAt(31) },
       {},
     );
-    expect(r.tier).toBe("MEDIUM");
+    expect(scoreResult.tier).toBe("MEDIUM");
   });
 
   it("score at medium threshold is MEDIUM", () => {
-    const r = scoreWithRegistries(
+    const scoreResult = scoreWithRegistries(
       minimalContext(),
       singleCriterionConfig,
       { c: criterionAt(60) },
       {},
     );
-    expect(r.tier).toBe("MEDIUM");
+    expect(scoreResult.tier).toBe("MEDIUM");
   });
 
   it("score just above medium threshold is HIGH", () => {
-    const r = scoreWithRegistries(
+    const scoreResult = scoreWithRegistries(
       minimalContext(),
       singleCriterionConfig,
       { c: criterionAt(61) },
       {},
     );
-    expect(r.tier).toBe("HIGH");
+    expect(scoreResult.tier).toBe("HIGH");
   });
 });
 
@@ -246,9 +266,9 @@ describe("missing criterion implementation", () => {
       thresholds,
       criteria: { ghost: { weight: 100 } },
     };
-    const r = scoreWithRegistries(minimalContext(), config, {}, {});
-    expect(r.disabledCriteria).toContain("ghost");
-    expect(r.score).toBe(0);
-    expect(r.tier).toBe("LOW");
+    const scoreResult = scoreWithRegistries(minimalContext(), config, {}, {});
+    expect(scoreResult.disabledCriteria).toContain("ghost");
+    expect(scoreResult.score).toBe(0);
+    expect(scoreResult.tier).toBe("LOW");
   });
 });

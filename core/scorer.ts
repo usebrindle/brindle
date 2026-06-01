@@ -25,10 +25,11 @@ import type {
   WeightedParts,
 } from "./scorer.types.js";
 
-const clampScore = (n: number): number => Math.min(100, Math.max(0, n));
+const clampScore = (scoreValue: number): number =>
+  Math.min(100, Math.max(0, scoreValue));
 
-const thresholdsAreInvalid = (t: ScoringConfig["thresholds"]): boolean => {
-  const { low, medium } = t;
+const thresholdsAreInvalid = (thresholds: ScoringConfig["thresholds"]): boolean => {
+  const { low, medium } = thresholds;
   return (
     !Number.isFinite(low) ||
     !Number.isFinite(medium) ||
@@ -38,9 +39,9 @@ const thresholdsAreInvalid = (t: ScoringConfig["thresholds"]): boolean => {
   );
 };
 
-const assertValidThresholds = (t: ScoringConfig["thresholds"]): void => {
-  if (thresholdsAreInvalid(t)) {
-    const { low, medium } = t;
+const assertValidThresholds = (thresholds: ScoringConfig["thresholds"]): void => {
+  if (thresholdsAreInvalid(thresholds)) {
+    const { low, medium } = thresholds;
     throw new Error(
       `Invalid thresholds: expected 0 <= low < medium <= 100, got low=${low}, medium=${medium}`,
     );
@@ -57,76 +58,101 @@ const tierForScore = (
 };
 
 const sortedCriterionIds = (criteria: ScoringConfig["criteria"]): string[] =>
-  Object.keys(criteria).sort((a, b) => a.localeCompare(b));
+  Object.keys(criteria).sort((leftCriterionId, rightCriterionId) =>
+    leftCriterionId.localeCompare(rightCriterionId),
+  );
 
 const criterionGate = (
   context: PRContext,
-  entry: CriterionConfiguration | undefined,
-  impl: Criterion | undefined,
+  criterionConfiguration: CriterionConfiguration | undefined,
+  criterionImplementation: Criterion | undefined,
 ): CriterionGate => {
-  if (entry === undefined) return "omit";
-  if (entry.enabled === false) return "disabled";
-  if (impl === undefined) return "disabled";
-  if (impl.isEnabled && !impl.isEnabled(context, entry.options)) return "disabled";
+  if (criterionConfiguration === undefined) return "omit";
+  if (criterionConfiguration.enabled === false) return "disabled";
+  if (criterionImplementation === undefined) return "disabled";
+  if (
+    criterionImplementation.isEnabled &&
+    !criterionImplementation.isEnabled(context, criterionConfiguration.options)
+  ) {
+    return "disabled";
+  }
   return "continue";
 };
 
 const toActiveCriterion = (
-  id: string,
-  impl: Criterion,
-  entry: CriterionConfiguration,
+  criterionId: string,
+  criterionImplementation: Criterion,
+  criterionConfiguration: CriterionConfiguration,
   evaluated: CriterionResult,
 ): ActiveCriterion => ({
-  id,
-  criterion: impl,
-  configWeight: entry.weight,
-  options: entry.options,
+  id: criterionId,
+  criterion: criterionImplementation,
+  configWeight: criterionConfiguration.weight,
+  options: criterionConfiguration.options,
   evaluated,
 });
 
 const buildActiveOrDisabled = (
-  id: string,
+  criterionId: string,
   context: PRContext,
-  entry: CriterionConfiguration,
-  impl: Criterion,
+  criterionConfiguration: CriterionConfiguration,
+  criterionImplementation: Criterion,
 ): CriterionResolution => {
-  const evaluated = impl.evaluate(context, entry.options);
-  if (evaluated.selfDisable === true) return { type: "disabled", id };
-  return { type: "active", active: toActiveCriterion(id, impl, entry, evaluated) };
+  const evaluated = criterionImplementation.evaluate(context, criterionConfiguration.options);
+  if (evaluated.selfDisable === true) return { type: "disabled", id: criterionId };
+  return {
+    type: "active",
+    active: toActiveCriterion(
+      criterionId,
+      criterionImplementation,
+      criterionConfiguration,
+      evaluated,
+    ),
+  };
 };
 
 const resolveOneCriterion = (
-  id: string,
+  criterionId: string,
   context: PRContext,
-  entry: CriterionConfiguration | undefined,
-  impl: Criterion | undefined,
+  criterionConfiguration: CriterionConfiguration | undefined,
+  criterionImplementation: Criterion | undefined,
 ): CriterionResolution => {
-  const gate = criterionGate(context, entry, impl);
+  const gate = criterionGate(context, criterionConfiguration, criterionImplementation);
   if (gate === "omit") return { type: "omit" };
-  if (gate === "disabled") return { type: "disabled", id };
-  return buildActiveOrDisabled(id, context, entry!, impl!);
+  if (gate === "disabled") return { type: "disabled", id: criterionId };
+  return buildActiveOrDisabled(
+    criterionId,
+    context,
+    criterionConfiguration!,
+    criterionImplementation!,
+  );
 };
 
 const applyCriterionResolution = (
-  res: CriterionResolution,
-  actives: ActiveCriterion[],
-  disabled: string[],
+  criterionResolution: CriterionResolution,
+  activeCriteria: ActiveCriterion[],
+  disabledCriterionIds: string[],
 ): void => {
-  if (res.type === "omit") return;
-  if (res.type === "disabled") disabled.push(res.id);
-  else actives.push(res.active);
+  if (criterionResolution.type === "omit") return;
+  if (criterionResolution.type === "disabled") disabledCriterionIds.push(criterionResolution.id);
+  else activeCriteria.push(criterionResolution.active);
 };
 
 const accumulateForCriterionId = (
-  id: string,
+  criterionId: string,
   context: PRContext,
   config: ScoringConfig,
   criteria: Record<string, Criterion>,
-  actives: ActiveCriterion[],
-  disabled: string[],
+  activeCriteria: ActiveCriterion[],
+  disabledCriterionIds: string[],
 ): void => {
-  const res = resolveOneCriterion(id, context, config.criteria[id], criteria[id]);
-  applyCriterionResolution(res, actives, disabled);
+  const criterionResolution = resolveOneCriterion(
+    criterionId,
+    context,
+    config.criteria[criterionId],
+    criteria[criterionId],
+  );
+  applyCriterionResolution(criterionResolution, activeCriteria, disabledCriterionIds);
 };
 
 const collectActiveCriteria = (
@@ -136,8 +162,8 @@ const collectActiveCriteria = (
 ): { actives: ActiveCriterion[]; disabledCriteria: string[] } => {
   const disabledCriteria: string[] = [];
   const actives: ActiveCriterion[] = [];
-  for (const id of sortedCriterionIds(config.criteria)) {
-    accumulateForCriterionId(id, context, config, criteria, actives, disabledCriteria);
+  for (const criterionId of sortedCriterionIds(config.criteria)) {
+    accumulateForCriterionId(criterionId, context, config, criteria, actives, disabledCriteria);
   }
   return { actives, disabledCriteria };
 };
@@ -153,31 +179,37 @@ const emptyScoreResult = (
   disabledCriteria,
 });
 
-const weightedPartsForActive = (a: ActiveCriterion, weightSum: number): WeightedParts => {
-  const { evaluated } = a;
+const weightedPartsForActive = (
+  activeCriterion: ActiveCriterion,
+  weightSum: number,
+): WeightedParts => {
+  const { evaluated } = activeCriterion;
   const raw = clampScore(evaluated.score);
-  const normalizedWeight = (a.configWeight * 100) / weightSum;
+  const normalizedWeight = (activeCriterion.configWeight * 100) / weightSum;
   const weighted = raw * (normalizedWeight / 100);
   return { raw, normalizedWeight, weighted, evaluated };
 };
 
-const toBreakdownRow = (a: ActiveCriterion, parts: WeightedParts): CriterionBreakdown => ({
-  name: a.criterion.name,
-  score: parts.raw,
-  weight: parts.normalizedWeight,
-  weighted: parts.weighted,
-  justification: parts.evaluated.justification,
-  detail: parts.evaluated.detail,
+const toBreakdownRow = (
+  activeCriterion: ActiveCriterion,
+  weightedParts: WeightedParts,
+): CriterionBreakdown => ({
+  name: activeCriterion.criterion.name,
+  score: weightedParts.raw,
+  weight: weightedParts.normalizedWeight,
+  weighted: weightedParts.weighted,
+  justification: weightedParts.evaluated.justification,
+  detail: weightedParts.evaluated.detail,
 });
 
 const appendOneBreakdownRow = (
-  a: ActiveCriterion,
+  activeCriterion: ActiveCriterion,
   weightSum: number,
   breakdown: CriterionBreakdown[],
 ): number => {
-  const parts = weightedPartsForActive(a, weightSum);
-  breakdown.push(toBreakdownRow(a, parts));
-  return parts.weighted;
+  const weightedParts = weightedPartsForActive(activeCriterion, weightSum);
+  breakdown.push(toBreakdownRow(activeCriterion, weightedParts));
+  return weightedParts.weighted;
 };
 
 const computeBreakdown = (
@@ -186,49 +218,64 @@ const computeBreakdown = (
 ): { breakdown: CriterionBreakdown[]; baseScore: number } => {
   const breakdown: CriterionBreakdown[] = [];
   let baseScore = 0;
-  for (const a of actives) baseScore += appendOneBreakdownRow(a, weightSum, breakdown);
+  for (const activeCriterion of actives) {
+    baseScore += appendOneBreakdownRow(activeCriterion, weightSum, breakdown);
+  }
   return { breakdown, baseScore };
 };
 
 const sortedMutatorEntries = (
   mutatorConfig: ScoringConfig["mutators"],
 ): [string, MutatorConfiguration][] => {
-  const byId: Record<string, MutatorConfiguration> = mutatorConfig ?? {};
-  return Object.keys(byId)
-    .sort((a, b) => a.localeCompare(b))
-    .map((id): [string, MutatorConfiguration] => [id, byId[id]]);
+  const mutatorConfigurationsById: Record<string, MutatorConfiguration> = mutatorConfig ?? {};
+  return Object.keys(mutatorConfigurationsById)
+    .sort((leftMutatorId, rightMutatorId) => leftMutatorId.localeCompare(rightMutatorId))
+    .map(
+      (mutatorId): [string, MutatorConfiguration] => [
+        mutatorId,
+        mutatorConfigurationsById[mutatorId],
+      ],
+    );
 };
 
-const assertValidMutatorFactor = (id: string, factor: number): void => {
+const assertValidMutatorFactor = (mutatorId: string, factor: number): void => {
   if (Number.isFinite(factor) && factor > 0) return;
-  throw new Error(`Mutator "${id}" returned invalid factor: ${String(factor)}`);
+  throw new Error(`Mutator "${mutatorId}" returned invalid factor: ${String(factor)}`);
 };
 
 const applyOneMutatorEntry = (
-  id: string,
-  mcfg: MutatorConfiguration,
-  impl: Mutator | undefined,
+  mutatorId: string,
+  mutatorConfiguration: MutatorConfiguration,
+  mutatorImplementation: Mutator | undefined,
   context: PRContext,
-  running: number,
+  runningScore: number,
 ): MutatorApplyResult => {
-  if (mcfg.enabled === false || impl === undefined) return { nextScore: running, didApply: false };
-  const factor = impl.apply(context, mcfg.options);
-  if (factor === null) return { nextScore: running, didApply: false };
-  assertValidMutatorFactor(id, factor);
-  return { nextScore: clampScore(running * factor), didApply: true };
+  if (mutatorConfiguration.enabled === false || mutatorImplementation === undefined) {
+    return { nextScore: runningScore, didApply: false };
+  }
+  const factor = mutatorImplementation.apply(context, mutatorConfiguration.options);
+  if (factor === null) return { nextScore: runningScore, didApply: false };
+  assertValidMutatorFactor(mutatorId, factor);
+  return { nextScore: clampScore(runningScore * factor), didApply: true };
 };
 
 const foldOneMutatorEntry = (
-  id: string,
-  mcfg: MutatorConfiguration,
+  mutatorId: string,
+  mutatorConfiguration: MutatorConfiguration,
   mutators: Record<string, Mutator>,
   context: PRContext,
-  running: number,
-  appliedIds: string[],
+  runningScore: number,
+  appliedMutatorIds: string[],
 ): number => {
-  const impl = mutators[id];
-  const { nextScore, didApply } = applyOneMutatorEntry(id, mcfg, impl, context, running);
-  if (didApply) appliedIds.push(id);
+  const mutatorImplementation = mutators[mutatorId];
+  const { nextScore, didApply } = applyOneMutatorEntry(
+    mutatorId,
+    mutatorConfiguration,
+    mutatorImplementation,
+    context,
+    runningScore,
+  );
+  if (didApply) appliedMutatorIds.push(mutatorId);
   return nextScore;
 };
 
@@ -238,13 +285,22 @@ const applyMutators = (
   mutatorConfig: ScoringConfig["mutators"],
   mutators: Record<string, Mutator>,
 ): { score: number; mutatorsApplied: string[] } => {
-  let running = clampScore(baseScore);
+  let runningScore = clampScore(baseScore);
   const mutatorsApplied: string[] = [];
-  for (const [id, mcfg] of sortedMutatorEntries(mutatorConfig)) {
-    running = foldOneMutatorEntry(id, mcfg, mutators, context, running, mutatorsApplied);
+  for (const [mutatorId, mutatorConfiguration] of sortedMutatorEntries(mutatorConfig)) {
+    runningScore = foldOneMutatorEntry(
+      mutatorId,
+      mutatorConfiguration,
+      mutators,
+      context,
+      runningScore,
+      mutatorsApplied,
+    );
   }
-  mutatorsApplied.sort((a, b) => a.localeCompare(b));
-  return { score: running, mutatorsApplied };
+  mutatorsApplied.sort((leftMutatorId, rightMutatorId) =>
+    leftMutatorId.localeCompare(rightMutatorId),
+  );
+  return { score: runningScore, mutatorsApplied };
 };
 
 const requirePositiveWeightSum = (weightSum: number): void => {
@@ -258,28 +314,35 @@ const scoreActiveSubset = (
   config: ScoringConfig,
   mutators: Record<string, Mutator>,
 ): Pick<ScoreResult, "score" | "breakdown" | "mutatorsApplied"> => {
-  const weightSum = actives.reduce((sum, a) => sum + a.configWeight, 0);
+  const weightSum = actives.reduce(
+    (runningWeightSum, activeCriterion) => runningWeightSum + activeCriterion.configWeight,
+    0,
+  );
   requirePositiveWeightSum(weightSum);
-  actives.sort((a, b) => a.id.localeCompare(b.id));
+  actives.sort((leftActive, rightActive) => leftActive.id.localeCompare(rightActive.id));
   const { breakdown, baseScore } = computeBreakdown(actives, weightSum);
-  const applied = applyMutators(context, baseScore, config.mutators, mutators);
-  return { breakdown, score: applied.score, mutatorsApplied: applied.mutatorsApplied };
+  const mutatorPass = applyMutators(context, baseScore, config.mutators, mutators);
+  return {
+    breakdown,
+    score: mutatorPass.score,
+    mutatorsApplied: mutatorPass.mutatorsApplied,
+  };
 };
 
 const finalizeScoreResult = (
-  partial: Pick<ScoreResult, "score" | "breakdown" | "mutatorsApplied">,
+  partialScore: Pick<ScoreResult, "score" | "breakdown" | "mutatorsApplied">,
   thresholds: ScoringConfig["thresholds"],
   disabledCriteria: string[],
 ): ScoreResult => ({
-  score: partial.score,
-  tier: tierForScore(partial.score, thresholds),
-  breakdown: partial.breakdown,
-  mutatorsApplied: partial.mutatorsApplied,
+  score: partialScore.score,
+  tier: tierForScore(partialScore.score, thresholds),
+  breakdown: partialScore.breakdown,
+  mutatorsApplied: partialScore.mutatorsApplied,
   disabledCriteria,
 });
 
 /**
- * Score a change using the built-in criterion and mutator registries (initially empty; filled in later slices).
+ * Score a change using the built-in criterion and mutator registries (`criteria` grows per slice; mutators stay empty until wired).
  *
  * @param context - Platform-neutral change data produced by an adapter.
  * @param config - Weights, thresholds, and mutator ids (full schema validation comes in a later slice).

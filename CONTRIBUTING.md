@@ -42,9 +42,11 @@ Prefer **short bodies** (on the order of **ten lines or fewer** per function, bl
 
 Prefer **`const` arrow functions** for top-level helpers and exports unless a hoisted declaration or generator genuinely reads clearer.
 
+**Names:** prefer **long, explicit identifiers** for locals, parameters, and helpers so call sites read like prose. Avoid cryptic abbreviations (`mcfg`, `ctx`) and vague placeholders (`tmp`, `obj`) in non-trivial code paths. When a value is a criterion or mutator **implementation**, prefer names like **`criterionImplementation`** / **`mutatorImplementation`** (or include the id in the name) over a bare **`impl`**. Match vocabulary from the [LLD](docs/designs/lld-merge-risk-classifier.md) and shared types in `core/types.ts`.
+
 **Types vs implementation:** do not define criterion- or module-specific `export type` / `export interface` in the same file as that module’s runtime code. Use a sibling **`*.types.ts` with the same stem** (for example `core/criteria/diffSize.ts` + `core/criteria/diffSize.types.ts`). Keep **`core/types.ts`** for the shared platform-neutral model only.
 
-Cursor loads the same expectations from [`.cursor/rules/typescript-style.mdc`](.cursor/rules/typescript-style.mdc) when you work on `*.ts` files; keep that rule and this section in sync.
+Cursor loads the same expectations from [`.cursor/rules/typescript-style.mdc`](.cursor/rules/typescript-style.mdc) and [`.cursor/rules/naming.mdc`](.cursor/rules/naming.mdc) when you work on `*.ts` files; keep those rules and this section in sync.
 
 ## Documentation (JSDoc)
 
