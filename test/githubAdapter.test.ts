@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { GitHubAdapter } from "../adapters/github/GitHubAdapter.js";
 import type {
@@ -23,6 +23,29 @@ const sampleFileSnapshots = (): GitHubPullFileSnapshot[] => [
   { path: "src/a.ts", status: "modified", additions: 3, deletions: 1 },
   { path: "src/b.ts", status: "added", additions: 10, deletions: 0 },
 ];
+
+const sampleRiskReport = (): RiskReport => ({
+  result: {
+    score: 10,
+    tier: "LOW",
+    breakdown: [],
+    mutatorsApplied: [],
+    disabledCriteria: [],
+  },
+  commentMarkdown: "## Merge risk\nLow.",
+  checkConclusion: "success",
+  autoMergeOutcome: "skipped",
+});
+
+const createMockGithubApiClient = (
+  overrides: Partial<GitHubApiClient> = {},
+): GitHubApiClient => ({
+  getPullRequest: async () => samplePullSnapshot(),
+  listPullRequestFiles: async () => [],
+  createMergeRiskCheckRun: vi.fn().mockResolvedValue(undefined),
+  createPullRequestComment: vi.fn().mockResolvedValue(undefined),
+  ...overrides,
+});
 
 describe("mapGitHubPullAndFilesToPRContext", () => {
   it("maps repo slug, totals, and file rows", () => {
@@ -64,10 +87,9 @@ describe("mapGitHubPullAndFilesToPRContext", () => {
 
 describe("GitHubAdapter.buildContext", () => {
   it("delegates to the injected client then maps to PRContext", async () => {
-    const mockGithubApiClient: GitHubApiClient = {
-      getPullRequest: async () => samplePullSnapshot(),
+    const mockGithubApiClient = createMockGithubApiClient({
       listPullRequestFiles: async () => sampleFileSnapshots(),
-    };
+    });
     const githubAdapter = new GitHubAdapter({
       githubApiClient: mockGithubApiClient,
       repositoryOwner: "acme",
@@ -79,32 +101,116 @@ describe("GitHubAdapter.buildContext", () => {
     expect(pullContext.changeNumber).toBe(7);
     expect(pullContext.totalAdditions).toBe(13);
   });
+});
 
-  it("rejects writeResult until slice 07", async () => {
-    const mockGithubApiClient: GitHubApiClient = {
-      getPullRequest: async () => samplePullSnapshot(),
-      listPullRequestFiles: async () => [],
-    };
+describe("GitHubAdapter.writeResult", () => {
+  it("rejects when buildContext was never run", async () => {
+    const mockGithubApiClient = createMockGithubApiClient();
     const githubAdapter = new GitHubAdapter({
       githubApiClient: mockGithubApiClient,
       repositoryOwner: "acme",
       repositoryName: "demo",
       pullRequestNumber: 1,
     });
-    await expect(githubAdapter.writeResult({} as RiskReport)).rejects.toThrow(/slice 07/);
+    await expect(githubAdapter.writeResult(sampleRiskReport())).rejects.toThrow(/buildContext/);
+    expect(mockGithubApiClient.createMergeRiskCheckRun).not.toHaveBeenCalled();
   });
 
-  it("rejects enableAutoMerge until slice 07", async () => {
-    const mockGithubApiClient: GitHubApiClient = {
-      getPullRequest: async () => samplePullSnapshot(),
-      listPullRequestFiles: async () => [],
-    };
+  it("creates a check run on the head SHA from the last buildContext", async () => {
+    const createMergeRiskCheckRun = vi.fn().mockResolvedValue(undefined);
+    const createPullRequestComment = vi.fn().mockResolvedValue(undefined);
+    const mockGithubApiClient = createMockGithubApiClient({
+      createMergeRiskCheckRun,
+      createPullRequestComment,
+    });
+    const githubAdapter = new GitHubAdapter({
+      githubApiClient: mockGithubApiClient,
+      repositoryOwner: "acme",
+      repositoryName: "demo",
+      pullRequestNumber: 99,
+      mergeRiskCheckRunName: "Brindle merge risk",
+    });
+    await githubAdapter.buildContext();
+    await githubAdapter.writeResult({
+      ...sampleRiskReport(),
+      checkConclusion: "neutral",
+    });
+    expect(createMergeRiskCheckRun).toHaveBeenCalledWith({
+      repositoryOwner: "acme",
+      repositoryName: "demo",
+      headSha: "headdeadbeef",
+      name: "Brindle merge risk",
+      conclusion: "neutral",
+      summaryMarkdown: "## Merge risk\nLow.",
+    });
+    expect(createPullRequestComment).toHaveBeenCalledWith({
+      repositoryOwner: "acme",
+      repositoryName: "demo",
+      pullRequestNumber: 99,
+      body: "## Merge risk\nLow.",
+    });
+  });
+
+  it("defaults the check run name to Merge risk", async () => {
+    const createMergeRiskCheckRun = vi.fn().mockResolvedValue(undefined);
+    const githubAdapter = new GitHubAdapter({
+      githubApiClient: createMockGithubApiClient({ createMergeRiskCheckRun }),
+      repositoryOwner: "a",
+      repositoryName: "b",
+      pullRequestNumber: 1,
+    });
+    await githubAdapter.buildContext();
+    await githubAdapter.writeResult(sampleRiskReport());
+    expect(createMergeRiskCheckRun).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Merge risk" }),
+    );
+  });
+
+  it("skips the PR comment when postRiskSummaryComment is false", async () => {
+    const createMergeRiskCheckRun = vi.fn().mockResolvedValue(undefined);
+    const createPullRequestComment = vi.fn().mockResolvedValue(undefined);
+    const githubAdapter = new GitHubAdapter({
+      githubApiClient: createMockGithubApiClient({
+        createMergeRiskCheckRun,
+        createPullRequestComment,
+      }),
+      repositoryOwner: "o",
+      repositoryName: "r",
+      pullRequestNumber: 3,
+      postRiskSummaryComment: false,
+    });
+    await githubAdapter.buildContext();
+    await githubAdapter.writeResult(sampleRiskReport());
+    expect(createMergeRiskCheckRun).toHaveBeenCalled();
+    expect(createPullRequestComment).not.toHaveBeenCalled();
+  });
+
+  it("skips the PR comment when comment markdown is empty or whitespace-only", async () => {
+    const createPullRequestComment = vi.fn().mockResolvedValue(undefined);
+    const githubAdapter = new GitHubAdapter({
+      githubApiClient: createMockGithubApiClient({ createPullRequestComment }),
+      repositoryOwner: "o",
+      repositoryName: "r",
+      pullRequestNumber: 3,
+    });
+    await githubAdapter.buildContext();
+    await githubAdapter.writeResult({
+      ...sampleRiskReport(),
+      commentMarkdown: "   \n\t  ",
+    });
+    expect(createPullRequestComment).not.toHaveBeenCalled();
+  });
+});
+
+describe("GitHubAdapter.enableAutoMerge", () => {
+  it("rejects enableAutoMerge until slice 09", async () => {
+    const mockGithubApiClient = createMockGithubApiClient();
     const githubAdapter = new GitHubAdapter({
       githubApiClient: mockGithubApiClient,
       repositoryOwner: "acme",
       repositoryName: "demo",
       pullRequestNumber: 1,
     });
-    await expect(githubAdapter.enableAutoMerge("squash")).rejects.toThrow(/slice 07/);
+    await expect(githubAdapter.enableAutoMerge("squash")).rejects.toThrow(/slice 09/);
   });
 });
