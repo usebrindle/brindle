@@ -31,6 +31,14 @@ The LLD layout (`core/`, `adapters/`, `extensions/`) lives in-tree; new work sho
 
 A contribution that puts platform-specific code in `core/`, or executes content from a pull request head, will be asked to change. See [ADR 0001](docs/adrs/0001-no-pr-head-execution.md) and [ADR 0004](docs/adrs/0004-pure-criteria-over-hydrated-context.md) for the constraints that shape this.
 
+## TypeScript style
+
+Keep **single responsibility** per function: one decision, one transformation, or one side effect (the scorer favors tiny helpers over long pipelines in one block).
+
+Prefer **short bodies** (on the order of **ten lines or fewer** per function, blanks and closing braces not counted as “work”). When a function grows, extract a named helper rather than nesting more logic.
+
+Prefer **`const` arrow functions** for top-level helpers and exports unless a hoisted declaration or generator genuinely reads clearer.
+
 ## Tooling status
 
 **ESLint** (flat config, `typescript-eslint`) is configured; use `npm run lint` / `npm run lint:fix`. **Vitest** runs via `npm run test` / `npm run test:watch`; CI runs tests **with coverage** (`lcov` in `coverage/`). **Husky** + **lint-staged** run on **pre-commit** for staged TypeScript: ESLint fix, then Vitest related. **SonarCloud** analysis runs via a dedicated workflow on same-repo PRs and on **`main`** (see **SonarCloud** below).
