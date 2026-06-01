@@ -53,8 +53,11 @@ describe("buildRiskReport", () => {
     const scoreResult = scoreResultFixture();
     const report = buildRiskReport(scoreResult, baseReportOptions());
     expect(report.result).toBe(scoreResult);
-    expect(report.commentMarkdown).toContain("## Merge risk");
-    expect(report.commentMarkdown).toContain("Diff size");
+    expect(report.commentMarkdown).toContain("## 🟡 Merge risk — MEDIUM (score 42)");
+    expect(report.commentMarkdown).toContain("<details>");
+    expect(report.commentMarkdown).toContain("<summary>Score breakdown</summary>");
+    expect(report.commentMarkdown).toContain("<!-- brindle-merge-risk -->");
+    expect(report.commentMarkdown).toContain("| Diff size |");
     expect(report.checkConclusion).toBe("neutral");
     expect(report.autoMergeOutcome).toBe("eligible");
   });
@@ -97,6 +100,44 @@ describe("buildRiskReport", () => {
 });
 
 describe("buildMergeRiskCommentMarkdown", () => {
+  it("uses the green verdict line for LOW tier", () => {
+    const markdown = buildMergeRiskCommentMarkdown(scoreResultFixture({ tier: "LOW", score: 18 }));
+    expect(markdown).toContain("## 🟢 Merge risk — LOW (score 18)");
+    expect(markdown).toContain("Low-risk changes are eligible for auto-merge when your policy enables it.");
+  });
+
+  it("uses the yellow verdict line for MEDIUM tier", () => {
+    const markdown = buildMergeRiskCommentMarkdown(scoreResultFixture({ tier: "MEDIUM", score: 20 }));
+    expect(markdown).toContain("## 🟡 Merge risk — MEDIUM (score 20)");
+    expect(markdown).toContain("Have a human review this change before merging.");
+  });
+
+  it("uses the red verdict line for HIGH tier", () => {
+    const markdown = buildMergeRiskCommentMarkdown(scoreResultFixture({ tier: "HIGH", score: 75 }));
+    expect(markdown).toContain("## 🔴 Merge risk — HIGH (score 75)");
+    expect(markdown).toContain("A human must review and approve this change before merging.");
+  });
+
+  it("wraps the criteria table and audit lines in a collapsible score breakdown", () => {
+    const markdown = buildMergeRiskCommentMarkdown(
+      scoreResultFixture({
+        mutatorsApplied: ["junior"],
+        disabledCriteria: ["diff_size"],
+      }),
+    );
+    expect(markdown).toContain("<details>");
+    expect(markdown).toContain("<summary>Score breakdown</summary>");
+    const detailsOpen = markdown.indexOf("<details>");
+    const detailsClose = markdown.indexOf("</details>");
+    expect(detailsClose).toBeGreaterThan(detailsOpen);
+    expect(markdown.indexOf("| Diff size |", detailsOpen)).toBeGreaterThan(-1);
+    expect(markdown.indexOf("junior", detailsOpen)).toBeGreaterThan(-1);
+    expect(markdown.indexOf("diff_size", detailsOpen)).toBeGreaterThan(-1);
+    expect(markdown).toContain("*🐾 Scored by Brindle*");
+    expect(markdown).toContain("<!-- brindle-merge-risk -->");
+    expect(markdown.endsWith("<!-- brindle-merge-risk -->\n")).toBe(true);
+  });
+
   it("escapes pipes in criterion names for the markdown table", () => {
     const scoreResult = scoreResultFixture({
       breakdown: [

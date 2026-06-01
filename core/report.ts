@@ -77,18 +77,42 @@ const markdownTableRowForBreakdown = (breakdownRow: CriterionBreakdown): string 
   return `| ${displayName} | ${rawScore} | ${weightPercent} | ${weightedScore} | ${displayJustification} |`;
 };
 
+const mergeRiskVerdictEmojiForTier = (riskTier: RiskTier): string => {
+  if (riskTier === "LOW") return "🟢";
+  if (riskTier === "MEDIUM") return "🟡";
+  return "🔴";
+};
+
+const mergeRiskPlainLanguageAssessmentForTier = (riskTier: RiskTier): string => {
+  if (riskTier === "LOW") return "this change is low risk and safe to merge";
+  if (riskTier === "MEDIUM") return "review is recommended";
+  return "human review is required";
+};
+
+const mergeRiskNextStepSentenceForTier = (riskTier: RiskTier): string => {
+  if (riskTier === "LOW") {
+    return "Low-risk changes are eligible for auto-merge when your policy enables it.";
+  }
+  if (riskTier === "MEDIUM") {
+    return "Have a human review this change before merging.";
+  }
+  return "A human must review and approve this change before merging.";
+};
+
+const mergeRiskVerdictHeadingLine = (scoreResult: ScoreResult): string => {
+  const verdictEmoji = mergeRiskVerdictEmojiForTier(scoreResult.tier);
+  const assessmentPhrase = mergeRiskPlainLanguageAssessmentForTier(scoreResult.tier);
+  const scoreDisplay = formatNumberForDisplay(scoreResult.score);
+  return `## ${verdictEmoji} Merge risk — ${scoreResult.tier} (score ${scoreDisplay}) — ${assessmentPhrase}.`;
+};
+
 const markdownLinesForSummaryHeader = (scoreResult: ScoreResult): string[] => [
-  "## Merge risk",
+  mergeRiskVerdictHeadingLine(scoreResult),
   "",
-  `**Tier:** ${scoreResult.tier}`,
-  `**Score:** ${formatNumberForDisplay(scoreResult.score)}`,
-  "",
+  mergeRiskNextStepSentenceForTier(scoreResult.tier),
 ];
 
 const markdownLinesForCriteriaTable = (breakdownRows: CriterionBreakdown[]): string[] => [
-  "",
-  "### Criteria breakdown",
-  "",
   "| Criterion | Raw | Weight % | Weighted | Notes |",
   "| --- | ---: | ---: | ---: | --- |",
   ...breakdownRows.map(markdownTableRowForBreakdown),
@@ -116,11 +140,30 @@ export const buildMergeRiskCommentMarkdown = (scoreResult: ScoreResult): string 
   const summaryLines = markdownLinesForSummaryHeader(scoreResult);
   const tableLines = markdownLinesForCriteriaTable(scoreResult.breakdown);
   const auditLines = markdownLinesForMutatorsAndDisabledCriteria(scoreResult);
-  const bodyLines = [...summaryLines, ...tableLines];
+
+  const linesInsideScoreBreakdownDetails: string[] = ["", ...tableLines];
   if (auditLines.length > 0) {
-    bodyLines.push("", auditLines.join("\n\n"));
+    linesInsideScoreBreakdownDetails.push("", auditLines.join("\n\n"));
   }
-  return `${bodyLines.join("\n")}\n`;
+  linesInsideScoreBreakdownDetails.push("");
+
+  const scoreBreakdownDetailsBlockLines = [
+    "<details>",
+    "<summary>Score breakdown</summary>",
+    ...linesInsideScoreBreakdownDetails,
+    "</details>",
+  ];
+
+  const commentBodyParts = [
+    summaryLines.join("\n"),
+    "",
+    scoreBreakdownDetailsBlockLines.join("\n"),
+    "",
+    "*🐾 Scored by Brindle*",
+    "",
+    "<!-- brindle-merge-risk -->",
+  ];
+  return `${commentBodyParts.join("\n")}\n`;
 };
 
 /**
