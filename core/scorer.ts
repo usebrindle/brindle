@@ -1,3 +1,9 @@
+/**
+ * Pure merge-risk scoring: resolve criteria, normalize weights, apply mutators, map to tier.
+ *
+ * @see docs/designs/lld-merge-risk-classifier.md
+ * @see docs/adrs/0004-pure-criteria-over-hydrated-context.md
+ */
 import { builtInCriteria } from "./criteria/builtins.js";
 import { builtInMutators } from "./mutators/builtins.js";
 import type {
@@ -289,14 +295,23 @@ const finalizeScoreResult = (
 });
 
 /**
- * Pure scoring engine. Same inputs always yield the same result shape.
- * @see docs/designs/lld-merge-risk-classifier.md
+ * Score a change using the built-in criterion and mutator registries (initially empty; filled in later slices).
+ *
+ * @param context - Platform-neutral change data produced by an adapter.
+ * @param config - Weights, thresholds, and mutator ids (full schema validation comes in a later slice).
+ * @returns Aggregated score, tier, per-criterion breakdown, and mutator ids that ran.
  */
 export const score = (context: PRContext, config: ScoringConfig): ScoreResult =>
   scoreWithRegistries(context, config, builtInCriteria, builtInMutators);
 
 /**
- * Like {@link score} but with explicit registries (tests and future plugin wiring).
+ * Score with explicit registries (used by tests and future trusted-plugin wiring).
+ *
+ * @param context - Platform-neutral change data.
+ * @param config - Weights and thresholds.
+ * @param criteria - Implementations keyed like `config.criteria`.
+ * @param mutators - Implementations keyed like `config.mutators`.
+ * @returns Same shape as {@link score}.
  */
 export const scoreWithRegistries = (
   context: PRContext,

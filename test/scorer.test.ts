@@ -187,3 +187,68 @@ describe("scoreWithRegistries", () => {
     );
   });
 });
+
+describe("tier boundaries", () => {
+  const singleCriterionConfig: ScoringConfig = {
+    thresholds: { low: 30, medium: 60 },
+    criteria: { c: { weight: 100 } },
+  };
+
+  const criterionAt = (rawScore: number): Criterion => ({
+    name: "C",
+    evaluate: () => ({ score: rawScore, justification: `raw ${rawScore}` }),
+  });
+
+  it("score at low threshold is LOW", () => {
+    const r = scoreWithRegistries(
+      minimalContext(),
+      singleCriterionConfig,
+      { c: criterionAt(30) },
+      {},
+    );
+    expect(r.tier).toBe("LOW");
+  });
+
+  it("score just above low threshold is MEDIUM", () => {
+    const r = scoreWithRegistries(
+      minimalContext(),
+      singleCriterionConfig,
+      { c: criterionAt(31) },
+      {},
+    );
+    expect(r.tier).toBe("MEDIUM");
+  });
+
+  it("score at medium threshold is MEDIUM", () => {
+    const r = scoreWithRegistries(
+      minimalContext(),
+      singleCriterionConfig,
+      { c: criterionAt(60) },
+      {},
+    );
+    expect(r.tier).toBe("MEDIUM");
+  });
+
+  it("score just above medium threshold is HIGH", () => {
+    const r = scoreWithRegistries(
+      minimalContext(),
+      singleCriterionConfig,
+      { c: criterionAt(61) },
+      {},
+    );
+    expect(r.tier).toBe("HIGH");
+  });
+});
+
+describe("missing criterion implementation", () => {
+  it("records configured id in disabledCriteria when no implementation exists", () => {
+    const config: ScoringConfig = {
+      thresholds,
+      criteria: { ghost: { weight: 100 } },
+    };
+    const r = scoreWithRegistries(minimalContext(), config, {}, {});
+    expect(r.disabledCriteria).toContain("ghost");
+    expect(r.score).toBe(0);
+    expect(r.tier).toBe("LOW");
+  });
+});
