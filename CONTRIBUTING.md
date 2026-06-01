@@ -18,7 +18,7 @@ npm run test:coverage   # same as CI test step (lcov for Sonar)
 
 **Vitest** drives unit tests under [`test/`](test/). **`npm run test:coverage`** runs Vitest with **v8 coverage**, writes **`coverage/lcov.info`** (for SonarCloud) and a text summary. CI runs **`npm run test -- --coverage`** on every push and PR.
 
-Coverage is **scoped in [`vitest.config.ts`](vitest.config.ts)** to **`core/**/*.ts`**, with **`core/types.ts`**, **`core/scorer.types.ts`**, and **`core/criteria/diffSize.types.ts`** excluded (type-only modules). **`adapters/`** is still analyzed by Sonar as sources but is not in the Vitest coverage set until it contains executable implementations. Tighten or add thresholds later as the surface grows.
+Coverage is **scoped in [`vitest.config.ts`](vitest.config.ts)** to **`core/**/*.ts`**, with **`core/types.ts`**, **`core/scorer.types.ts`**, **`core/report.types.ts`**, and **`core/criteria/diffSize.types.ts`** excluded (type-only modules). **`adapters/`** is still analyzed by Sonar as sources but is not in the Vitest coverage set until it contains executable implementations. Tighten or add thresholds later as the surface grows.
 
 ## Project layout
 
