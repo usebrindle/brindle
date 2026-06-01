@@ -39954,8 +39954,15 @@ const decodeGithubContentsApiFileBody = (contentsApiResponse, requestedFilePath)
     const normalizedBase64 = base64Content.replace(/\s/g, "");
     return Buffer.from(normalizedBase64, "base64").toString("utf8");
 };
+const isGithubContentsApiNotFoundError = (error) => {
+    if (typeof error !== "object" || error === null) {
+        return false;
+    }
+    const maybeStatus = error.status;
+    return maybeStatus === 404;
+};
 const fetchMergeRiskYamlTextFromGithubBaseRef = async (options) => {
-    const { octokit, repositoryOwner, repositoryName, baseRefName, mergeRiskFilePath } = options;
+    const { octokit, repositoryOwner, repositoryName, baseRefName, mergeRiskFilePath, skipWhenMergeRiskFileMissingOnBase, } = options;
     try {
         const { data } = await octokit.rest.repos.getContent({
             owner: repositoryOwner,
@@ -39966,9 +39973,13 @@ const fetchMergeRiskYamlTextFromGithubBaseRef = async (options) => {
         return decodeGithubContentsApiFileBody(data, mergeRiskFilePath);
     }
     catch (cause) {
+        if (skipWhenMergeRiskFileMissingOnBase && isGithubContentsApiNotFoundError(cause)) {
+            return null;
+        }
         const message = cause instanceof Error ? cause.message : String(cause);
         throw new Error(`Could not load ${mergeRiskFilePath} from base ref "${baseRefName}" (${message}). ` +
-            "Add the file on the default branch / base ref (see ADR 0001).", { cause });
+            "Add the file on the default branch / base ref (see ADR 0001). " +
+            "If this pull request only adds the file, set input skip_when_merge_risk_missing_on_base to true until the base branch has it, or merge the config in an earlier change.", { cause });
     }
 };
 const resolveGithubAuthTokenFromActionInputs = () => {
@@ -39988,18 +39999,24 @@ const resolveGithubAuthTokenFromActionInputs = () => {
 const runMergeRiskGithubAction = async () => {
     const githubToken = resolveGithubAuthTokenFromActionInputs();
     const mergeRiskFilePath = (0,core.getInput)("merge_risk_file_path") === "" ? ".merge-risk.yml" : (0,core.getInput)("merge_risk_file_path");
+    const skipWhenMergeRiskFileMissingOnBase = (0,core.getBooleanInput)("skip_when_merge_risk_missing_on_base");
     const { repositoryOwner, repositoryName } = parseGithubRepositorySlug(process.env.GITHUB_REPOSITORY);
     const githubEventPayload = await readGithubEventPayloadFromRunner();
     const { pullRequestNumber, baseRefName } = readPullRequestNumberAndBaseRefFromEvent(githubEventPayload);
     const octokit = new dist_src_Octokit({ auth: githubToken });
-    const githubApiClient = createOctokitGithubApiClient(octokit);
     const mergeRiskYamlText = await fetchMergeRiskYamlTextFromGithubBaseRef({
         octokit,
         repositoryOwner,
         repositoryName,
         baseRefName,
         mergeRiskFilePath,
+        skipWhenMergeRiskFileMissingOnBase,
     });
+    if (mergeRiskYamlText === null) {
+        (0,core.info)(`Brindle skipped: "${mergeRiskFilePath}" is not on base ref "${baseRefName}" yet (Contents API 404). ` +
+            "Merge that file to the default branch to enable scoring; this run exited successfully because skip_when_merge_risk_missing_on_base is true.");
+        return;
+    }
     let scoringConfig;
     try {
         scoringConfig = loadScoringConfigFromMergeRiskYaml(mergeRiskYamlText);
@@ -40010,6 +40027,7 @@ const runMergeRiskGithubAction = async () => {
         }
         throw cause;
     }
+    const githubApiClient = createOctokitGithubApiClient(octokit);
     const githubAdapter = new GitHubAdapter({
         githubApiClient,
         repositoryOwner,

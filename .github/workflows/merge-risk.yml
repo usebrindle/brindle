@@ -17,3 +17,4 @@ jobs:
         uses: ./extensions/github-action
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          skip_when_merge_risk_missing_on_base: true
