@@ -12,7 +12,7 @@ import type {
   RiskReport,
   ScoreResult,
 } from "./types.js";
-import type { BuildRiskReportOptions } from "./report.types.js";
+import type { BuildRiskReportOptions, CheckConclusionPolicy } from "./report.types.js";
 
 type RiskTier = ScoreResult["tier"];
 
@@ -29,18 +29,19 @@ const isRiskTierAtOrBelowMaxEligible = (
   numericRiskRankForTier(resultTier) <= numericRiskRankForTier(maxEligibleTier);
 
 /**
- * Maps risk tier and `fail-on-high` to a Check Runs–style conclusion (ADR 0003).
+ * Maps risk tier and policy to a Check Runs–style conclusion (ADR 0003).
  *
  * @param riskTier - Final tier from scoring.
- * @param failOnHigh - When `true`, HIGH becomes `failure` instead of `action_required`.
+ * @param policy - `informationalCheckConclusion` forces `success`; otherwise ADR tier mapping and `failOnHigh` apply.
  */
 export const checkConclusionForTier = (
   riskTier: RiskTier,
-  failOnHigh: boolean,
+  policy: CheckConclusionPolicy,
 ): RiskReport["checkConclusion"] => {
+  if (policy.informationalCheckConclusion) return "success";
   if (riskTier === "LOW") return "success";
   if (riskTier === "MEDIUM") return "neutral";
-  return failOnHigh ? "failure" : "action_required";
+  return policy.failOnHigh ? "failure" : "action_required";
 };
 
 const autoMergeOutcomeFromReportPolicy = (
@@ -179,6 +180,9 @@ export const buildRiskReport = (
 ): RiskReport => ({
   result: scoreResult,
   commentMarkdown: buildMergeRiskCommentMarkdown(scoreResult),
-  checkConclusion: checkConclusionForTier(scoreResult.tier, reportOptions.failOnHigh),
+  checkConclusion: checkConclusionForTier(scoreResult.tier, {
+    failOnHigh: reportOptions.failOnHigh,
+    informationalCheckConclusion: reportOptions.informationalCheckConclusion === true,
+  }),
   autoMergeOutcome: autoMergeOutcomeFromReportPolicy(scoreResult, reportOptions),
 });

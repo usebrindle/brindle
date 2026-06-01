@@ -6,13 +6,36 @@
  */
 
 /**
+ * Inputs to {@link import("./report.js").checkConclusionForTier}; kept explicit so call sites stay readable.
+ */
+export type CheckConclusionPolicy = {
+  /**
+   * When `true`, a HIGH risk tier maps the check to `failure` instead of `action_required` (ADR 0003).
+   * Ignored when {@link CheckConclusionPolicy.informationalCheckConclusion} is `true`.
+   */
+  failOnHigh: boolean;
+  /**
+   * When `true`, every tier maps to `success` so the published check never blocks CI or required checks;
+   * MEDIUM/HIGH remain visible in the markdown body (ADR 0003 informational mode).
+   */
+  informationalCheckConclusion: boolean;
+};
+
+/**
  * Policy for mapping a {@link ScoreResult} to {@link RiskReport.checkConclusion} and {@link RiskReport.autoMergeOutcome}.
  */
 export type BuildRiskReportOptions = {
   /**
    * When `true`, a HIGH risk tier maps the check to `failure` instead of `action_required` (ADR 0003).
+   * Ignored when {@link BuildRiskReportOptions.informationalCheckConclusion} is `true`.
    */
   failOnHigh: boolean;
+  /**
+   * When `true` (recommended for the bundled GitHub Action), the check run conclusion is always `success`
+   * so branch protection and PR check rolls stay green; tier is still in the summary markdown.
+   * When omitted or `false`, ADR 0003 tier-to-conclusion mapping applies.
+   */
+  informationalCheckConclusion?: boolean;
   /**
    * Native auto-merge policy (ADR 0002). The adapter still performs the platform mutation; the core only classifies intent.
    */

@@ -40208,17 +40208,19 @@ const numericRiskRankForTier = (riskTier) => {
 };
 const isRiskTierAtOrBelowMaxEligible = (resultTier, maxEligibleTier) => numericRiskRankForTier(resultTier) <= numericRiskRankForTier(maxEligibleTier);
 /**
- * Maps risk tier and `fail-on-high` to a Check Runs–style conclusion (ADR 0003).
+ * Maps risk tier and policy to a Check Runs–style conclusion (ADR 0003).
  *
  * @param riskTier - Final tier from scoring.
- * @param failOnHigh - When `true`, HIGH becomes `failure` instead of `action_required`.
+ * @param policy - `informationalCheckConclusion` forces `success`; otherwise ADR tier mapping and `failOnHigh` apply.
  */
-const checkConclusionForTier = (riskTier, failOnHigh) => {
+const checkConclusionForTier = (riskTier, policy) => {
+    if (policy.informationalCheckConclusion)
+        return "success";
     if (riskTier === "LOW")
         return "success";
     if (riskTier === "MEDIUM")
         return "neutral";
-    return failOnHigh ? "failure" : "action_required";
+    return policy.failOnHigh ? "failure" : "action_required";
 };
 const autoMergeOutcomeFromReportPolicy = (scoreResult, reportOptions) => {
     if (!reportOptions.autoMergePolicy.enabled)
@@ -40335,7 +40337,10 @@ const buildMergeRiskCommentMarkdown = (scoreResult) => {
 const buildRiskReport = (scoreResult, reportOptions) => ({
     result: scoreResult,
     commentMarkdown: buildMergeRiskCommentMarkdown(scoreResult),
-    checkConclusion: checkConclusionForTier(scoreResult.tier, reportOptions.failOnHigh),
+    checkConclusion: checkConclusionForTier(scoreResult.tier, {
+        failOnHigh: reportOptions.failOnHigh,
+        informationalCheckConclusion: reportOptions.informationalCheckConclusion === true,
+    }),
     autoMergeOutcome: autoMergeOutcomeFromReportPolicy(scoreResult, reportOptions),
 });
 
@@ -40373,8 +40378,9 @@ const BRINDLE_VERSION = "0.0.0";
 
 
 
-const buildMergeRiskReportOptionsFromAutoMergeConfig = (autoMerge) => ({
-    failOnHigh: false,
+const buildMergeRiskReportOptionsFromGithubActionInputs = (autoMerge, reportPolicyFromInputs) => ({
+    failOnHigh: reportPolicyFromInputs.failOnHigh,
+    informationalCheckConclusion: reportPolicyFromInputs.informationalCheckConclusion,
     autoMergePolicy: autoMerge === undefined
         ? { enabled: false, maxEligibleTier: "LOW" }
         : { enabled: true, maxEligibleTier: autoMerge.maxEligibleTier },
@@ -40497,6 +40503,8 @@ const runMergeRiskGithubAction = async () => {
         throw cause;
     }
     const { scoringConfig, autoMerge } = mergeRiskRepositoryYaml;
+    const informationalCheckConclusion = (0,core.getBooleanInput)("informational_check_conclusion");
+    const failOnHigh = (0,core.getBooleanInput)("fail_on_high");
     const coverageReportPath = (0,core.getInput)("coverage_report_path").trim();
     const testCoverageCriterionConfig = scoringConfig.criteria.test_coverage;
     const shouldHydrateIstanbulCoverage = coverageReportPath !== "" &&
@@ -40514,7 +40522,10 @@ const runMergeRiskGithubAction = async () => {
     });
     const pullRequestContext = await githubAdapter.buildContext();
     const scoreResult = score(pullRequestContext, scoringConfig);
-    const riskReport = buildRiskReport(scoreResult, buildMergeRiskReportOptionsFromAutoMergeConfig(autoMerge));
+    const riskReport = buildRiskReport(scoreResult, buildMergeRiskReportOptionsFromGithubActionInputs(autoMerge, {
+        informationalCheckConclusion,
+        failOnHigh,
+    }));
     await githubAdapter.writeResult(riskReport);
     if (riskReport.autoMergeOutcome === "eligible") {
         const mergeMethod = autoMerge?.method ?? "squash";

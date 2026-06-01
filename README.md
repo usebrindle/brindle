@@ -70,7 +70,8 @@ criteria:
   diff_size:
     weight: 100
     options:
-      max_lines_for_cap: 200
+      # Calibrate cap vs thresholds so line churn maps to tiers the way you want (see repo .merge-risk.yml).
+      max_lines_for_cap: 800
 ```
 
 The example below shows additional criteria planned in the LLD; only built-ins shipped in this repo apply today (`diff_size`, `test_coverage` with Istanbul reports).

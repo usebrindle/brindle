@@ -20,10 +20,12 @@ import {
 import type { BuildRiskReportOptions } from "../../core/report.types.js";
 import type { MergeRiskAutoMergeConfig } from "../../core/types.js";
 
-const buildMergeRiskReportOptionsFromAutoMergeConfig = (
+const buildMergeRiskReportOptionsFromGithubActionInputs = (
   autoMerge: MergeRiskAutoMergeConfig | undefined,
+  reportPolicyFromInputs: { informationalCheckConclusion: boolean; failOnHigh: boolean },
 ): BuildRiskReportOptions => ({
-  failOnHigh: false,
+  failOnHigh: reportPolicyFromInputs.failOnHigh,
+  informationalCheckConclusion: reportPolicyFromInputs.informationalCheckConclusion,
   autoMergePolicy:
     autoMerge === undefined
       ? { enabled: false, maxEligibleTier: "LOW" }
@@ -188,6 +190,9 @@ export const runMergeRiskGithubAction = async (): Promise<void> => {
 
   const { scoringConfig, autoMerge } = mergeRiskRepositoryYaml;
 
+  const informationalCheckConclusion = getBooleanInput("informational_check_conclusion");
+  const failOnHigh = getBooleanInput("fail_on_high");
+
   const coverageReportPath = getInput("coverage_report_path").trim();
   const testCoverageCriterionConfig = scoringConfig.criteria.test_coverage;
   const shouldHydrateIstanbulCoverage =
@@ -211,7 +216,10 @@ export const runMergeRiskGithubAction = async (): Promise<void> => {
   const scoreResult = score(pullRequestContext, scoringConfig);
   const riskReport = buildRiskReport(
     scoreResult,
-    buildMergeRiskReportOptionsFromAutoMergeConfig(autoMerge),
+    buildMergeRiskReportOptionsFromGithubActionInputs(autoMerge, {
+      informationalCheckConclusion,
+      failOnHigh,
+    }),
   );
   await githubAdapter.writeResult(riskReport);
 
