@@ -35383,19 +35383,19 @@ const dist_src_Octokit = Octokit.plugin(requestLog, legacyRestEndpointMethods, p
  */
 const decodeGithubRepositoryContentFile = (contentsApiResponse, requestedFilePath) => {
     if (Array.isArray(contentsApiResponse)) {
-        throw new Error(`${requestedFilePath} is a directory, not a file.`);
+        throw new TypeError(`${requestedFilePath} is a directory, not a file.`);
     }
     if (typeof contentsApiResponse !== "object" || contentsApiResponse === null) {
-        throw new Error(`Unexpected response when reading ${requestedFilePath}.`);
+        throw new TypeError(`Unexpected response when reading ${requestedFilePath}.`);
     }
     const fileRecord = contentsApiResponse;
     if (fileRecord.type !== "file") {
-        throw new Error(`${requestedFilePath} is not a file (type=${String(fileRecord.type)}).`);
+        throw new TypeError(`${requestedFilePath} is not a file (type=${String(fileRecord.type)}).`);
     }
     const encoding = fileRecord.encoding;
     const base64Content = fileRecord.content;
     if (encoding !== "base64" || typeof base64Content !== "string") {
-        throw new Error(`${requestedFilePath} could not be read as base64-encoded file content.`);
+        throw new TypeError(`${requestedFilePath} could not be read as base64-encoded file content.`);
     }
     const normalizedBase64 = base64Content.replace(/\s/g, "");
     return Buffer.from(normalizedBase64, "base64").toString("utf8");
@@ -35621,7 +35621,7 @@ const mapGitHubPullAndFilesToPRContext = (repositoryOwner, repositoryName, pullR
         files: changedFiles,
         totalAdditions: sumAdditions(changedFiles),
         totalDeletions: sumDeletions(changedFiles),
-        ...(coverageReport !== undefined ? { coverage: coverageReport } : {}),
+        ...(coverageReport === undefined ? {} : { coverage: coverageReport }),
     };
 };
 
@@ -40243,17 +40243,41 @@ const markdownTableRowForBreakdown = (breakdownRow) => {
     const weightedScore = formatNumberForDisplay(breakdownRow.weighted);
     return `| ${displayName} | ${rawScore} | ${weightPercent} | ${weightedScore} | ${displayJustification} |`;
 };
+const mergeRiskVerdictEmojiForTier = (riskTier) => {
+    if (riskTier === "LOW")
+        return "🟢";
+    if (riskTier === "MEDIUM")
+        return "🟡";
+    return "🔴";
+};
+const mergeRiskPlainLanguageAssessmentForTier = (riskTier) => {
+    if (riskTier === "LOW")
+        return "this change is low risk and safe to merge";
+    if (riskTier === "MEDIUM")
+        return "review is recommended";
+    return "human review is required";
+};
+const mergeRiskNextStepSentenceForTier = (riskTier) => {
+    if (riskTier === "LOW") {
+        return "Low-risk changes are eligible for auto-merge when your policy enables it.";
+    }
+    if (riskTier === "MEDIUM") {
+        return "Have a human review this change before merging.";
+    }
+    return "A human must review and approve this change before merging.";
+};
+const mergeRiskVerdictHeadingLine = (scoreResult) => {
+    const verdictEmoji = mergeRiskVerdictEmojiForTier(scoreResult.tier);
+    const assessmentPhrase = mergeRiskPlainLanguageAssessmentForTier(scoreResult.tier);
+    const scoreDisplay = formatNumberForDisplay(scoreResult.score);
+    return `## ${verdictEmoji} Merge risk — ${scoreResult.tier} (score ${scoreDisplay}) — ${assessmentPhrase}.`;
+};
 const markdownLinesForSummaryHeader = (scoreResult) => [
-    "## Merge risk",
+    mergeRiskVerdictHeadingLine(scoreResult),
     "",
-    `**Tier:** ${scoreResult.tier}`,
-    `**Score:** ${formatNumberForDisplay(scoreResult.score)}`,
-    "",
+    mergeRiskNextStepSentenceForTier(scoreResult.tier),
 ];
 const markdownLinesForCriteriaTable = (breakdownRows) => [
-    "",
-    "### Criteria breakdown",
-    "",
     "| Criterion | Raw | Weight % | Weighted | Notes |",
     "| --- | ---: | ---: | ---: | --- |",
     ...breakdownRows.map(markdownTableRowForBreakdown),
@@ -40279,11 +40303,27 @@ const buildMergeRiskCommentMarkdown = (scoreResult) => {
     const summaryLines = markdownLinesForSummaryHeader(scoreResult);
     const tableLines = markdownLinesForCriteriaTable(scoreResult.breakdown);
     const auditLines = markdownLinesForMutatorsAndDisabledCriteria(scoreResult);
-    const bodyLines = [...summaryLines, ...tableLines];
+    const linesInsideScoreBreakdownDetails = ["", ...tableLines];
     if (auditLines.length > 0) {
-        bodyLines.push("", auditLines.join("\n\n"));
+        linesInsideScoreBreakdownDetails.push("", auditLines.join("\n\n"));
     }
-    return `${bodyLines.join("\n")}\n`;
+    linesInsideScoreBreakdownDetails.push("");
+    const scoreBreakdownDetailsBlockLines = [
+        "<details>",
+        "<summary>Score breakdown</summary>",
+        ...linesInsideScoreBreakdownDetails,
+        "</details>",
+    ];
+    const commentBodyParts = [
+        summaryLines.join("\n"),
+        "",
+        scoreBreakdownDetailsBlockLines.join("\n"),
+        "",
+        "*🐾 Scored by Brindle*",
+        "",
+        "<!-- brindle-merge-risk -->",
+    ];
+    return `${commentBodyParts.join("\n")}\n`;
 };
 /**
  * Assembles a {@link RiskReport} for adapters to render.
