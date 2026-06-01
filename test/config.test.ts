@@ -122,4 +122,24 @@ describe("assertValidScoringConfig", () => {
     const scoringConfig = assertValidScoringConfig(parsedDocument);
     expect(scoringConfig.criteria.diff_size?.weight).toBe(100);
   });
+
+  it("rejects null and undefined roots", () => {
+    expect(() => assertValidScoringConfig(null)).toThrow(/empty/);
+    expect(() => assertValidScoringConfig(undefined)).toThrow(/empty/);
+  });
+
+  it("rejects non-object roots", () => {
+    expect(() => assertValidScoringConfig("yaml")).toThrow(/got string/);
+    expect(() => assertValidScoringConfig(42)).toThrow(/got number/);
+  });
+
+  it("attaches cause on invalid YAML from load helper", () => {
+    try {
+      loadScoringConfigFromMergeRiskYaml("{");
+      expect.fail("expected MergeRiskConfigError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(MergeRiskConfigError);
+      expect((error as MergeRiskConfigError).cause).toBeDefined();
+    }
+  });
 });

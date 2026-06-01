@@ -14,10 +14,17 @@ export default defineConfig({
         "core/types.ts",
         "core/scorer.types.ts",
         "core/criteria/diffSize.types.ts",
+        "adapters/PlatformAdapter.ts",
         "adapters/github/githubAdapter.types.ts",
         "core/report.types.ts",
         "**/*.config.ts",
       ],
+      thresholds: {
+        lines: 80,
+        statements: 80,
+        branches: 80,
+        functions: 80,
+      },
     },
   },
 });
