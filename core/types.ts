@@ -44,6 +44,11 @@ export interface PRContext {
 
 export interface Criterion {
   name: string;
+  /**
+   * When false, the criterion is excluded and its weight is redistributed.
+   * Omitted means always enabled.
+   */
+  isEnabled?(context: PRContext, options: unknown): boolean;
   evaluate(context: PRContext, options: unknown): CriterionResult;
 }
 
@@ -51,6 +56,36 @@ export interface CriterionResult {
   score: number;
   justification: string;
   detail?: Record<string, unknown>;
+  /** When true, this criterion is dropped and its weight is redistributed. */
+  selfDisable?: boolean;
+}
+
+/** Per-criterion weights and options; ids map to built-in / plugin implementations. */
+export interface CriterionConfiguration {
+  enabled?: boolean;
+  weight: number;
+  options?: unknown;
+}
+
+export interface MutatorConfiguration {
+  enabled?: boolean;
+  options?: unknown;
+}
+
+/**
+ * Minimal config consumed by the scorer. The full merge-risk file is validated in a later slice.
+ * @see docs/designs/lld-merge-risk-classifier.md
+ */
+export interface ScoringConfig {
+  thresholds: { low: number; medium: number };
+  criteria: Record<string, CriterionConfiguration>;
+  mutators?: Record<string, MutatorConfiguration>;
+}
+
+/** Multiplies the running score; return null to skip. */
+export interface Mutator {
+  name: string;
+  apply(context: PRContext, options: unknown): number | null;
 }
 
 export interface CriterionBreakdown {
