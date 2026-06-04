@@ -170,7 +170,7 @@ const evaluateServiceCriticality = (context: PRContext, options: unknown): Crite
 };
 
 /**
- * Criterion for YAML key `service_criticality` (registered in {@link ./builtins.js} in a later slice).
+ * Criterion for YAML key `service_criticality` (registered in {@link ./builtins.js}).
  */
 export const serviceCriticalityCriterion: Criterion = {
   name: "Service criticality",

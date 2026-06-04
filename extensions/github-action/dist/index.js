@@ -35755,7 +35755,7 @@ module.exports = {
 __nccwpck_require__.a(module, async (__webpack_handle_async_dependencies__, __webpack_async_result__) => { try {
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0__ = __nccwpck_require__(7484);
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__nccwpck_require__.n(_actions_core__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(5940);
+/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(1340);
 /**
  * GitHub Actions entry: scores the pull request from base-branch config and publishes results.
  *
@@ -35776,7 +35776,7 @@ __webpack_async_result__();
 
 /***/ }),
 
-/***/ 5940:
+/***/ 1340:
 /***/ ((__unused_webpack_module, __webpack_exports__, __nccwpck_require__) => {
 
 
@@ -40657,6 +40657,141 @@ const filePatternsCriterion = {
     },
 };
 
+;// CONCATENATED MODULE: ./core/criteria/serviceCriticality.ts
+/**
+ * Built-in `service_criticality` criterion (runtime only). Options types live in {@link ./serviceCriticality.types.js}.
+ *
+ * Root `services` are merged onto evaluate options by {@link ../scorer.js} (ADR 0009); validated YAML never embeds
+ * `services` under `criteria.service_criticality.options`.
+ *
+ * @see docs/adrs/0009-service-criticality-criterion-config.md
+ * @see docs/designs/lld-merge-risk-classifier.md
+ */
+
+const serviceCriticality_micromatchOptions = { dot: true };
+const clampScoreValue = (value) => Math.min(100, Math.max(0, value));
+const serviceCriticality_changedPathsFromContext = (context) => context.files.map((changedFile) => changedFile.path);
+const asPlainObject = (value) => {
+    if (value === null || value === undefined || typeof value !== "object" || Array.isArray(value)) {
+        return undefined;
+    }
+    return value;
+};
+const sanitizeScoresMap = (raw) => {
+    const record = asPlainObject(raw);
+    if (record === undefined) {
+        return {};
+    }
+    return Object.fromEntries(Object.entries(record).flatMap(([serviceId, rawScore]) => {
+        if (typeof rawScore !== "number" || !Number.isFinite(rawScore)) {
+            return [];
+        }
+        return [[serviceId, clampScoreValue(rawScore)]];
+    }));
+};
+const parseEvaluateInput = (options) => {
+    const record = asPlainObject(options);
+    if (record === undefined) {
+        return {};
+    }
+    const input = {};
+    if (record.aggregation === "max") {
+        input.aggregation = "max";
+    }
+    if (record.scores !== undefined) {
+        input.scores = sanitizeScoresMap(record.scores);
+    }
+    if (typeof record.default_score === "number" && Number.isFinite(record.default_score)) {
+        input.default_score = clampScoreValue(record.default_score);
+    }
+    const servicesRaw = record.services;
+    if (servicesRaw !== undefined && typeof servicesRaw === "object" && !Array.isArray(servicesRaw)) {
+        input.services = servicesRaw;
+    }
+    return input;
+};
+const pathMatchesGlob = (pathValue, globPattern) => micromatch_default().isMatch(pathValue, globPattern, serviceCriticality_micromatchOptions);
+const trimmedGlobPatternsFromEntry = (entry) => {
+    if (entry === undefined || !Array.isArray(entry.globs)) {
+        return [];
+    }
+    return entry.globs
+        .filter((globPattern) => typeof globPattern === "string" && globPattern.trim() !== "")
+        .map((globPattern) => globPattern.trim());
+};
+const anyChangedPathMatchesAnyGlob = (changedPaths, globPatterns) => changedPaths.some((pathValue) => globPatterns.some((globPattern) => pathMatchesGlob(pathValue, globPattern)));
+const sortedServiceIdsTouchingPaths = (changedPaths, catalog) => Object.keys(catalog)
+    .sort((leftId, rightId) => leftId.localeCompare(rightId))
+    .filter((serviceId) => {
+    const globPatterns = trimmedGlobPatternsFromEntry(catalog[serviceId]);
+    return globPatterns.length > 0 && anyChangedPathMatchesAnyGlob(changedPaths, globPatterns);
+});
+const configuredScoreForServiceOrZero = (scoresByServiceId, serviceId) => {
+    const configured = scoresByServiceId[serviceId];
+    if (typeof configured !== "number" || !Number.isFinite(configured)) {
+        return 0;
+    }
+    return configured;
+};
+const maxConfiguredScoreAcrossServices = (touchedServiceIds, scoresByServiceId) => {
+    if (touchedServiceIds.length === 0) {
+        return 0;
+    }
+    const perServiceScores = touchedServiceIds.map((serviceId) => configuredScoreForServiceOrZero(scoresByServiceId, serviceId));
+    return clampScoreValue(Math.max(...perServiceScores));
+};
+const defaultScoreFromInput = (input) => clampScoreValue(typeof input.default_score === "number" && Number.isFinite(input.default_score) ? input.default_score : 0);
+const detailNoServiceMatch = () => ({
+    touchedServiceIds: [],
+    matchedServices: false,
+});
+/** Default-path outcomes: score is the configured default; no services matched. */
+const criterionResultDefaultOnly = (score, justification) => ({
+    score,
+    justification,
+    detail: detailNoServiceMatch(),
+});
+const criterionResultForMatchedServices = (touchedServiceIds, rawScore) => ({
+    score: rawScore,
+    justification: `Touches service(s) ${touchedServiceIds.join(", ")} (max configured score ${rawScore}).`,
+    detail: {
+        touchedServiceIds,
+        matchedServices: true,
+        aggregation: "max",
+    },
+});
+const evaluateServiceCriticality = (context, options) => {
+    const input = parseEvaluateInput(options);
+    const changedPaths = serviceCriticality_changedPathsFromContext(context);
+    const defaultRaw = defaultScoreFromInput(input);
+    if (changedPaths.length === 0) {
+        return criterionResultDefaultOnly(defaultRaw, "No changed files; using default service criticality score.");
+    }
+    const catalog = input.services;
+    if (catalog === undefined || Object.keys(catalog).length === 0) {
+        return criterionResultDefaultOnly(defaultRaw, "No services catalog configured; using default service criticality score.");
+    }
+    const touchedServiceIds = sortedServiceIdsTouchingPaths(changedPaths, catalog);
+    if (touchedServiceIds.length === 0) {
+        return criterionResultDefaultOnly(defaultRaw, "No changed paths matched configured service globs; using default score.");
+    }
+    const scoresByServiceId = input.scores ?? {};
+    const rawScore = maxConfiguredScoreAcrossServices(touchedServiceIds, scoresByServiceId);
+    return criterionResultForMatchedServices(touchedServiceIds, rawScore);
+};
+/**
+ * Criterion for YAML key `service_criticality` (registered in {@link ./builtins.js}).
+ */
+const serviceCriticalityCriterion = {
+    name: "Service criticality",
+    /**
+     * @param context - Uses {@link PRContext.files} paths; ignores other fields.
+     * @param options - `criteria.service_criticality.options` plus optional runtime `services` merge (see module doc).
+     * @returns Raw score 0–100: max per touched service when `aggregation` is `max` (MVP default).
+     */
+    evaluate: evaluateServiceCriticality,
+};
+
 ;// CONCATENATED MODULE: ./core/criteria/testCoverage.ts
 const DEFAULT_MINIMUM_PERCENT = 80;
 const minimumPercentFromOptions = (options) => {
@@ -40719,6 +40854,7 @@ const testCoverageCriterion = {
 
 
 
+
 /**
  * Map from YAML criterion id (e.g. `diff_size`) to implementation. Consumers rely on stable ids across releases.
  */
@@ -40727,6 +40863,7 @@ const builtInCriteria = {
     branch_age: branchAgeCriterion,
     diff_size: diffSizeCriterion,
     file_patterns: filePatternsCriterion,
+    service_criticality: serviceCriticalityCriterion,
     test_coverage: testCoverageCriterion,
 };
 

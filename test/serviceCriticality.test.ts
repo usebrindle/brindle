@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { builtInCriteria } from "../core/criteria/builtins.js";
-import { serviceCriticalityCriterion } from "../core/criteria/serviceCriticality.js";
 import { loadScoringConfigFromMergeRiskYaml } from "../core/config.js";
-import { builtInMutators } from "../core/mutators/builtins.js";
-import { scoreWithRegistries } from "../core/scorer.js";
+import { serviceCriticalityCriterion } from "../core/criteria/serviceCriticality.js";
+import { score } from "../core/index.js";
 import type { PRContext } from "../core/types.js";
 
 const baseContext = (overrides: Partial<PRContext> = {}): PRContext => ({
@@ -109,7 +107,7 @@ describe("serviceCriticalityCriterion", () => {
     expect(criterionResult.detail?.touchedServiceIds).toEqual(["pay"]);
   });
 
-  it("scoreWithRegistries merges root services from config for service_criticality", () => {
+  it("score() merges root services for service_criticality via built-in registry", () => {
     const yamlText = `
 thresholds:
   low: 0
@@ -128,14 +126,10 @@ criteria:
       default_score: 0
 `;
     const scoringConfig = loadScoringConfigFromMergeRiskYaml(yamlText);
-    const criteria = {
-      ...builtInCriteria,
-      service_criticality: serviceCriticalityCriterion,
-    };
     const context = baseContext({
       files: [{ path: "services/payments/x.ts", status: "modified", additions: 1, deletions: 0 }],
     });
-    const scoreResult = scoreWithRegistries(context, scoringConfig, criteria, builtInMutators);
+    const scoreResult = score(context, scoringConfig);
     const row = scoreResult.breakdown.find((entry) => entry.name === "Service criticality");
     expect(row).toBeDefined();
     expect(row!.score).toBe(66);
