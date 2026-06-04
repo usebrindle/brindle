@@ -35755,7 +35755,7 @@ module.exports = {
 __nccwpck_require__.a(module, async (__webpack_handle_async_dependencies__, __webpack_async_result__) => { try {
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0__ = __nccwpck_require__(7484);
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__nccwpck_require__.n(_actions_core__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(9395);
+/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(5940);
 /**
  * GitHub Actions entry: scores the pull request from base-branch config and publishes results.
  *
@@ -35776,7 +35776,7 @@ __webpack_async_result__();
 
 /***/ }),
 
-/***/ 9395:
+/***/ 5940:
 /***/ ((__unused_webpack_module, __webpack_exports__, __nccwpck_require__) => {
 
 
@@ -40420,6 +40420,85 @@ const authorSeniorityCriterion = {
     },
 };
 
+;// CONCATENATED MODULE: ./core/criteria/branchAge.ts
+const DEFAULT_MAX_AGE_HOURS_FOR_CAP = 168;
+const MILLISECONDS_PER_HOUR = 60 * 60 * 1000;
+/**
+ * @param options - `criteria.branch_age.options` from config, or `unknown` until schema validation lands.
+ * @returns Positive hour count at which raw score reaches 100; falls back when options are missing or invalid.
+ */
+const maxAgeHoursForCapFromOptions = (options) => {
+    if (options === null || options === undefined)
+        return DEFAULT_MAX_AGE_HOURS_FOR_CAP;
+    if (typeof options !== "object" || Array.isArray(options))
+        return DEFAULT_MAX_AGE_HOURS_FOR_CAP;
+    const record = options;
+    const configured = record.max_age_hours_for_cap;
+    if (typeof configured !== "number" || !Number.isFinite(configured) || configured <= 0) {
+        return DEFAULT_MAX_AGE_HOURS_FOR_CAP;
+    }
+    return configured;
+};
+const temporalInputsPresent = (context) => {
+    const classifiedAtIso = context.classifiedAtIso;
+    const headCommitCommittedAtIso = context.headCommitCommittedAtIso;
+    return (typeof classifiedAtIso === "string" &&
+        classifiedAtIso.trim() !== "" &&
+        typeof headCommitCommittedAtIso === "string" &&
+        headCommitCommittedAtIso.trim() !== "");
+};
+/**
+ * @param context - Hydrated change; requires parseable {@link PRContext.classifiedAtIso} and {@link PRContext.headCommitCommittedAtIso}.
+ * @returns Non-negative age in hours, or `null` when timestamps do not parse to finite instants.
+ */
+const headCommitAgeHoursFromContext = (context) => {
+    const classifiedAtMs = Date.parse(context.classifiedAtIso);
+    const headCommittedAtMs = Date.parse(context.headCommitCommittedAtIso);
+    if (!Number.isFinite(classifiedAtMs) || !Number.isFinite(headCommittedAtMs)) {
+        return null;
+    }
+    const deltaMs = classifiedAtMs - headCommittedAtMs;
+    if (!Number.isFinite(deltaMs)) {
+        return null;
+    }
+    return Math.max(0, deltaMs / MILLISECONDS_PER_HOUR);
+};
+/**
+ * Criterion registered under YAML key `branch_age`. Requires adapter-hydrated head commit and classification instants.
+ */
+const branchAgeCriterion = {
+    name: "Head commit age",
+    isEnabled: (context) => temporalInputsPresent(context),
+    /**
+     * @param context - Hydrated {@link PRContext}; must not be mutated.
+     * @param options - Parsed `criteria.branch_age.options` (see {@link ./branchAge.types.js}); unknown until a later config slice validates YAML.
+     * @returns Raw score 0–100 vs cap, justification, and optional `detail` for audit.
+     */
+    evaluate: (context, options) => {
+        const ageHours = headCommitAgeHoursFromContext(context);
+        if (ageHours === null) {
+            return {
+                score: 0,
+                justification: "Head commit age could not be computed from the hydrated timestamps.",
+                selfDisable: true,
+            };
+        }
+        const maxAgeHoursForCap = maxAgeHoursForCapFromOptions(options);
+        const rawCriterionScore = Math.min(100, (ageHours / maxAgeHoursForCap) * 100);
+        const ageHoursRounded = Math.round(ageHours * 100) / 100;
+        return {
+            score: rawCriterionScore,
+            justification: `Head commit is about ${ageHoursRounded}h old (cap ${maxAgeHoursForCap}h for raw score 100).`,
+            detail: {
+                ageHours: ageHoursRounded,
+                maxAgeHoursForCap,
+                classifiedAtIso: context.classifiedAtIso,
+                headCommitCommittedAtIso: context.headCommitCommittedAtIso,
+            },
+        };
+    },
+};
+
 ;// CONCATENATED MODULE: ./core/criteria/diffSize.ts
 const DEFAULT_CAP_LINES = 400;
 /**
@@ -40639,11 +40718,13 @@ const testCoverageCriterion = {
 
 
 
+
 /**
  * Map from YAML criterion id (e.g. `diff_size`) to implementation. Consumers rely on stable ids across releases.
  */
 const builtInCriteria = {
     author_seniority: authorSeniorityCriterion,
+    branch_age: branchAgeCriterion,
     diff_size: diffSizeCriterion,
     file_patterns: filePatternsCriterion,
     test_coverage: testCoverageCriterion,
@@ -44724,7 +44805,7 @@ var jsYaml = {
 
 
 ;// CONCATENATED MODULE: ./schema/merge-risk-config.schema.json
-const merge_risk_config_schema_namespaceObject = /*#__PURE__*/JSON.parse('{"$schema":"http://json-schema.org/draft-07/schema#","$id":"https://brindle.dev/schema/merge-risk-config.schema.json","title":"Merge risk scoring config (subset)","description":"YAML shape under .merge-risk.yml consumed by the scorer. Additional top-level keys are allowed for forward compatibility.","definitions":{"filePatternsOptions":{"type":"object","additionalProperties":false,"properties":{"patterns":{"type":"array","items":{"type":"object","required":["glob","score"],"additionalProperties":false,"properties":{"glob":{"type":"string","minLength":1},"score":{"type":"number","minimum":0,"maximum":100}}}},"aggregation":{"type":"string","enum":["max"]}}},"authorSeniorityOptions":{"type":"object","additionalProperties":false,"properties":{"rules":{"type":"array","items":{"type":"object","required":["login","score"],"additionalProperties":false,"properties":{"login":{"type":"string","minLength":1},"score":{"type":"number","minimum":0,"maximum":100}}}},"default_score":{"type":"number","minimum":0,"maximum":100},"aggregation":{"type":"string","enum":["max"]}}}},"type":"object","required":["thresholds","criteria"],"additionalProperties":true,"properties":{"thresholds":{"type":"object","required":["low","medium"],"additionalProperties":true,"properties":{"low":{"type":"number"},"medium":{"type":"number"}}},"criteria":{"type":"object","additionalProperties":{"type":"object","required":["weight"],"additionalProperties":true,"properties":{"enabled":{"type":"boolean"},"weight":{"type":"number"},"options":{}}}},"mutators":{"type":"object","additionalProperties":{"type":"object","additionalProperties":true,"properties":{"enabled":{"type":"boolean"},"options":{}}}},"auto_merge":{"type":"object","additionalProperties":true,"properties":{"enabled":{"type":"boolean"},"tier":{"type":"string"},"method":{"type":"string"}}}},"allOf":[{"if":{"properties":{"criteria":{"type":"object","required":["file_patterns"]}},"required":["criteria"]},"then":{"properties":{"criteria":{"type":"object","properties":{"file_patterns":{"type":"object","required":["weight"],"additionalProperties":true,"properties":{"weight":{"type":"number"},"enabled":{"type":"boolean"},"options":{"$ref":"#/definitions/filePatternsOptions"}}}}}}}},{"if":{"properties":{"criteria":{"type":"object","required":["author_seniority"]}},"required":["criteria"]},"then":{"properties":{"criteria":{"type":"object","properties":{"author_seniority":{"type":"object","required":["weight"],"additionalProperties":true,"properties":{"weight":{"type":"number"},"enabled":{"type":"boolean"},"options":{"$ref":"#/definitions/authorSeniorityOptions"}}}}}}}}]}');
+const merge_risk_config_schema_namespaceObject = /*#__PURE__*/JSON.parse('{"$schema":"http://json-schema.org/draft-07/schema#","$id":"https://brindle.dev/schema/merge-risk-config.schema.json","title":"Merge risk scoring config (subset)","description":"YAML shape under .merge-risk.yml consumed by the scorer. Additional top-level keys are allowed for forward compatibility.","definitions":{"filePatternsOptions":{"type":"object","additionalProperties":false,"properties":{"patterns":{"type":"array","items":{"type":"object","required":["glob","score"],"additionalProperties":false,"properties":{"glob":{"type":"string","minLength":1},"score":{"type":"number","minimum":0,"maximum":100}}}},"aggregation":{"type":"string","enum":["max"]}}},"authorSeniorityOptions":{"type":"object","additionalProperties":false,"properties":{"rules":{"type":"array","items":{"type":"object","required":["login","score"],"additionalProperties":false,"properties":{"login":{"type":"string","minLength":1},"score":{"type":"number","minimum":0,"maximum":100}}}},"default_score":{"type":"number","minimum":0,"maximum":100},"aggregation":{"type":"string","enum":["max"]}}},"serviceCatalogEntry":{"type":"object","additionalProperties":false,"required":["globs"],"properties":{"globs":{"type":"array","minItems":1,"items":{"type":"string","minLength":1}}}},"serviceCriticalityOptions":{"type":"object","additionalProperties":false,"properties":{"aggregation":{"type":"string","enum":["max"]},"scores":{"type":"object","additionalProperties":{"type":"number","minimum":0,"maximum":100}},"default_score":{"type":"number","minimum":0,"maximum":100}}},"branchAgeOptions":{"type":"object","additionalProperties":false,"properties":{"max_age_hours_for_cap":{"type":"number","exclusiveMinimum":0}}}},"type":"object","required":["thresholds","criteria"],"additionalProperties":true,"properties":{"thresholds":{"type":"object","required":["low","medium"],"additionalProperties":true,"properties":{"low":{"type":"number"},"medium":{"type":"number"}}},"criteria":{"type":"object","additionalProperties":{"type":"object","required":["weight"],"additionalProperties":true,"properties":{"enabled":{"type":"boolean"},"weight":{"type":"number"},"options":{}}}},"mutators":{"type":"object","additionalProperties":{"type":"object","additionalProperties":true,"properties":{"enabled":{"type":"boolean"},"options":{}}}},"auto_merge":{"type":"object","additionalProperties":true,"properties":{"enabled":{"type":"boolean"},"tier":{"type":"string"},"method":{"type":"string"}}},"services":{"type":"object","additionalProperties":{"$ref":"#/definitions/serviceCatalogEntry"}}},"allOf":[{"if":{"properties":{"criteria":{"type":"object","required":["file_patterns"]}},"required":["criteria"]},"then":{"properties":{"criteria":{"type":"object","properties":{"file_patterns":{"type":"object","required":["weight"],"additionalProperties":true,"properties":{"weight":{"type":"number"},"enabled":{"type":"boolean"},"options":{"$ref":"#/definitions/filePatternsOptions"}}}}}}}},{"if":{"properties":{"criteria":{"type":"object","required":["author_seniority"]}},"required":["criteria"]},"then":{"properties":{"criteria":{"type":"object","properties":{"author_seniority":{"type":"object","required":["weight"],"additionalProperties":true,"properties":{"weight":{"type":"number"},"enabled":{"type":"boolean"},"options":{"$ref":"#/definitions/authorSeniorityOptions"}}}}}}}},{"if":{"properties":{"criteria":{"type":"object","required":["service_criticality"]}},"required":["criteria"]},"then":{"properties":{"criteria":{"type":"object","properties":{"service_criticality":{"type":"object","required":["weight"],"additionalProperties":true,"properties":{"weight":{"type":"number"},"enabled":{"type":"boolean"},"options":{"$ref":"#/definitions/serviceCriticalityOptions"}}}}}}}},{"if":{"properties":{"criteria":{"type":"object","required":["branch_age"]}},"required":["criteria"]},"then":{"properties":{"criteria":{"type":"object","properties":{"branch_age":{"type":"object","required":["weight"],"additionalProperties":true,"properties":{"weight":{"type":"number"},"enabled":{"type":"boolean"},"options":{"$ref":"#/definitions/branchAgeOptions"}}}}}}}}]}');
 ;// CONCATENATED MODULE: ./core/config.ts
 /**
  * Parse `.merge-risk.yml` (or equivalent) into a {@link ScoringConfig} using JSON Schema validation.
