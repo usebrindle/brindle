@@ -359,6 +359,141 @@ criteria:
 `;
     expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
   });
+
+  it("accepts service_criticality with services catalog and options", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+services:
+  payments:
+    globs:
+      - "services/payments/**"
+  auth:
+    globs:
+      - "src/auth/**"
+criteria:
+  diff_size:
+    weight: 100
+  service_criticality:
+    weight: 10
+    options:
+      aggregation: max
+      scores:
+        payments: 80
+        auth: 55
+      default_score: 0
+`;
+    const scoringConfig = loadScoringConfigFromMergeRiskYaml(yamlText);
+    expect(scoringConfig.services?.payments?.globs).toEqual(["services/payments/**"]);
+    expect(scoringConfig.services?.auth?.globs).toEqual(["src/auth/**"]);
+    expect(scoringConfig.criteria.service_criticality?.weight).toBe(10);
+    expect(scoringConfig.criteria.service_criticality?.options).toEqual({
+      aggregation: "max",
+      scores: { payments: 80, auth: 55 },
+      default_score: 0,
+    });
+  });
+
+  it("accepts service_criticality with empty options object", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  service_criticality:
+    weight: 1
+    options: {}
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).not.toThrow();
+  });
+
+  it("accepts service_criticality with no options key", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  service_criticality:
+    weight: 1
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).not.toThrow();
+  });
+
+  it("throws when service_criticality.options has an unknown property", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  service_criticality:
+    weight: 1
+    options:
+      unknown_flag: true
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when service_criticality.options.scores value is above 100", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  service_criticality:
+    weight: 1
+    options:
+      aggregation: max
+      scores:
+        api: 101
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when service_criticality.options.aggregation is not max", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  service_criticality:
+    weight: 1
+    options:
+      aggregation: sum
+      scores:
+        api: 10
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when services entry omits globs", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+services:
+  broken: {}
+criteria:
+  diff_size:
+    weight: 100
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when services entry has empty globs array", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+services:
+  empty_globs:
+    globs: []
+criteria:
+  diff_size:
+    weight: 100
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
 });
 
 describe("loadMergeRiskRepositoryYaml", () => {
