@@ -553,6 +553,131 @@ criteria:
     expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
   });
 
+  it("accepts junior_author mutator with valid options", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  diff_size:
+    weight: 100
+mutators:
+  junior_author:
+    options:
+      logins:
+        - "alice"
+        - "bob"
+      multiplier: 1.25
+`;
+    const scoringConfig = loadScoringConfigFromMergeRiskYaml(yamlText);
+    expect(scoringConfig.mutators?.junior_author?.options).toEqual({
+      logins: ["alice", "bob"],
+      multiplier: 1.25,
+    });
+  });
+
+  it("throws when junior_author is present but options is omitted", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  diff_size:
+    weight: 100
+mutators:
+  junior_author:
+    enabled: false
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when junior_author.options has an unknown property", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  diff_size:
+    weight: 100
+mutators:
+  junior_author:
+    options:
+      logins: ["alice"]
+      multiplier: 1.5
+      extra: true
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when junior_author.options.multiplier is 1", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  diff_size:
+    weight: 100
+mutators:
+  junior_author:
+    options:
+      logins: ["alice"]
+      multiplier: 1
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when junior_author.options.logins is empty", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  diff_size:
+    weight: 100
+mutators:
+  junior_author:
+    options:
+      logins: []
+      multiplier: 1.5
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when junior_author.options.logins entry is empty string", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  diff_size:
+    weight: 100
+mutators:
+  junior_author:
+    options:
+      logins: [""]
+      multiplier: 1.5
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("accepts junior_author with enabled false when options are present", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  diff_size:
+    weight: 100
+mutators:
+  junior_author:
+    enabled: false
+    options:
+      logins: ["alice"]
+      multiplier: 1.5
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).not.toThrow();
+  });
+
   it("throws when services entry omits globs", () => {
     const yamlText = `
 thresholds:
