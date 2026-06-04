@@ -25,6 +25,41 @@
           "enum": ["max"]
         }
       }
+    },
+    "serviceCatalogEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["globs"],
+      "properties": {
+        "globs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "serviceCriticalityOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "aggregation": {
+          "type": "string",
+          "enum": ["max"]
+        },
+        "scores": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          }
+        },
+        "default_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        }
+      }
     }
   },
   "type": "object",
@@ -72,6 +107,12 @@
         "tier": { "type": "string" },
         "method": { "type": "string" }
       }
+    },
+    "services": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/serviceCatalogEntry"
+      }
     }
   },
   "allOf": [
@@ -99,6 +140,38 @@
                   "enabled": { "type": "boolean" },
                   "options": {
                     "$ref": "#/definitions/filePatternsOptions"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "criteria": {
+            "type": "object",
+            "required": ["service_criticality"]
+          }
+        },
+        "required": ["criteria"]
+      },
+      "then": {
+        "properties": {
+          "criteria": {
+            "type": "object",
+            "properties": {
+              "service_criticality": {
+                "type": "object",
+                "required": ["weight"],
+                "additionalProperties": true,
+                "properties": {
+                  "weight": { "type": "number" },
+                  "enabled": { "type": "boolean" },
+                  "options": {
+                    "$ref": "#/definitions/serviceCriticalityOptions"
                   }
                 }
               }

@@ -107,7 +107,7 @@ merge-risk-classifier/
 The directory tree above is still the **v4 product target**, with Brindle-specific filenames called out inline. The [Brindle](https://github.com/usebrindle/brindle) repository matches it as follows:
 
 - **Root and docs.** The package root is **`brindle/`** (not `merge-risk-classifier/`). Design docs and ADRs live under **`docs/designs/`** and **`docs/adrs/`** (not `docs/design/`).
-- **Criteria.** Shipped built-ins: **`diff_size`**, **`file_patterns`**, **`test_coverage`**, each with a sibling **`*.types.ts`**. They are registered in **`core/criteria/builtins.ts`**. There is no `registry.ts`. `authorSeniority`, `serviceCriticality`, and `branchAge` are not present yet.
+- **Criteria.** Shipped built-ins: **`diff_size`**, **`file_patterns`**, **`test_coverage`**, each with a sibling **`*.types.ts`**. They are registered in **`core/criteria/builtins.ts`**. There is no `registry.ts`. `authorSeniority` and `branchAge` are not present yet. **`service_criticality`**: `core/criteria/serviceCriticality.types.ts`, root-level **`services`** on **`ScoringConfig`**, and JSON Schema validation are defined (ADR 0009); the **`serviceCriticality`** runtime criterion and **`builtins.ts`** registration are not wired yet.
 - **Mutators.** **`core/mutators/builtins.ts`** is the extension point and is still empty. `juniorAuthor` and `criticalService` are not present yet.
 - **Dogfood.** This repo's **`.merge-risk.yml`** enables **`file_patterns`** alongside **`diff_size`** so merge-risk scoring on our own pull requests exercises path rules (notably the committed GitHub Action bundle under `extensions/github-action/dist/` and files under `schema/`).
 
