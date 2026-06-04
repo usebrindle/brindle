@@ -6,9 +6,11 @@ export type {
   CreateMergeRiskCheckRunInput,
   CreatePullRequestCommentInput,
   EnableNativePullRequestAutoMergeInput,
+  GetRepositoryCommitCommittedAtIsoInput,
   GitHubAdapterDependencies,
   GitHubApiClient,
   GitHubPullFileSnapshot,
   GitHubPullRequestLookup,
   GitHubPullSnapshot,
+  GitHubTemporalContextHydration,
 } from "./github/githubAdapter.types.js";

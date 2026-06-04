@@ -64,6 +64,16 @@ export interface PRContext {
   totalDeletions: number;
   coverage?: CoverageReport;
   baselineCoverage?: CoverageReport;
+  /**
+   * ISO-8601 instant when the adapter finished hydrating this context (runner wall clock).
+   * Used with {@link headCommitCommittedAtIso} for pure temporal criteria (e.g. head commit age); criteria must not call `Date.now()` (ADR 0004).
+   */
+  classifiedAtIso?: string;
+  /**
+   * ISO-8601 **committer** timestamp for {@link headSha} from the platform commit API, when available.
+   * Omitted when the commit lookup fails or the response has no usable date.
+   */
+  headCommitCommittedAtIso?: string;
 }
 
 export interface Criterion {
