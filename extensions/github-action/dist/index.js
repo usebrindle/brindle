@@ -35755,7 +35755,7 @@ module.exports = {
 __nccwpck_require__.a(module, async (__webpack_handle_async_dependencies__, __webpack_async_result__) => { try {
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0__ = __nccwpck_require__(7484);
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__nccwpck_require__.n(_actions_core__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(7273);
+/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(9395);
 /**
  * GitHub Actions entry: scores the pull request from base-branch config and publishes results.
  *
@@ -35776,7 +35776,7 @@ __webpack_async_result__();
 
 /***/ }),
 
-/***/ 7273:
+/***/ 9395:
 /***/ ((__unused_webpack_module, __webpack_exports__, __nccwpck_require__) => {
 
 
@@ -40315,6 +40315,111 @@ const createOctokitGithubApiClient = (octokit) => ({
 
 
 
+;// CONCATENATED MODULE: ./core/criteria/authorSeniority.ts
+/**
+ * @param login - Raw login from config or {@link PRContext.author}.
+ * @returns Lowercase trimmed string for stable matching; empty string if unusable.
+ */
+const normalizedLogin = (login) => login.trim().toLowerCase();
+/**
+ * @param options - `criteria.author_seniority.options` from config; validated in a later schema slice.
+ * @returns Sanitized rules with scores clamped to 0–100; invalid entries dropped.
+ */
+const rulesFromOptions = (options) => {
+    if (options === null || options === undefined || typeof options !== "object" || Array.isArray(options)) {
+        return [];
+    }
+    const record = options;
+    const rawRules = record.rules;
+    if (!Array.isArray(rawRules)) {
+        return [];
+    }
+    const sanitizedRules = [];
+    for (const item of rawRules) {
+        if (item === null || typeof item !== "object" || Array.isArray(item)) {
+            continue;
+        }
+        const row = item;
+        const loginValue = row.login;
+        const scoreValue = row.score;
+        if (typeof loginValue !== "string" || normalizedLogin(loginValue) === "") {
+            continue;
+        }
+        if (typeof scoreValue !== "number" || !Number.isFinite(scoreValue)) {
+            continue;
+        }
+        sanitizedRules.push({
+            login: loginValue.trim(),
+            score: Math.min(100, Math.max(0, scoreValue)),
+        });
+    }
+    return sanitizedRules;
+};
+/**
+ * @param options - Same options object as {@link rulesFromOptions}.
+ * @returns Clamped default score for authors who match no rule; 0 when missing or invalid.
+ */
+const defaultScoreFromOptions = (options) => {
+    if (options === null || options === undefined || typeof options !== "object" || Array.isArray(options)) {
+        return 0;
+    }
+    const record = options;
+    const rawDefault = record.default_score;
+    if (typeof rawDefault !== "number" || !Number.isFinite(rawDefault)) {
+        return 0;
+    }
+    return Math.min(100, Math.max(0, rawDefault));
+};
+/**
+ * Criterion registered under YAML key `author_seniority`. Scores from configured login tiers over {@link PRContext.author}.
+ */
+const authorSeniorityCriterion = {
+    name: "Author seniority",
+    /**
+     * @param context - Hydrated {@link PRContext}; uses `author` only for this criterion.
+     * @param options - Parsed `criteria.author_seniority.options` (see {@link ./authorSeniority.types.js}).
+     * @returns Raw score 0–100 from max of matching rule scores, else `default_score`, else 0 when no rules configured.
+     */
+    evaluate: (context, options) => {
+        const rules = rulesFromOptions(options);
+        const authorKey = normalizedLogin(context.author);
+        if (rules.length === 0) {
+            return {
+                score: 0,
+                justification: "No author seniority rules configured.",
+                detail: { matchedLogin: null, usedDefault: false },
+            };
+        }
+        let highestMatchingScore = -1;
+        let matchedLoginDisplay = null;
+        for (const rule of rules) {
+            if (normalizedLogin(rule.login) !== authorKey) {
+                continue;
+            }
+            if (rule.score > highestMatchingScore) {
+                highestMatchingScore = rule.score;
+                matchedLoginDisplay = rule.login;
+            }
+        }
+        if (highestMatchingScore >= 0) {
+            const rawScore = Math.min(100, highestMatchingScore);
+            return {
+                score: rawScore,
+                justification: `Author matched configured login rule (${matchedLoginDisplay}).`,
+                detail: { matchedLogin: matchedLoginDisplay, usedDefault: false, matchedRuleScore: rawScore },
+            };
+        }
+        const defaultScore = defaultScoreFromOptions(options);
+        return {
+            score: defaultScore,
+            justification: defaultScore > 0
+                ? `Author did not match any configured login; using default score (${defaultScore}).`
+                : "Author did not match any configured login; default score is zero.",
+            detail: { matchedLogin: null, usedDefault: true, defaultScore },
+        };
+    },
+};
+
 ;// CONCATENATED MODULE: ./core/criteria/diffSize.ts
 const DEFAULT_CAP_LINES = 400;
 /**
@@ -40380,7 +40485,7 @@ const micromatchOptions = { dot: true };
  * @param options - `criteria.file_patterns.options` from config; validated in a later schema slice.
  * @returns Sanitized rules with scores clamped to 0–100; invalid entries dropped.
  */
-const rulesFromOptions = (options) => {
+const filePatterns_rulesFromOptions = (options) => {
     if (options === null || options === undefined || typeof options !== "object" || Array.isArray(options)) {
         return [];
     }
@@ -40428,7 +40533,7 @@ const filePatternsCriterion = {
      * @returns Raw score 0–100 from max of matching rule scores (MVP), with matched glob detail.
      */
     evaluate: (context, options) => {
-        const rules = rulesFromOptions(options);
+        const rules = filePatterns_rulesFromOptions(options);
         const paths = changedPathsFromContext(context);
         if (rules.length === 0) {
             return {
@@ -40533,10 +40638,12 @@ const testCoverageCriterion = {
 
 
 
+
 /**
  * Map from YAML criterion id (e.g. `diff_size`) to implementation. Consumers rely on stable ids across releases.
  */
 const builtInCriteria = {
+    author_seniority: authorSeniorityCriterion,
     diff_size: diffSizeCriterion,
     file_patterns: filePatternsCriterion,
     test_coverage: testCoverageCriterion,
@@ -44617,7 +44724,7 @@ var jsYaml = {
 
 
 ;// CONCATENATED MODULE: ./schema/merge-risk-config.schema.json
-const merge_risk_config_schema_namespaceObject = /*#__PURE__*/JSON.parse('{"$schema":"http://json-schema.org/draft-07/schema#","$id":"https://brindle.dev/schema/merge-risk-config.schema.json","title":"Merge risk scoring config (subset)","description":"YAML shape under .merge-risk.yml consumed by the scorer. Additional top-level keys are allowed for forward compatibility.","definitions":{"filePatternsOptions":{"type":"object","additionalProperties":false,"properties":{"patterns":{"type":"array","items":{"type":"object","required":["glob","score"],"additionalProperties":false,"properties":{"glob":{"type":"string","minLength":1},"score":{"type":"number","minimum":0,"maximum":100}}}},"aggregation":{"type":"string","enum":["max"]}}}},"type":"object","required":["thresholds","criteria"],"additionalProperties":true,"properties":{"thresholds":{"type":"object","required":["low","medium"],"additionalProperties":true,"properties":{"low":{"type":"number"},"medium":{"type":"number"}}},"criteria":{"type":"object","additionalProperties":{"type":"object","required":["weight"],"additionalProperties":true,"properties":{"enabled":{"type":"boolean"},"weight":{"type":"number"},"options":{}}}},"mutators":{"type":"object","additionalProperties":{"type":"object","additionalProperties":true,"properties":{"enabled":{"type":"boolean"},"options":{}}}},"auto_merge":{"type":"object","additionalProperties":true,"properties":{"enabled":{"type":"boolean"},"tier":{"type":"string"},"method":{"type":"string"}}}},"allOf":[{"if":{"properties":{"criteria":{"type":"object","required":["file_patterns"]}},"required":["criteria"]},"then":{"properties":{"criteria":{"type":"object","properties":{"file_patterns":{"type":"object","required":["weight"],"additionalProperties":true,"properties":{"weight":{"type":"number"},"enabled":{"type":"boolean"},"options":{"$ref":"#/definitions/filePatternsOptions"}}}}}}}}]}');
+const merge_risk_config_schema_namespaceObject = /*#__PURE__*/JSON.parse('{"$schema":"http://json-schema.org/draft-07/schema#","$id":"https://brindle.dev/schema/merge-risk-config.schema.json","title":"Merge risk scoring config (subset)","description":"YAML shape under .merge-risk.yml consumed by the scorer. Additional top-level keys are allowed for forward compatibility.","definitions":{"filePatternsOptions":{"type":"object","additionalProperties":false,"properties":{"patterns":{"type":"array","items":{"type":"object","required":["glob","score"],"additionalProperties":false,"properties":{"glob":{"type":"string","minLength":1},"score":{"type":"number","minimum":0,"maximum":100}}}},"aggregation":{"type":"string","enum":["max"]}}},"authorSeniorityOptions":{"type":"object","additionalProperties":false,"properties":{"rules":{"type":"array","items":{"type":"object","required":["login","score"],"additionalProperties":false,"properties":{"login":{"type":"string","minLength":1},"score":{"type":"number","minimum":0,"maximum":100}}}},"default_score":{"type":"number","minimum":0,"maximum":100},"aggregation":{"type":"string","enum":["max"]}}}},"type":"object","required":["thresholds","criteria"],"additionalProperties":true,"properties":{"thresholds":{"type":"object","required":["low","medium"],"additionalProperties":true,"properties":{"low":{"type":"number"},"medium":{"type":"number"}}},"criteria":{"type":"object","additionalProperties":{"type":"object","required":["weight"],"additionalProperties":true,"properties":{"enabled":{"type":"boolean"},"weight":{"type":"number"},"options":{}}}},"mutators":{"type":"object","additionalProperties":{"type":"object","additionalProperties":true,"properties":{"enabled":{"type":"boolean"},"options":{}}}},"auto_merge":{"type":"object","additionalProperties":true,"properties":{"enabled":{"type":"boolean"},"tier":{"type":"string"},"method":{"type":"string"}}}},"allOf":[{"if":{"properties":{"criteria":{"type":"object","required":["file_patterns"]}},"required":["criteria"]},"then":{"properties":{"criteria":{"type":"object","properties":{"file_patterns":{"type":"object","required":["weight"],"additionalProperties":true,"properties":{"weight":{"type":"number"},"enabled":{"type":"boolean"},"options":{"$ref":"#/definitions/filePatternsOptions"}}}}}}}},{"if":{"properties":{"criteria":{"type":"object","required":["author_seniority"]}},"required":["criteria"]},"then":{"properties":{"criteria":{"type":"object","properties":{"author_seniority":{"type":"object","required":["weight"],"additionalProperties":true,"properties":{"weight":{"type":"number"},"enabled":{"type":"boolean"},"options":{"$ref":"#/definitions/authorSeniorityOptions"}}}}}}}}]}');
 ;// CONCATENATED MODULE: ./core/config.ts
 /**
  * Parse `.merge-risk.yml` (or equivalent) into a {@link ScoringConfig} using JSON Schema validation.
