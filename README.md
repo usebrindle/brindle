@@ -15,7 +15,7 @@
 
 Brindle gives every pull request a **risk score from 0 to 100**, then sorts it into a tier ... LOW, MEDIUM, or HIGH. Low-risk changes can merge on their own. Risky ones get held for a human. You decide what counts as risky.
 
-> **0.1.0 ... early but real.** The scoring engine, the GitHub Action, the PR check and comment, and native auto-merge all work today. Three built-in criteria ship in this release (`diff_size`, `file_patterns`, and `test_coverage`). The config format may still change before `1.0`, so pin to a version. Brindle supports same-repo pull requests.
+> **0.1.0 ... early but real.** The scoring engine, the GitHub Action, the PR check and comment, and native auto-merge all work today. Four built-in criteria ship in this release (`diff_size`, `file_patterns`, `author_seniority`, and `test_coverage`). The config format may still change before `1.0`, so pin to a version. Brindle supports same-repo pull requests.
 
 ## Table of contents
 
@@ -29,6 +29,7 @@ Brindle gives every pull request a **risk score from 0 to 100**, then sorts it i
 - [Add auto-merge so LOW-risk PRs merge themselves (optional)](#add-auto-merge-so-low-risk-prs-merge-themselves-optional)
 - [Add coverage scoring (optional)](#add-coverage-scoring-optional)
 - [Add file-pattern scoring (optional)](#add-file-pattern-scoring-optional)
+- [Add author seniority scoring (optional)](#add-author-seniority-scoring-optional)
 - [What you get on every PR](#what-you-get-on-every-pr)
 - [Full input reference](#full-input-reference)
 - [Criteria reference](#criteria-reference)
@@ -261,6 +262,40 @@ If no patterns are configured, or nothing matches, this criterion scores **0** (
 
 ---
 
+## Add author seniority scoring (optional)
+
+The **`author_seniority`** criterion scores pull requests using the **author login** on the change request. It does not call external directory APIs: you define tiers in base-branch config by listing logins and scores. Matching uses the same login string the platform adapter puts on [`PRContext.author`](core/types.ts) (on GitHub, the pull request author login), compared **case-insensitively** after trimming whitespace.
+
+**1. Add `author_seniority` under `criteria`** with a `weight` and an `options` block (or omit `options` / use `options: {}` until you add rules):
+
+```yaml
+criteria:
+  diff_size:
+    weight: 60
+    options:
+      max_lines_for_cap: 200
+  author_seniority:
+    weight: 40
+    options:
+      aggregation: max   # optional; only `max` is supported today
+      default_score: 55  # optional; used when the author matches no rule (0–100)
+      rules:
+        - login: "senior-dev"
+          score: 5
+        - login: "bot-account"
+          score: 80
+```
+
+**`rules`** ... a list of `{ login, score }`. Each **`login`** is a non-empty string; each **`score`** is from 0 to 100. If the PR author matches one or more rules, Brindle uses the **maximum** `score` among those rules for this criterion’s raw output (duplicate logins for the same person do not stack additively).
+
+**`default_score`** ... optional number from 0 to 100. When **at least one** rule is configured but the author matches **none** of them, that value becomes the raw score. If you omit it, the runtime treats unknown authors as **0** for this criterion until you set a default.
+
+**`aggregation`** ... reserved for future combination modes. Only **`max`** is allowed when present; you can omit it.
+
+If **no** `rules` are configured, this criterion scores **0** (same as an empty rule list at runtime).
+
+---
+
 ## What you get on every PR
 
 A check run and a comment. The comment leads with the verdict ... tier, score, and one plain sentence on what to do ... followed by a collapsible breakdown of every criterion's contribution, so anyone can see exactly why a change scored the way it did. The check conclusion follows the tier, so a HIGH PR can block merge under branch protection when you want it to.
@@ -284,9 +319,10 @@ Because the scoring is deterministic, the same change always gets the same score
 |---|---|---|
 | `diff_size` | `max_lines_for_cap` (default 400) | Total added + deleted lines. Score is `(lines / cap) * 100`, capped at 100. |
 | `file_patterns` | `patterns` (list of `glob` + `score`), optional `aggregation: max` | Whether changed paths match sensitive globs; raw score is the max `score` among matching rules. |
+| `author_seniority` | `rules` (list of `login` + `score`), optional `default_score`, optional `aggregation: max` | Maps the change-request author login to a raw score; unknown authors use `default_score` when rules exist. |
 | `test_coverage` | `minimum_percent` | Test coverage from an Istanbul report versus your minimum. Self-disables when no report is provided. |
 
-More criteria (author seniority, service criticality, branch age) and mutators are coming. See the [LLD](docs/designs/).
+More criteria (service criticality, branch age) and mutators are coming. See the [LLD](docs/designs/).
 
 ## Roadmap
 
@@ -295,8 +331,9 @@ More criteria (author seniority, service criticality, branch age) and mutators a
 - [x] Native auto-merge on low-risk changes
 - [x] Istanbul coverage scoring
 - [x] File pattern criterion (`file_patterns`)
-- [ ] More criteria ... author seniority, service criticality, branch age
-- [ ] Mutators ... author seniority and service criticality adjustments
+- [x] Author seniority criterion (`author_seniority`)
+- [ ] More criteria ... service criticality, branch age
+- [ ] Mutators ... junior author and service criticality adjustments
 - [ ] Coverage formats ... lcov and Cobertura
 - [ ] GitLab CI component
 - [ ] Bitbucket Pipe
