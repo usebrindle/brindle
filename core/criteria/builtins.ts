@@ -6,6 +6,7 @@
 import type { Criterion } from "../types.js";
 
 import { diffSizeCriterion } from "./diffSize.js";
+import { filePatternsCriterion } from "./filePatterns.js";
 import { testCoverageCriterion } from "./testCoverage.js";
 
 /**
@@ -13,5 +14,6 @@ import { testCoverageCriterion } from "./testCoverage.js";
  */
 export const builtInCriteria: Record<string, Criterion> = {
   diff_size: diffSizeCriterion,
+  file_patterns: filePatternsCriterion,
   test_coverage: testCoverageCriterion,
 };
