@@ -34,9 +34,12 @@ JSON Schema validates `services` when present, validates `criteria.service_criti
 
 ### Non-goals (this ADR)
 
-- Implementing `serviceCriticality.ts` evaluation (follow-up slice).
-- Registering the criterion in `builtins.ts` (follow-up slice).
+- Registering the criterion in `builtins.ts` (separate wiring slice).
 - The `critical_service` mutator.
+
+## Implementation notes (slice 2)
+
+Runtime scoring lives in `core/criteria/serviceCriticality.ts`. The scorer merges root `services` onto the options object passed to `evaluate` for id `service_criticality` only, so validated YAML keeps `services` at the document root (ADR 0001).
 
 ## Consequences
 
