@@ -28,7 +28,7 @@ const minimalContext = (overrides: Partial<PRContext> = {}): PRContext => ({
 const thresholds = { low: 30, medium: 60 } as const;
 
 describe("scoreWithRegistries", () => {
-  it("score() delegates to built-in registries (empty)", () => {
+  it("score() delegates to built-in criteria and mutator registries when test registries are empty", () => {
     const config: ScoringConfig = { thresholds, criteria: {} };
     expect(score(minimalContext(), config)).toEqual(
       scoreWithRegistries(minimalContext(), config, {}, {}),
