@@ -34,6 +34,8 @@ describe("serviceCriticalityCriterion", () => {
     );
     expect(criterionResult.score).toBe(12);
     expect(criterionResult.justification).toContain("No changed files");
+    expect(criterionResult.justification).toContain("Configured services:");
+    expect(criterionResult.justification).toContain("pay (**/*)");
   });
 
   it("uses default score when no services catalog is present on options", () => {
@@ -55,6 +57,8 @@ describe("serviceCriticalityCriterion", () => {
     );
     expect(criterionResult.score).toBe(3);
     expect(criterionResult.detail?.matchedServices).toBe(false);
+    expect(criterionResult.justification).toContain("Services in config:");
+    expect(criterionResult.justification).toContain("pay (services/payments/**)");
   });
 
   it("returns configured score when a path matches one service", () => {
@@ -70,6 +74,9 @@ describe("serviceCriticalityCriterion", () => {
     expect(criterionResult.score).toBe(77);
     expect(criterionResult.detail?.touchedServiceIds).toEqual(["pay"]);
     expect(criterionResult.detail?.matchedServices).toBe(true);
+    expect(criterionResult.justification).toContain("Matched service(s): pay (configured 77)");
+    expect(criterionResult.justification).toContain("`services/payments/api.ts`");
+    expect(Array.isArray(criterionResult.detail?.examplePaths)).toBe(true);
   });
 
   it("uses max score when multiple services are touched", () => {
@@ -94,6 +101,9 @@ describe("serviceCriticalityCriterion", () => {
     );
     expect(criterionResult.score).toBe(85);
     expect((criterionResult.detail?.touchedServiceIds as string[]).sort()).toEqual(["auth", "pay"]);
+    expect(criterionResult.justification).toContain("pay (configured 40)");
+    expect(criterionResult.justification).toContain("auth (configured 85)");
+    expect(criterionResult.justification).toContain("max raw score 85");
   });
 
   it("treats missing score for a touched service as zero when taking max", () => {
@@ -105,6 +115,7 @@ describe("serviceCriticalityCriterion", () => {
     );
     expect(criterionResult.score).toBe(0);
     expect(criterionResult.detail?.touchedServiceIds).toEqual(["pay"]);
+    expect(criterionResult.justification).toContain("pay (configured 0)");
   });
 
   it("score() merges root services for service_criticality via built-in registry", () => {
@@ -133,5 +144,7 @@ criteria:
     const row = scoreResult.breakdown.find((entry) => entry.name === "Service criticality");
     expect(row).toBeDefined();
     expect(row!.score).toBe(66);
+    expect(row!.justification).toContain("Matched service(s): pay (configured 66)");
+    expect(row!.justification).toContain("`services/payments/x.ts`");
   });
 });
