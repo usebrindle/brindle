@@ -62,7 +62,8 @@ merge-risk-classifier/
 │   │   ├── testCoverage.types.ts
 │   │   ├── authorSeniority.ts     # Brindle: shipped
 │   │   ├── authorSeniority.types.ts
-│   │   ├── serviceCriticality.ts
+│   │   ├── serviceCriticality.types.ts   # Brindle: shipped (ADR 0009)
+│   │   ├── serviceCriticality.ts           # Brindle: shipped (evaluator; not in builtins yet)
 │   │   └── branchAge.ts
 │   ├── coverage/
 │   │   ├── istanbul.ts            # Brindle: shipped
@@ -108,7 +109,7 @@ merge-risk-classifier/
 The directory tree above is still the **v4 product target**, with Brindle-specific filenames called out inline. The [Brindle](https://github.com/usebrindle/brindle) repository matches it as follows:
 
 - **Root and docs.** The package root is **`brindle/`** (not `merge-risk-classifier/`). Design docs and ADRs live under **`docs/designs/`** and **`docs/adrs/`** (not `docs/design/`).
-- **Criteria.** Shipped built-ins: **`diff_size`**, **`file_patterns`**, **`test_coverage`**, **`author_seniority`** (see **`authorSeniority.ts`** + **`authorSeniority.types.ts`**), each with a sibling **`*.types.ts`** where applicable. They are registered in **`core/criteria/builtins.ts`**. There is no `registry.ts`. **`branch_age`** (`branch_age` criterion) is not registered yet. **`PRContext`** may include optional **`classifiedAtIso`** and **`headCommitCommittedAtIso`** (GitHub: REST `repos.getCommit` committer date + adapter clock anchor) for upcoming temporal criteria; criteria must not call `Date.now()` (ADR 0004). **`service_criticality`** is partially landed: **`core/criteria/serviceCriticality.types.ts`**, root-level **`services`** on **`ScoringConfig`**, and JSON Schema validation (ADR 0009); the **`serviceCriticality`** evaluator and **`builtins.ts`** registration are not wired yet.
+- **Criteria.** Shipped built-ins: **`diff_size`**, **`file_patterns`**, **`test_coverage`**, **`author_seniority`** (see **`authorSeniority.ts`** + **`authorSeniority.types.ts`**), each with a sibling **`*.types.ts`** where applicable. They are registered in **`core/criteria/builtins.ts`**. There is no `registry.ts`. **`branch_age`** (`branch_age` criterion) is not registered yet. **`PRContext`** may include optional **`classifiedAtIso`** and **`headCommitCommittedAtIso`** (GitHub: REST `repos.getCommit` committer date + adapter clock anchor) for upcoming temporal criteria; criteria must not call `Date.now()` (ADR 0004). **`service_criticality`** ships as **`serviceCriticality.ts`** + **`serviceCriticality.types.ts`**, root **`services`** on **`ScoringConfig`**, JSON Schema validation (ADR 0009), and scorer-side merge of `services` into evaluate options; **`builtins.ts`** registration is not wired yet (no YAML id active in the default registry).
 - **Mutators.** **`core/mutators/builtins.ts`** is the extension point and is still empty. `juniorAuthor` and `criticalService` are not present yet.
 - **Dogfood.** This repo's **`.merge-risk.yml`** enables **`file_patterns`**, **`author_seniority`**, and **`diff_size`** so merge-risk scoring on our own pull requests exercises path rules (notably the committed GitHub Action bundle under `extensions/github-action/dist/` and files under `schema/`) plus login-tier rules (including common automation accounts).
 

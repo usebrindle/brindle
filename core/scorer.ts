@@ -92,13 +92,37 @@ const toActiveCriterion = (
   evaluated,
 });
 
+/**
+ * Merges root-level `services` into evaluate options for `service_criticality` (ADR 0009); validated YAML keeps
+ * `services` at the document root only.
+ */
+const mergeOptionsForCriterionEvaluation = (
+  criterionId: string,
+  config: ScoringConfig,
+  options: unknown,
+): unknown => {
+  if (criterionId !== "service_criticality") return options;
+  if (config.services === undefined) return options;
+  const baseRecord =
+    options !== null && options !== undefined && typeof options === "object" && !Array.isArray(options)
+      ? { ...(options as Record<string, unknown>) }
+      : {};
+  return { ...baseRecord, services: config.services };
+};
+
 const buildActiveOrDisabled = (
   criterionId: string,
   context: PRContext,
+  config: ScoringConfig,
   criterionConfiguration: CriterionConfiguration,
   criterionImplementation: Criterion,
 ): CriterionResolution => {
-  const evaluated = criterionImplementation.evaluate(context, criterionConfiguration.options);
+  const evaluateOptions = mergeOptionsForCriterionEvaluation(
+    criterionId,
+    config,
+    criterionConfiguration.options,
+  );
+  const evaluated = criterionImplementation.evaluate(context, evaluateOptions);
   if (evaluated.selfDisable === true) return { type: "disabled", id: criterionId };
   return {
     type: "active",
@@ -114,6 +138,7 @@ const buildActiveOrDisabled = (
 const resolveOneCriterion = (
   criterionId: string,
   context: PRContext,
+  config: ScoringConfig,
   criterionConfiguration: CriterionConfiguration | undefined,
   criterionImplementation: Criterion | undefined,
 ): CriterionResolution => {
@@ -123,6 +148,7 @@ const resolveOneCriterion = (
   return buildActiveOrDisabled(
     criterionId,
     context,
+    config,
     criterionConfiguration!,
     criterionImplementation!,
   );
@@ -149,6 +175,7 @@ const accumulateForCriterionId = (
   const criterionResolution = resolveOneCriterion(
     criterionId,
     context,
+    config,
     config.criteria[criterionId],
     criteria[criterionId],
   );
