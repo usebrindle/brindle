@@ -466,6 +466,89 @@ criteria:
     expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
   });
 
+  it("accepts branch_age with max_age_hours_for_cap", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  branch_age:
+    weight: 100
+    options:
+      max_age_hours_for_cap: 240
+`;
+    const scoringConfig = loadScoringConfigFromMergeRiskYaml(yamlText);
+    expect(scoringConfig.criteria.branch_age?.weight).toBe(100);
+    expect(scoringConfig.criteria.branch_age?.options).toEqual({ max_age_hours_for_cap: 240 });
+  });
+
+  it("accepts branch_age with empty options object", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  branch_age:
+    weight: 1
+    options: {}
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).not.toThrow();
+  });
+
+  it("accepts branch_age with no options key", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  branch_age:
+    weight: 1
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).not.toThrow();
+  });
+
+  it("throws when branch_age.options has an unknown property", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  branch_age:
+    weight: 1
+    options:
+      unknown_flag: true
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when branch_age.options.max_age_hours_for_cap is zero", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  branch_age:
+    weight: 1
+    options:
+      max_age_hours_for_cap: 0
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when branch_age.options.max_age_hours_for_cap is negative", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  branch_age:
+    weight: 1
+    options:
+      max_age_hours_for_cap: -1
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
   it("throws when services entry omits globs", () => {
     const yamlText = `
 thresholds:

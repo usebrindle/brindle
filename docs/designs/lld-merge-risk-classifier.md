@@ -62,9 +62,10 @@ merge-risk-classifier/
 │   │   ├── testCoverage.types.ts
 │   │   ├── authorSeniority.ts     # Brindle: shipped
 │   │   ├── authorSeniority.types.ts
+│   │   ├── branchAge.ts           # Brindle: shipped
+│   │   ├── branchAge.types.ts
 │   │   ├── serviceCriticality.types.ts   # Brindle: shipped (ADR 0009)
-│   │   ├── serviceCriticality.ts           # Brindle: shipped (evaluator; not in builtins yet)
-│   │   └── branchAge.ts
+│   │   └── serviceCriticality.ts           # Brindle: shipped (evaluator; not in builtins yet)
 │   ├── coverage/
 │   │   ├── istanbul.ts            # Brindle: shipped
 │   │   ├── adapter.ts             # not yet in Brindle
@@ -109,7 +110,7 @@ merge-risk-classifier/
 The directory tree above is still the **v4 product target**, with Brindle-specific filenames called out inline. The [Brindle](https://github.com/usebrindle/brindle) repository matches it as follows:
 
 - **Root and docs.** The package root is **`brindle/`** (not `merge-risk-classifier/`). Design docs and ADRs live under **`docs/designs/`** and **`docs/adrs/`** (not `docs/design/`).
-- **Criteria.** Shipped built-ins: **`diff_size`**, **`file_patterns`**, **`test_coverage`**, **`author_seniority`** (see **`authorSeniority.ts`** + **`authorSeniority.types.ts`**), each with a sibling **`*.types.ts`** where applicable. They are registered in **`core/criteria/builtins.ts`**. There is no `registry.ts`. **`branch_age`** (`branch_age` criterion) is not registered yet. **`PRContext`** may include optional **`classifiedAtIso`** and **`headCommitCommittedAtIso`** (GitHub: REST `repos.getCommit` committer date + adapter clock anchor) for upcoming temporal criteria; criteria must not call `Date.now()` (ADR 0004). **`service_criticality`** ships as **`serviceCriticality.ts`** + **`serviceCriticality.types.ts`**, root **`services`** on **`ScoringConfig`**, JSON Schema validation (ADR 0009), and scorer-side merge of `services` into evaluate options; **`builtins.ts`** registration is not wired yet (no YAML id active in the default registry).
+- **Criteria.** Shipped built-ins: **`diff_size`**, **`file_patterns`**, **`test_coverage`**, **`author_seniority`** (see **`authorSeniority.ts`** + **`authorSeniority.types.ts`**), **`branch_age`** (**`branchAge.ts`** + **`branchAge.types.ts`**), each under `core/criteria/` with a sibling **`*.types.ts`** when the criterion has YAML options. They are registered in **`core/criteria/builtins.ts`**. There is no `registry.ts`. **`PRContext`** may include optional **`classifiedAtIso`** and **`headCommitCommittedAtIso`** (GitHub: REST `repos.getCommit` committer date + adapter clock anchor); **`branch_age`** scores elapsed hours between those instants (adapter-hydrated; ADR 0004; no `Date.now()` in core), raw **0–100** vs a cap (**168h** default, **`max_age_hours_for_cap`** in **`criteria.branch_age.options`**). When **`branch_age`** appears under **`criteria`**, **`schema/merge-risk-config.schema.json`** validates **`options`** (positive **`max_age_hours_for_cap`** only). **`service_criticality`** ships as **`serviceCriticality.ts`** + **`serviceCriticality.types.ts`**, root **`services`** on **`ScoringConfig`**, JSON Schema validation (ADR 0009), and scorer-side merge of `services` into evaluate options; **`builtins.ts`** registration is not wired yet (no YAML id active in the default registry).
 - **Mutators.** **`core/mutators/builtins.ts`** is the extension point and is still empty. `juniorAuthor` and `criticalService` are not present yet.
 - **Dogfood.** This repo's **`.merge-risk.yml`** enables **`file_patterns`**, **`author_seniority`**, and **`diff_size`** so merge-risk scoring on our own pull requests exercises path rules (notably the committed GitHub Action bundle under `extensions/github-action/dist/` and files under `schema/`) plus login-tier rules (including common automation accounts).
 
@@ -229,7 +230,7 @@ export function score(context: PRContext, config: Config): ScoreResult;
 4. Apply enabled mutators whose condition matches. Each multiplies the running score. Multiplication is commutative, so order does not matter. Cap at 100.
 5. Map to a tier using `thresholds`.
 
-Built-in criteria, the coverage adapter, mutators, declarative rules, and the config schema are exactly as specified in v3. They are unchanged because they were already platform-agnostic. Their only adjustment is that they read the neutral `PRContext` fields rather than any GitHub-shaped object.
+Built-in criteria, the coverage adapter, mutators, declarative rules, and the config schema are exactly as specified in v3. They are unchanged because they were already platform-agnostic. Their only adjustment is that they read the neutral `PRContext` fields rather than any GitHub-shaped object. The **`branch_age`** built-in maps elapsed hours from **`headCommitCommittedAtIso`** to **`classifiedAtIso`** to a 0–100 raw score with a configurable hour cap (default **168**); when **`criteria.branch_age`** is present, **`schema/merge-risk-config.schema.json`** validates **`options`** (`max_age_hours_for_cap` must be positive when set).
 
 ---
 
