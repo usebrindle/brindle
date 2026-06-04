@@ -3,12 +3,12 @@ thresholds:
   medium: 60
 criteria:
   diff_size:
-    weight: 62
+    weight: 58
     options:
       # Line churn vs cap → raw score; calibrate so typical PRs map to tiers by repo norms (not tiny caps).
       max_lines_for_cap: 800
   file_patterns:
-    weight: 28
+    weight: 24
     options:
       aggregation: max
       patterns:
@@ -29,6 +29,11 @@ criteria:
           score: 28
         - login: "github-actions[bot]"
           score: 22
+  branch_age:
+    weight: 8
+    options:
+      # Head commit age (adapter timestamps); gentle cap so only very stale tips move the needle.
+      max_age_hours_for_cap: 336
 
 # Optional native auto-merge (ADR 0002). Requires workflow `contents: write` and repo auto-merge enabled.
 # auto_merge:
