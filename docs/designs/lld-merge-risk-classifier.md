@@ -53,26 +53,29 @@ merge-risk-classifier/
 │   ├── scorer.ts
 │   ├── types.ts                   # PRContext, ScoreResult, MergeMethod, etc.
 │   ├── criteria/
-│   │   ├── registry.ts
+│   │   ├── builtins.ts            # Brindle: YAML id → Criterion (LLD historically said registry.ts)
 │   │   ├── diffSize.ts
+│   │   ├── diffSize.types.ts
 │   │   ├── filePatterns.ts
+│   │   ├── filePatterns.types.ts
 │   │   ├── testCoverage.ts
-│   │   ├── authorSeniority.ts
+│   │   ├── testCoverage.types.ts
+│   │   ├── authorSeniority.ts     # not yet in Brindle
 │   │   ├── serviceCriticality.ts
 │   │   └── branchAge.ts
 │   ├── coverage/
-│   │   ├── adapter.ts
-│   │   ├── istanbul.ts
+│   │   ├── istanbul.ts            # Brindle: shipped
+│   │   ├── adapter.ts             # not yet in Brindle
 │   │   ├── lcov.ts
 │   │   └── cobertura.ts
 │   ├── mutators/
-│   │   ├── registry.ts
-│   │   ├── juniorAuthor.ts
+│   │   ├── builtins.ts            # Brindle: empty until first mutator ships (LLD: registry.ts + examples)
+│   │   ├── juniorAuthor.ts        # not yet in Brindle
 │   │   └── criticalService.ts
 │   ├── rules/
-│   │   └── declarativeRule.ts
+│   │   └── declarativeRule.ts     # not yet in Brindle
 │   ├── plugins/
-│   │   └── loadTrustedPlugins.ts
+│   │   └── loadTrustedPlugins.ts  # not yet in Brindle
 │   ├── config.ts
 │   └── report.ts                  # builds platform-neutral RiskReport
 ├── adapters/
@@ -90,12 +93,23 @@ merge-risk-classifier/
 │   ├── gitlab-component/          # later
 │   └── bitbucket-pipe/            # later
 ├── schema/
-│   └── config.schema.json
+│   └── merge-risk-config.schema.json   # Brindle: subset schema for .merge-risk.yml
 ├── docs/
-│   ├── design/
+│   ├── designs/                   # Brindle: LLDs live here (this file)
 │   └── adr/
 └── test/
 ```
+
+---
+
+## Brindle repository snapshot (this spec vs shipped code)
+
+The directory tree above is still the **v4 product target**, with Brindle-specific filenames called out inline. The [Brindle](https://github.com/usebrindle/brindle) repository matches it as follows:
+
+- **Root and docs.** The package root is **`brindle/`** (not `merge-risk-classifier/`). Design docs and ADRs live under **`docs/designs/`** and **`docs/adrs/`** (not `docs/design/`).
+- **Criteria.** Shipped built-ins: **`diff_size`**, **`file_patterns`**, **`test_coverage`**, each with a sibling **`*.types.ts`**. They are registered in **`core/criteria/builtins.ts`**. There is no `registry.ts`. `authorSeniority`, `serviceCriticality`, and `branchAge` are not present yet.
+- **Mutators.** **`core/mutators/builtins.ts`** is the extension point and is still empty. `juniorAuthor` and `criticalService` are not present yet.
+- **Dogfood.** This repo's **`.merge-risk.yml`** enables **`file_patterns`** alongside **`diff_size`** so merge-risk scoring on our own pull requests exercises path rules (notably the committed GitHub Action bundle under `extensions/github-action/dist/` and files under `schema/`).
 
 ---
 
@@ -306,7 +320,7 @@ jobs:
 
 ## Config Schema
 
-Identical to v3 and platform-neutral already. Read from the base branch by the adapter. The full schema with criteria, mutators, services, declarative rules, trusted plugins, and the auto-merge block is unchanged. The only neutral note is that `services` paths and file globs are repository-relative and mean the same thing on every platform.
+Identical to v3 and platform-neutral already. Read from the base branch by the adapter. The full schema with criteria, mutators, services, declarative rules, trusted plugins, and the auto-merge block is unchanged at the v3 level of ambition. **In Brindle today:** `schema/merge-risk-config.schema.json` validates a **subset** of that surface (thresholds, criteria, mutators, auto-merge); when **`criteria.file_patterns`** is present, its **`options`** are validated (`patterns` with `glob` / `score`, optional `aggregation: max`). `services`, declarative rules, and trusted plugins remain forward-compatible via permissive keys where applicable. The only neutral note is that `services` paths and file globs are repository-relative and mean the same thing on every platform.
 
 ---
 
