@@ -9,6 +9,7 @@ import { authorSeniorityCriterion } from "./authorSeniority.js";
 import { branchAgeCriterion } from "./branchAge.js";
 import { diffSizeCriterion } from "./diffSize.js";
 import { filePatternsCriterion } from "./filePatterns.js";
+import { serviceCriticalityCriterion } from "./serviceCriticality.js";
 import { testCoverageCriterion } from "./testCoverage.js";
 
 /**
@@ -19,5 +20,6 @@ export const builtInCriteria: Record<string, Criterion> = {
   branch_age: branchAgeCriterion,
   diff_size: diffSizeCriterion,
   file_patterns: filePatternsCriterion,
+  service_criticality: serviceCriticalityCriterion,
   test_coverage: testCoverageCriterion,
 };
