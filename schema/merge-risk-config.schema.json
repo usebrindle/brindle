@@ -87,6 +87,16 @@
           "maximum": 100
         }
       }
+    },
+    "branchAgeOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_age_hours_for_cap": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
     }
   },
   "type": "object",
@@ -231,6 +241,38 @@
                   "enabled": { "type": "boolean" },
                   "options": {
                     "$ref": "#/definitions/serviceCriticalityOptions"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "criteria": {
+            "type": "object",
+            "required": ["branch_age"]
+          }
+        },
+        "required": ["criteria"]
+      },
+      "then": {
+        "properties": {
+          "criteria": {
+            "type": "object",
+            "properties": {
+              "branch_age": {
+                "type": "object",
+                "required": ["weight"],
+                "additionalProperties": true,
+                "properties": {
+                  "weight": { "type": "number" },
+                  "enabled": { "type": "boolean" },
+                  "options": {
+                    "$ref": "#/definitions/branchAgeOptions"
                   }
                 }
               }
