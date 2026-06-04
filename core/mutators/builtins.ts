@@ -5,7 +5,11 @@
  */
 import type { Mutator } from "../types.js";
 
+import { juniorAuthorMutator } from "./juniorAuthor.js";
+
 /**
- * Map from YAML mutator id to implementation. Empty until mutator slices land.
+ * Map from YAML mutator id to implementation.
  */
-export const builtInMutators: Record<string, Mutator> = {};
+export const builtInMutators: Record<string, Mutator> = {
+  junior_author: juniorAuthorMutator,
+};
