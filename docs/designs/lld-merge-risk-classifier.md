@@ -60,7 +60,8 @@ merge-risk-classifier/
 │   │   ├── filePatterns.types.ts
 │   │   ├── testCoverage.ts
 │   │   ├── testCoverage.types.ts
-│   │   ├── authorSeniority.ts     # not yet in Brindle
+│   │   ├── authorSeniority.ts     # Brindle: shipped
+│   │   ├── authorSeniority.types.ts
 │   │   ├── serviceCriticality.ts
 │   │   └── branchAge.ts
 │   ├── coverage/
@@ -107,9 +108,9 @@ merge-risk-classifier/
 The directory tree above is still the **v4 product target**, with Brindle-specific filenames called out inline. The [Brindle](https://github.com/usebrindle/brindle) repository matches it as follows:
 
 - **Root and docs.** The package root is **`brindle/`** (not `merge-risk-classifier/`). Design docs and ADRs live under **`docs/designs/`** and **`docs/adrs/`** (not `docs/design/`).
-- **Criteria.** Shipped built-ins: **`diff_size`**, **`file_patterns`**, **`test_coverage`**, **`author_seniority`**, each with a sibling **`*.types.ts`**. They are registered in **`core/criteria/builtins.ts`**. There is no `registry.ts`. `branchAge` is not present yet. **`service_criticality`**: `core/criteria/serviceCriticality.types.ts`, root-level **`services`** on **`ScoringConfig`**, and JSON Schema validation are defined (ADR 0009); the **`serviceCriticality`** runtime criterion and **`builtins.ts`** registration are not wired yet.
+- **Criteria.** Shipped built-ins: **`diff_size`**, **`file_patterns`**, **`test_coverage`**, **`author_seniority`** (see **`authorSeniority.ts`** + **`authorSeniority.types.ts`**), each with a sibling **`*.types.ts`** where applicable. They are registered in **`core/criteria/builtins.ts`**. There is no `registry.ts`. **`branch_age`** (`branch_age` criterion) is not registered yet. **`PRContext`** may include optional **`classifiedAtIso`** and **`headCommitCommittedAtIso`** (GitHub: REST `repos.getCommit` committer date + adapter clock anchor) for upcoming temporal criteria; criteria must not call `Date.now()` (ADR 0004). **`service_criticality`** is partially landed: **`core/criteria/serviceCriticality.types.ts`**, root-level **`services`** on **`ScoringConfig`**, and JSON Schema validation (ADR 0009); the **`serviceCriticality`** evaluator and **`builtins.ts`** registration are not wired yet.
 - **Mutators.** **`core/mutators/builtins.ts`** is the extension point and is still empty. `juniorAuthor` and `criticalService` are not present yet.
-- **Dogfood.** This repo's **`.merge-risk.yml`** enables **`file_patterns`** alongside **`diff_size`** so merge-risk scoring on our own pull requests exercises path rules (notably the committed GitHub Action bundle under `extensions/github-action/dist/` and files under `schema/`).
+- **Dogfood.** This repo's **`.merge-risk.yml`** enables **`file_patterns`**, **`author_seniority`**, and **`diff_size`** so merge-risk scoring on our own pull requests exercises path rules (notably the committed GitHub Action bundle under `extensions/github-action/dist/` and files under `schema/`) plus login-tier rules (including common automation accounts).
 
 ---
 
@@ -186,6 +187,10 @@ export interface PRContext {
   totalDeletions: number;
   coverage?: CoverageReport;
   baselineCoverage?: CoverageReport;
+  /** ISO instant when the adapter classified this run; paired with head commit time for temporal criteria (ADR 0004). */
+  classifiedAtIso?: string;
+  /** ISO committer timestamp for `headSha` when the platform commit API succeeds. */
+  headCommitCommittedAtIso?: string;
 }
 
 export interface ScoreResult {

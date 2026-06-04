@@ -44,6 +44,23 @@ export type GetRepositoryFileTextAtRefInput = {
   ref: string;
 };
 
+/** Resolve the head commit’s committer timestamp for temporal scoring (REST `repos.getCommit`). */
+export type GetRepositoryCommitCommittedAtIsoInput = {
+  repositoryOwner: string;
+  repositoryName: string;
+  /** Commit SHA or ref accepted by GitHub’s commits API (PR head SHA). */
+  ref: string;
+};
+
+/**
+ * Optional timestamps passed into {@link import("./mapGitHubPullToPrContext.js").mapGitHubPullAndFilesToPRContext}
+ * after adapter-side I/O (ADR 0004).
+ */
+export type GitHubTemporalContextHydration = {
+  classifiedAtIso: string;
+  headCommitCommittedAtIso?: string;
+};
+
 /** Input for {@link GitHubApiClient.createMergeRiskCheckRun} (maps to `rest.checks.create`). */
 export type CreateMergeRiskCheckRunInput = {
   repositoryOwner: string;
@@ -85,6 +102,12 @@ export type GitHubApiClient = {
    * Callers use this for CI artifacts such as Istanbul coverage (ADR 0005), not for `.merge-risk.yml` on the base ref.
    */
   getRepositoryFileTextAtRef(input: GetRepositoryFileTextAtRefInput): Promise<string | null>;
+  /**
+   * Returns the head commit’s **committer** `date` as ISO text from `repos.getCommit`, or `null` on 404 or when the response omits a usable date. Rethrows other HTTP errors.
+   */
+  getRepositoryCommitCommittedAtIso(
+    input: GetRepositoryCommitCommittedAtIsoInput,
+  ): Promise<string | null>;
   createMergeRiskCheckRun(input: CreateMergeRiskCheckRunInput): Promise<void>;
   createPullRequestComment(input: CreatePullRequestCommentInput): Promise<void>;
   enableNativePullRequestAutoMerge(input: EnableNativePullRequestAutoMergeInput): Promise<void>;

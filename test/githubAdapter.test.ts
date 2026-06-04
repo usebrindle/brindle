@@ -46,6 +46,7 @@ const createMockGithubApiClient = (
   getPullRequest: async () => samplePullSnapshot(),
   listPullRequestFiles: async () => [],
   getRepositoryFileTextAtRef: vi.fn().mockResolvedValue(null),
+  getRepositoryCommitCommittedAtIso: vi.fn().mockResolvedValue(null),
   createMergeRiskCheckRun: vi.fn().mockResolvedValue(undefined),
   createPullRequestComment: vi.fn().mockResolvedValue(undefined),
   enableNativePullRequestAutoMerge: vi.fn().mockResolvedValue(undefined),
@@ -100,23 +101,84 @@ describe("mapGitHubPullAndFilesToPRContext", () => {
     );
     expect(pullContext.coverage).toEqual({ linesCovered: 9, linesTotal: 10 });
   });
+
+  it("attaches temporal hydration when a seventh argument is provided", () => {
+    const pullContext = mapGitHubPullAndFilesToPRContext(
+      "acme",
+      "demo",
+      1,
+      samplePullSnapshot(),
+      [],
+      undefined,
+      {
+        classifiedAtIso: "2026-06-01T00:00:00.000Z",
+        headCommitCommittedAtIso: "2026-05-31T12:00:00.000Z",
+      },
+    );
+    expect(pullContext.classifiedAtIso).toBe("2026-06-01T00:00:00.000Z");
+    expect(pullContext.headCommitCommittedAtIso).toBe("2026-05-31T12:00:00.000Z");
+  });
+
+  it("omits headCommitCommittedAtIso when temporal hydration has only classifiedAtIso", () => {
+    const pullContext = mapGitHubPullAndFilesToPRContext("acme", "demo", 1, samplePullSnapshot(), [], undefined, {
+      classifiedAtIso: "2026-06-01T00:00:00.000Z",
+    });
+    expect(pullContext.classifiedAtIso).toBe("2026-06-01T00:00:00.000Z");
+    expect(pullContext.headCommitCommittedAtIso).toBeUndefined();
+  });
 });
 
 describe("GitHubAdapter.buildContext", () => {
   it("delegates to the injected client then maps to PRContext", async () => {
-    const mockGithubApiClient = createMockGithubApiClient({
-      listPullRequestFiles: async () => sampleFileSnapshots(),
-    });
-    const githubAdapter = new GitHubAdapter({
-      githubApiClient: mockGithubApiClient,
-      repositoryOwner: "acme",
-      repositoryName: "demo",
-      pullRequestNumber: 7,
-    });
-    const pullContext = await githubAdapter.buildContext();
-    expect(pullContext.repoSlug).toBe("acme/demo");
-    expect(pullContext.changeNumber).toBe(7);
-    expect(pullContext.totalAdditions).toBe(13);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-15T12:00:00.000Z"));
+    try {
+      const mockGithubApiClient = createMockGithubApiClient({
+        listPullRequestFiles: async () => sampleFileSnapshots(),
+        getRepositoryCommitCommittedAtIso: vi.fn().mockResolvedValue("2026-03-10T00:00:00.000Z"),
+      });
+      const githubAdapter = new GitHubAdapter({
+        githubApiClient: mockGithubApiClient,
+        repositoryOwner: "acme",
+        repositoryName: "demo",
+        pullRequestNumber: 7,
+      });
+      const pullContext = await githubAdapter.buildContext();
+      expect(pullContext.repoSlug).toBe("acme/demo");
+      expect(pullContext.changeNumber).toBe(7);
+      expect(pullContext.totalAdditions).toBe(13);
+      expect(mockGithubApiClient.getRepositoryCommitCommittedAtIso).toHaveBeenCalledWith({
+        repositoryOwner: "acme",
+        repositoryName: "demo",
+        ref: "headdeadbeef",
+      });
+      expect(pullContext.classifiedAtIso).toBe("2026-03-15T12:00:00.000Z");
+      expect(pullContext.headCommitCommittedAtIso).toBe("2026-03-10T00:00:00.000Z");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("omits headCommitCommittedAtIso when commit timestamp lookup returns null", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-15T12:00:00.000Z"));
+    try {
+      const getRepositoryCommitCommittedAtIso = vi.fn().mockResolvedValue(null);
+      const githubAdapter = new GitHubAdapter({
+        githubApiClient: createMockGithubApiClient({
+          listPullRequestFiles: async () => sampleFileSnapshots(),
+          getRepositoryCommitCommittedAtIso,
+        }),
+        repositoryOwner: "acme",
+        repositoryName: "demo",
+        pullRequestNumber: 7,
+      });
+      const pullContext = await githubAdapter.buildContext();
+      expect(pullContext.classifiedAtIso).toBe("2026-03-15T12:00:00.000Z");
+      expect(pullContext.headCommitCommittedAtIso).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("hydrates coverage from Istanbul JSON at the PR head ref when istanbulCoverageHydration is on", async () => {

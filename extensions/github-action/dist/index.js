@@ -40006,8 +40006,10 @@ const sumDeletions = (changedFiles) => changedFiles.reduce((runningTotal, file) 
  * @param pullRequestNumber - GitHub pull request number.
  * @param pullSnapshot - Fields read from the pull request resource.
  * @param fileSnapshots - Rows from the pull request files listing (caller paginates).
+ * @param coverageReport - Optional Istanbul-derived coverage attached by the adapter.
+ * @param temporalHydration - Optional adapter-hydrated instants for pure temporal criteria (ADR 0004).
  */
-const mapGitHubPullAndFilesToPRContext = (repositoryOwner, repositoryName, pullRequestNumber, pullSnapshot, fileSnapshots, coverageReport) => {
+const mapGitHubPullAndFilesToPRContext = (repositoryOwner, repositoryName, pullRequestNumber, pullSnapshot, fileSnapshots, coverageReport, temporalHydration) => {
     const changedFiles = changedFilesFromSnapshots(fileSnapshots);
     return {
         repoSlug: `${repositoryOwner}/${repositoryName}`,
@@ -40023,6 +40025,14 @@ const mapGitHubPullAndFilesToPRContext = (repositoryOwner, repositoryName, pullR
         totalAdditions: sumAdditions(changedFiles),
         totalDeletions: sumDeletions(changedFiles),
         ...(coverageReport === undefined ? {} : { coverage: coverageReport }),
+        ...(temporalHydration === undefined
+            ? {}
+            : {
+                classifiedAtIso: temporalHydration.classifiedAtIso,
+                ...(temporalHydration.headCommitCommittedAtIso === undefined
+                    ? {}
+                    : { headCommitCommittedAtIso: temporalHydration.headCommitCommittedAtIso }),
+            }),
     };
 };
 
@@ -40092,7 +40102,19 @@ class GitHubAdapter {
                 }
             }
         }
-        return mapGitHubPullAndFilesToPRContext(pullRequestLookup.repositoryOwner, pullRequestLookup.repositoryName, pullRequestLookup.pullRequestNumber, pullSnapshot, fileSnapshots, coverageReport);
+        const headCommitCommittedAtIso = await githubApiClient.getRepositoryCommitCommittedAtIso({
+            repositoryOwner: pullRequestLookup.repositoryOwner,
+            repositoryName: pullRequestLookup.repositoryName,
+            ref: pullSnapshot.headSha,
+        });
+        const classifiedAtIso = new Date().toISOString();
+        const temporalHydration = {
+            classifiedAtIso,
+            ...(headCommitCommittedAtIso !== null && headCommitCommittedAtIso.trim() !== ""
+                ? { headCommitCommittedAtIso: headCommitCommittedAtIso }
+                : {}),
+        };
+        return mapGitHubPullAndFilesToPRContext(pullRequestLookup.repositoryOwner, pullRequestLookup.repositoryName, pullRequestLookup.pullRequestNumber, pullSnapshot, fileSnapshots, coverageReport, temporalHydration);
     }
     async writeResult(report) {
         const headSha = this.lastPullRequestHeadSha;
@@ -40178,6 +40200,13 @@ const mergeMethodToGithubGraphQlEnum = (mergeMethod) => {
         return "REBASE";
     return "SQUASH";
 };
+const commitCommittedAtIsoFromRestPayload = (data) => {
+    const rawDate = data.commit?.committer?.date;
+    if (typeof rawDate !== "string" || rawDate.trim() === "") {
+        return null;
+    }
+    return rawDate;
+};
 const toPullSnapshot = (data) => ({
     pullRequestNodeId: typeof data.node_id === "string" ? data.node_id : "",
     headSha: data.head.sha,
@@ -40223,6 +40252,22 @@ const createOctokitGithubApiClient = (octokit) => ({
                 ref: input.ref,
             });
             return decodeGithubRepositoryContentFile(data, input.path);
+        }
+        catch (cause) {
+            if (cause instanceof RequestError && cause.status === 404) {
+                return null;
+            }
+            throw cause;
+        }
+    },
+    async getRepositoryCommitCommittedAtIso(input) {
+        try {
+            const { data } = await octokit.rest.repos.getCommit({
+                owner: input.repositoryOwner,
+                repo: input.repositoryName,
+                ref: input.ref,
+            });
+            return commitCommittedAtIsoFromRestPayload(data);
         }
         catch (cause) {
             if (cause instanceof RequestError && cause.status === 404) {

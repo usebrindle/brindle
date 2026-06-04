@@ -13,6 +13,7 @@ import type {
   CreateMergeRiskCheckRunInput,
   CreatePullRequestCommentInput,
   EnableNativePullRequestAutoMergeInput,
+  GetRepositoryCommitCommittedAtIsoInput,
   GetRepositoryFileTextAtRefInput,
   GitHubApiClient,
   GitHubPullFileSnapshot,
@@ -46,6 +47,16 @@ const mergeMethodToGithubGraphQlEnum = (mergeMethod: MergeMethod): "MERGE" | "RE
   if (mergeMethod === "merge") return "MERGE";
   if (mergeMethod === "rebase") return "REBASE";
   return "SQUASH";
+};
+
+const commitCommittedAtIsoFromRestPayload = (data: {
+  commit?: { committer?: { date?: string | null } | null } | null;
+}): string | null => {
+  const rawDate = data.commit?.committer?.date;
+  if (typeof rawDate !== "string" || rawDate.trim() === "") {
+    return null;
+  }
+  return rawDate;
 };
 
 const toPullSnapshot = (data: {
@@ -105,6 +116,24 @@ export const createOctokitGithubApiClient = (octokit: Octokit): GitHubApiClient 
         ref: input.ref,
       });
       return decodeGithubRepositoryContentFile(data, input.path);
+    } catch (cause: unknown) {
+      if (cause instanceof RequestError && cause.status === 404) {
+        return null;
+      }
+      throw cause;
+    }
+  },
+
+  async getRepositoryCommitCommittedAtIso(
+    input: GetRepositoryCommitCommittedAtIsoInput,
+  ): Promise<string | null> {
+    try {
+      const { data } = await octokit.rest.repos.getCommit({
+        owner: input.repositoryOwner,
+        repo: input.repositoryName,
+        ref: input.ref,
+      });
+      return commitCommittedAtIsoFromRestPayload(data);
     } catch (cause: unknown) {
       if (cause instanceof RequestError && cause.status === 404) {
         return null;
