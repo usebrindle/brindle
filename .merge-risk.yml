@@ -3,12 +3,12 @@ thresholds:
   medium: 60
 criteria:
   diff_size:
-    weight: 70
+    weight: 62
     options:
       # Line churn vs cap → raw score; calibrate so typical PRs map to tiers by repo norms (not tiny caps).
       max_lines_for_cap: 800
   file_patterns:
-    weight: 30
+    weight: 28
     options:
       aggregation: max
       patterns:
@@ -18,6 +18,17 @@ criteria:
         # Merge-risk schema affects all consumers of .merge-risk.yml
         - glob: "schema/**"
           score: 25
+  author_seniority:
+    weight: 10
+    options:
+      aggregation: max
+      # Human PRs not listed below get a small baseline signal; automation accounts are explicit.
+      default_score: 12
+      rules:
+        - login: "dependabot[bot]"
+          score: 28
+        - login: "github-actions[bot]"
+          score: 22
 
 # Optional native auto-merge (ADR 0002). Requires workflow `contents: write` and repo auto-merge enabled.
 # auto_merge:
