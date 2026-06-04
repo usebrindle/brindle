@@ -1,0 +1,20 @@
+---
+description: PR description requests — deliver copy-paste ready markdown in one fenced block
+alwaysApply: true
+---
+
+# Pull request description format
+
+When the user asks for a **pull request description**, **PR body**, **PR template filled in**, text for **`gh pr create`**, or similar, treat the **entire answer** as something they will paste into GitHub (or `--body-file`).
+
+## Required output shape
+
+1. **Follow** `.github/pull_request_template.md` section headings and checklist style when this repo has that template (Summary, Test plan, Risk & rollout, Checklist).
+2. Put **only** the paste-ready PR text inside **one** fenced code block: open with three backticks immediately followed by `markdown`, then the PR body, then close with three backticks.
+3. Do **not** wrap that block in a bulleted or numbered list (list + fenced block breaks rendering in some clients). A short line *above* the fence like “Copy below:” is optional; the fence must contain the full PR body.
+4. Inside the fence, use normal GitHub-flavored markdown (headings, `- [ ]` / `- [x]` task items, **bold**, `inline code` where useful).
+
+## Do not
+
+- Deliver the PR body only as loose chat paragraphs without a single copy-paste fence.
+- Split the PR across multiple code blocks unless the user explicitly asked for alternatives or excerpts.
