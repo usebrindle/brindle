@@ -1,14 +1,24 @@
 thresholds:
   low: 30
   medium: 60
+
+# Logical services for service_criticality (ADR 0009): repo-relative globs only.
+services:
+  github_action_extension:
+    globs:
+      - "extensions/github-action/**"
+  merge_risk_schema:
+    globs:
+      - "schema/**"
+
 criteria:
   diff_size:
-    weight: 58
+    weight: 54
     options:
       # Line churn vs cap → raw score; calibrate so typical PRs map to tiers by repo norms (not tiny caps).
       max_lines_for_cap: 800
   file_patterns:
-    weight: 24
+    weight: 22
     options:
       aggregation: max
       patterns:
@@ -34,6 +44,14 @@ criteria:
     options:
       # Head commit age (adapter timestamps); gentle cap so only very stale tips move the needle.
       max_age_hours_for_cap: 336
+  service_criticality:
+    weight: 6
+    options:
+      aggregation: max
+      default_score: 0
+      scores:
+        github_action_extension: 32
+        merge_risk_schema: 28
 
 # Optional native auto-merge (ADR 0002). Requires workflow `contents: write` and repo auto-merge enabled.
 # auto_merge:
