@@ -369,7 +369,7 @@ const finalizeScoreResult = (
 });
 
 /**
- * Score a change using the built-in criterion and mutator registries (`criteria` grows per slice; mutators stay empty until wired).
+ * Score a change using the built-in criterion and mutator registries (`criteria` / `mutators` grow per slice).
  *
  * @param context - Platform-neutral change data produced by an adapter.
  * @param config - Weights, thresholds, and mutator ids (full schema validation comes in a later slice).
