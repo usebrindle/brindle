@@ -3,6 +3,30 @@
   "$id": "https://brindle.dev/schema/merge-risk-config.schema.json",
   "title": "Merge risk scoring config (subset)",
   "description": "YAML shape under .merge-risk.yml consumed by the scorer. Additional top-level keys are allowed for forward compatibility.",
+  "definitions": {
+    "filePatternsOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "patterns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["glob", "score"],
+            "additionalProperties": false,
+            "properties": {
+              "glob": { "type": "string", "minLength": 1 },
+              "score": { "type": "number", "minimum": 0, "maximum": 100 }
+            }
+          }
+        },
+        "aggregation": {
+          "type": "string",
+          "enum": ["max"]
+        }
+      }
+    }
+  },
   "type": "object",
   "required": ["thresholds", "criteria"],
   "additionalProperties": true,
@@ -49,5 +73,39 @@
         "method": { "type": "string" }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "criteria": {
+            "type": "object",
+            "required": ["file_patterns"]
+          }
+        },
+        "required": ["criteria"]
+      },
+      "then": {
+        "properties": {
+          "criteria": {
+            "type": "object",
+            "properties": {
+              "file_patterns": {
+                "type": "object",
+                "required": ["weight"],
+                "additionalProperties": true,
+                "properties": {
+                  "weight": { "type": "number" },
+                  "enabled": { "type": "boolean" },
+                  "options": {
+                    "$ref": "#/definitions/filePatternsOptions"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }
