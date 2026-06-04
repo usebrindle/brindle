@@ -15,7 +15,7 @@
 
 Brindle gives every pull request a **risk score from 0 to 100**, then sorts it into a tier ... LOW, MEDIUM, or HIGH. Low-risk changes can merge on their own. Risky ones get held for a human. You decide what counts as risky.
 
-> **0.1.0 ... early but real.** The scoring engine, the GitHub Action, the PR check and comment, and native auto-merge all work today. Two criteria ship in this release (`diff_size` and `test_coverage`). The config format may still change before `1.0`, so pin to a version. Brindle supports same-repo pull requests.
+> **0.1.0 ... early but real.** The scoring engine, the GitHub Action, the PR check and comment, and native auto-merge all work today. Three built-in criteria ship in this release (`diff_size`, `file_patterns`, and `test_coverage`). The config format may still change before `1.0`, so pin to a version. Brindle supports same-repo pull requests.
 
 ## Table of contents
 
@@ -28,6 +28,7 @@ Brindle gives every pull request a **risk score from 0 to 100**, then sorts it i
   - [Step 3 ... open a pull request](#step-3-open-a-pull-request)
 - [Add auto-merge so LOW-risk PRs merge themselves (optional)](#add-auto-merge-so-low-risk-prs-merge-themselves-optional)
 - [Add coverage scoring (optional)](#add-coverage-scoring-optional)
+- [Add file-pattern scoring (optional)](#add-file-pattern-scoring-optional)
 - [What you get on every PR](#what-you-get-on-every-pr)
 - [Full input reference](#full-input-reference)
 - [Criteria reference](#criteria-reference)
@@ -229,6 +230,37 @@ If the file is not found, `test_coverage` quietly disables itself and its weight
 
 ---
 
+## Add file-pattern scoring (optional)
+
+The **`file_patterns`** criterion raises the risk score when any **changed file path** on the pull request matches a glob you configure. Globs use [micromatch](https://github.com/micromatch/micromatch) syntax. Paths come from the platform adapter (on GitHub, repository-relative paths as returned by the pull request files API, forward slashes).
+
+**1. Add `file_patterns` under `criteria`** with a `weight` and an `options` block (or omit `options` / use `options: {}` to match nothing until you add rules):
+
+```yaml
+criteria:
+  diff_size:
+    weight: 60
+    options:
+      max_lines_for_cap: 200
+  file_patterns:
+    weight: 40
+    options:
+      aggregation: max   # optional; only `max` is supported today
+      patterns:
+        - glob: "**/migrations/**"
+          score: 80
+        - glob: "src/auth/**"
+          score: 50
+```
+
+**`patterns`** ... a list of rules. Each rule has **`glob`** (string, non-empty) and **`score`** (number from 0 to 100). If **any** changed file matches the glob, that rule’s score is a candidate. Brindle uses the **maximum** score among all matching rules for this criterion’s raw 0–100 output (so overlapping globs do not stack additively).
+
+**`aggregation`** ... reserved for future combination modes. Only **`max`** is allowed when present; you can omit it.
+
+If no patterns are configured, or nothing matches, this criterion scores **0** (low risk) for that run.
+
+---
+
 ## What you get on every PR
 
 A check run and a comment. The comment leads with the verdict ... tier, score, and one plain sentence on what to do ... followed by a collapsible breakdown of every criterion's contribution, so anyone can see exactly why a change scored the way it did. The check conclusion follows the tier, so a HIGH PR can block merge under branch protection when you want it to.
@@ -251,9 +283,10 @@ Because the scoring is deterministic, the same change always gets the same score
 | Criterion | Options | What it measures |
 |---|---|---|
 | `diff_size` | `max_lines_for_cap` (default 400) | Total added + deleted lines. Score is `(lines / cap) * 100`, capped at 100. |
+| `file_patterns` | `patterns` (list of `glob` + `score`), optional `aggregation: max` | Whether changed paths match sensitive globs; raw score is the max `score` among matching rules. |
 | `test_coverage` | `minimum_percent` | Test coverage from an Istanbul report versus your minimum. Self-disables when no report is provided. |
 
-More criteria (file patterns, author seniority, service criticality, branch age) and mutators are coming. See the [LLD](docs/designs/).
+More criteria (author seniority, service criticality, branch age) and mutators are coming. See the [LLD](docs/designs/).
 
 ## Roadmap
 
@@ -261,7 +294,8 @@ More criteria (file patterns, author seniority, service criticality, branch age)
 - [x] GitHub Action ... score, comment, check run
 - [x] Native auto-merge on low-risk changes
 - [x] Istanbul coverage scoring
-- [ ] More criteria ... file patterns, author seniority, service criticality, branch age
+- [x] File pattern criterion (`file_patterns`)
+- [ ] More criteria ... author seniority, service criticality, branch age
 - [ ] Mutators ... author seniority and service criticality adjustments
 - [ ] Coverage formats ... lcov and Cobertura
 - [ ] GitLab CI component
