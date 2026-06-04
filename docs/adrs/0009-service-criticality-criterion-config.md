@@ -26,7 +26,7 @@ Under `criteria.service_criticality.options` the MVP shape is:
 
 - **`aggregation`**: string enum, only **`max`** in MVP. When multiple services are touched, the raw criterion score is the maximum of the per-service scores listed below.
 - **`scores`**: mapping from **service id** → number **0–100** (raw risk when that service is touched). Keys are not required to appear under `services` at JSON Schema validation time; stricter cross-checks may be added later.
-- **`default_score`** (optional): number **0–100** when no configured service matches any changed path. When omitted, the built-in treats this as **0** at evaluation time (slice 2).
+- **`default_score`** (optional): number **0–100** when no configured service matches any changed path. When omitted, the built-in treats this as **0** at evaluation time.
 
 An **empty** `options: {}` object is valid (same ergonomics as `file_patterns`) so config can ship the criterion id before options are filled in.
 
@@ -34,12 +34,11 @@ JSON Schema validates `services` when present, validates `criteria.service_criti
 
 ### Non-goals (this ADR)
 
-- Registering the criterion in `builtins.ts` (separate wiring slice).
 - The `critical_service` mutator.
 
-## Implementation notes (slice 2)
+## Implementation notes
 
-Runtime scoring lives in `core/criteria/serviceCriticality.ts`. The scorer merges root `services` onto the options object passed to `evaluate` for id `service_criticality` only, so validated YAML keeps `services` at the document root (ADR 0001).
+Runtime scoring lives in `core/criteria/serviceCriticality.ts`. The scorer merges root `services` onto the options object passed to `evaluate` for id `service_criticality` only, so validated YAML keeps `services` at the document root (ADR 0001). The criterion is registered in `core/criteria/builtins.ts` under YAML id **`service_criticality`**.
 
 ## Consequences
 
@@ -49,4 +48,4 @@ Positive. Schema and TypeScript types give a single source of truth for the MVP 
 
 Negative. JSON Schema cannot enforce that every `scores` key exists under `services`; misconfiguration may only surface at runtime or in team review until a stricter validator exists.
 
-Negative. Service overlap (one path matching multiple services) is defined only in the criterion implementation (slice 2); this ADR only fixes aggregation policy (`max`).
+Negative. Service overlap (one path matching multiple services) is defined only in the criterion implementation; this ADR only fixes aggregation policy (`max`).
