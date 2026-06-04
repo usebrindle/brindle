@@ -91,6 +91,53 @@ const sortedServiceIdsTouchingPaths = (changedPaths: string[], catalog: Services
       return globPatterns.length > 0 && anyChangedPathMatchesAnyGlob(changedPaths, globPatterns);
     });
 
+/** Human-oriented catalog line for Notes (ids + globs). */
+const formatConfiguredServicesForNotes = (catalog: ServicesCatalog): string =>
+  Object.keys(catalog)
+    .sort((a, b) => a.localeCompare(b))
+    .map((serviceId) => {
+      const globs = trimmedGlobPatternsFromEntry(catalog[serviceId]);
+      const globPart = globs.length > 0 ? globs.join(", ") : "(no globs)";
+      return `${serviceId} (${globPart})`;
+    })
+    .join("; ");
+
+const pathTouchesService = (pathValue: string, serviceId: string, catalog: ServicesCatalog): boolean => {
+  const globPatterns = trimmedGlobPatternsFromEntry(catalog[serviceId]);
+  return globPatterns.length > 0 && anyChangedPathMatchesAnyGlob([pathValue], globPatterns);
+};
+
+/** Up to `maxPaths` changed paths that fall under at least one touched service (sorted, unique). */
+const examplePathsForTouchedServices = (
+  changedPaths: string[],
+  catalog: ServicesCatalog,
+  touchedServiceIds: string[],
+  maxPaths: number,
+): string[] => {
+  const matched = changedPaths.filter((pathValue) =>
+    touchedServiceIds.some((serviceId) => pathTouchesService(pathValue, serviceId, catalog)),
+  );
+  const uniqueSorted = [...new Set(matched)].sort((a, b) => a.localeCompare(b));
+  return uniqueSorted.slice(0, maxPaths);
+};
+
+const formatExamplePathsForNotes = (
+  changedPaths: string[],
+  catalog: ServicesCatalog,
+  touchedServiceIds: string[],
+): string => {
+  const maxShow = 4;
+  const examples = examplePathsForTouchedServices(changedPaths, catalog, touchedServiceIds, maxShow + 1);
+  if (examples.length === 0) {
+    return "";
+  }
+  const overflow = examples.length > maxShow;
+  const head = overflow ? examples.slice(0, maxShow) : examples;
+  const listed = head.map((pathValue) => `\`${pathValue}\``).join(", ");
+  const more = overflow ? ` (+${examples.length - maxShow} more)` : "";
+  return ` Example changed paths: ${listed}${more}.`;
+};
+
 const configuredScoreForServiceOrZero = (
   scoresByServiceId: Record<string, number>,
   serviceId: string,
@@ -132,13 +179,47 @@ const criterionResultDefaultOnly = (score: number, justification: string): Crite
   detail: detailNoServiceMatch(),
 });
 
-const criterionResultForMatchedServices = (touchedServiceIds: string[], rawScore: number): CriterionResult => ({
+const perTouchedServiceConfiguredPhrase = (
+  serviceId: string,
+  scoresByServiceId: Record<string, number>,
+): string => {
+  const configured = configuredScoreForServiceOrZero(scoresByServiceId, serviceId);
+  return `${serviceId} (configured ${configured})`;
+};
+
+const justificationForMatchedServices = (
+  touchedServiceIds: string[],
+  rawScore: number,
+  scoresByServiceId: Record<string, number>,
+  changedPaths: string[],
+  catalog: ServicesCatalog,
+): string => {
+  const parts = touchedServiceIds.map((id) => perTouchedServiceConfiguredPhrase(id, scoresByServiceId));
+  const servicesPart = parts.join("; ");
+  const examplesPart = formatExamplePathsForNotes(changedPaths, catalog, touchedServiceIds);
+  return `Matched service(s): ${servicesPart}; using max raw score ${rawScore}.${examplesPart}`;
+};
+
+const criterionResultForMatchedServices = (
+  touchedServiceIds: string[],
+  rawScore: number,
+  scoresByServiceId: Record<string, number>,
+  changedPaths: string[],
+  catalog: ServicesCatalog,
+): CriterionResult => ({
   score: rawScore,
-  justification: `Touches service(s) ${touchedServiceIds.join(", ")} (max configured score ${rawScore}).`,
+  justification: justificationForMatchedServices(
+    touchedServiceIds,
+    rawScore,
+    scoresByServiceId,
+    changedPaths,
+    catalog,
+  ),
   detail: {
     touchedServiceIds,
     matchedServices: true,
     aggregation: "max",
+    examplePaths: examplePathsForTouchedServices(changedPaths, catalog, touchedServiceIds, 12),
   },
 });
 
@@ -147,11 +228,18 @@ const evaluateServiceCriticality = (context: PRContext, options: unknown): Crite
   const changedPaths = changedPathsFromContext(context);
   const defaultRaw = defaultScoreFromInput(input);
 
+  const catalog = input.services;
+  const catalogSummary =
+    catalog !== undefined && Object.keys(catalog).length > 0 ? formatConfiguredServicesForNotes(catalog) : "";
+
   if (changedPaths.length === 0) {
-    return criterionResultDefaultOnly(defaultRaw, "No changed files; using default service criticality score.");
+    const catalogHint = catalogSummary ? ` Configured services: ${catalogSummary}.` : "";
+    return criterionResultDefaultOnly(
+      defaultRaw,
+      `No changed files; using default service criticality score (${defaultRaw}).${catalogHint}`,
+    );
   }
 
-  const catalog = input.services;
   if (catalog === undefined || Object.keys(catalog).length === 0) {
     return criterionResultDefaultOnly(defaultRaw, "No services catalog configured; using default service criticality score.");
   }
@@ -160,13 +248,19 @@ const evaluateServiceCriticality = (context: PRContext, options: unknown): Crite
   if (touchedServiceIds.length === 0) {
     return criterionResultDefaultOnly(
       defaultRaw,
-      "No changed paths matched configured service globs; using default score.",
+      `No changed paths matched any configured service. Services in config: ${catalogSummary}. Using default score (${defaultRaw}).`,
     );
   }
 
   const scoresByServiceId = input.scores ?? {};
   const rawScore = maxConfiguredScoreAcrossServices(touchedServiceIds, scoresByServiceId);
-  return criterionResultForMatchedServices(touchedServiceIds, rawScore);
+  return criterionResultForMatchedServices(
+    touchedServiceIds,
+    rawScore,
+    scoresByServiceId,
+    changedPaths,
+    catalog,
+  );
 };
 
 /**
