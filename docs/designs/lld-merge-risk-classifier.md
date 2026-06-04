@@ -63,6 +63,7 @@ merge-risk-classifier/
 │   │   ├── authorSeniority.ts     # Brindle: shipped
 │   │   ├── authorSeniority.types.ts
 │   │   ├── serviceCriticality.ts
+│   │   ├── serviceCriticality.types.ts
 │   │   ├── branchAge.ts           # Brindle: shipped
 │   │   ├── branchAge.types.ts
 │   ├── coverage/
@@ -109,7 +110,7 @@ merge-risk-classifier/
 The directory tree above is still the **v4 product target**, with Brindle-specific filenames called out inline. The [Brindle](https://github.com/usebrindle/brindle) repository matches it as follows:
 
 - **Root and docs.** The package root is **`brindle/`** (not `merge-risk-classifier/`). Design docs and ADRs live under **`docs/designs/`** and **`docs/adrs/`** (not `docs/design/`).
-- **Criteria.** Shipped built-ins: **`diff_size`**, **`file_patterns`**, **`test_coverage`**, **`author_seniority`**, **`branch_age`**, each under `core/criteria/` with a sibling **`*.types.ts`** when the criterion has YAML options. They are registered in **`core/criteria/builtins.ts`**. There is no `registry.ts`. `serviceCriticality` is not present yet. **`branch_age`** scores hours from **`headCommitCommittedAtIso`** to **`classifiedAtIso`** (adapter-hydrated; ADR 0004), raw **0–100** vs a cap (**168h** default, **`max_age_hours_for_cap`** in **`criteria.branch_age.options`**). Strict JSON Schema for **`branch_age`** options is deferred to a follow-up slice.
+- **Criteria.** Shipped built-ins: **`diff_size`**, **`file_patterns`**, **`test_coverage`**, **`author_seniority`** (see **`authorSeniority.ts`** + **`authorSeniority.types.ts`**), **`branch_age`** (**`branchAge.ts`** + **`branchAge.types.ts`**), each under `core/criteria/` with a sibling **`*.types.ts`** when the criterion has YAML options. They are registered in **`core/criteria/builtins.ts`**. There is no `registry.ts`. **`PRContext`** may include optional **`classifiedAtIso`** and **`headCommitCommittedAtIso`** (GitHub: REST `repos.getCommit` committer date + adapter clock anchor); **`branch_age`** scores elapsed hours between those instants (adapter-hydrated; ADR 0004; no `Date.now()` in core), raw **0–100** vs a cap (**168h** default, **`max_age_hours_for_cap`** in **`criteria.branch_age.options`**). Strict JSON Schema for **`branch_age`** options is deferred to a follow-up slice. **`service_criticality`** is partially landed: **`core/criteria/serviceCriticality.types.ts`**, root-level **`services`** on **`ScoringConfig`**, and JSON Schema validation (ADR 0009); the **`serviceCriticality`** evaluator and **`builtins.ts`** registration are not wired yet.
 - **Mutators.** **`core/mutators/builtins.ts`** is the extension point and is still empty. `juniorAuthor` and `criticalService` are not present yet.
 - **Dogfood.** This repo's **`.merge-risk.yml`** enables **`file_patterns`**, **`author_seniority`**, and **`diff_size`** so merge-risk scoring on our own pull requests exercises path rules (notably the committed GitHub Action bundle under `extensions/github-action/dist/` and files under `schema/`) plus login-tier rules (including common automation accounts).
 
@@ -326,7 +327,7 @@ jobs:
 
 ## Config Schema
 
-Identical to v3 and platform-neutral already. Read from the base branch by the adapter. The full schema with criteria, mutators, services, declarative rules, trusted plugins, and the auto-merge block is unchanged at the v3 level of ambition. **In Brindle today:** `schema/merge-risk-config.schema.json` validates a **subset** of that surface (thresholds, criteria, mutators, auto-merge); when **`criteria.file_patterns`** is present, its **`options`** are validated (`patterns` with `glob` / `score`, optional `aggregation: max`). `services`, declarative rules, and trusted plugins remain forward-compatible via permissive keys where applicable. The only neutral note is that `services` paths and file globs are repository-relative and mean the same thing on every platform.
+Identical to v3 and platform-neutral already. Read from the base branch by the adapter. The full schema with criteria, mutators, services, declarative rules, trusted plugins, and the auto-merge block is unchanged at the v3 level of ambition. **In Brindle today:** `schema/merge-risk-config.schema.json` validates a **subset** of that surface (thresholds, criteria, mutators, auto-merge); when **`criteria.file_patterns`** is present, its **`options`** are validated (`patterns` with `glob` / `score`, optional `aggregation: max`). When **`criteria.author_seniority`** is present, its **`options`** are validated (`rules` with `login` / `score`, optional `default_score` and `aggregation: max`). When **`criteria.service_criticality`** is present, its **`options`** are validated (`scores`, optional `aggregation: max`, optional `default_score`). Top-level **`services`** entries are validated (`globs` arrays) when present. Declarative rules and trusted plugins remain forward-compatible via permissive keys where applicable. Repository-relative `services` globs and file patterns mean the same thing on every platform.
 
 ---
 

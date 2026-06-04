@@ -3,6 +3,8 @@
  * @see docs/designs/lld-merge-risk-classifier.md
  */
 
+import type { ServicesCatalog } from "./criteria/serviceCriticality.types.js";
+
 /**
  * How the platform merges the PR when auto-merge runs (metadata for adapters; not used by the scorer yet).
  */
@@ -133,6 +135,11 @@ export interface ScoringConfig {
   thresholds: { low: number; medium: number };
   criteria: Record<string, CriterionConfiguration>;
   mutators?: Record<string, MutatorConfiguration>;
+  /**
+   * Optional catalog of logical services (repo-relative globs). Consumed by `service_criticality` (ADR 0009).
+   * Present only when declared in base-branch `.merge-risk.yml`.
+   */
+  services?: ServicesCatalog;
 }
 
 /**
