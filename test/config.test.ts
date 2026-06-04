@@ -112,6 +112,120 @@ criteria:
 `;
     expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
   });
+
+  it("accepts file_patterns with valid patterns and optional aggregation", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  file_patterns:
+    weight: 100
+    options:
+      aggregation: max
+      patterns:
+        - glob: "**/*.sql"
+          score: 70
+        - glob: "src/auth/**"
+          score: 40
+`;
+    const scoringConfig = loadScoringConfigFromMergeRiskYaml(yamlText);
+    expect(scoringConfig.criteria.file_patterns?.weight).toBe(100);
+    expect(scoringConfig.criteria.file_patterns?.options).toEqual({
+      aggregation: "max",
+      patterns: [
+        { glob: "**/*.sql", score: 70 },
+        { glob: "src/auth/**", score: 40 },
+      ],
+    });
+  });
+
+  it("accepts file_patterns with empty options object", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  file_patterns:
+    weight: 1
+    options: {}
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).not.toThrow();
+  });
+
+  it("accepts file_patterns with no options key", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  file_patterns:
+    weight: 1
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).not.toThrow();
+  });
+
+  it("throws when file_patterns.options has an unknown property", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  file_patterns:
+    weight: 1
+    options:
+      unknown_flag: true
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when file_patterns.options.patterns entry omits glob", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  file_patterns:
+    weight: 1
+    options:
+      patterns:
+        - score: 10
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when file_patterns.options.patterns entry has score above 100", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  file_patterns:
+    weight: 1
+    options:
+      patterns:
+        - glob: "**/*.ts"
+          score: 101
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when file_patterns.options.aggregation is not max", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  file_patterns:
+    weight: 1
+    options:
+      aggregation: sum
+      patterns:
+        - glob: "a"
+          score: 1
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
 });
 
 describe("loadMergeRiskRepositoryYaml", () => {
