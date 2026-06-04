@@ -26,6 +26,33 @@
         }
       }
     },
+    "authorSeniorityOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["login", "score"],
+            "additionalProperties": false,
+            "properties": {
+              "login": { "type": "string", "minLength": 1 },
+              "score": { "type": "number", "minimum": 0, "maximum": 100 }
+            }
+          }
+        },
+        "default_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "aggregation": {
+          "type": "string",
+          "enum": ["max"]
+        }
+      }
+    },
     "serviceCatalogEntry": {
       "type": "object",
       "additionalProperties": false,
@@ -140,6 +167,38 @@
                   "enabled": { "type": "boolean" },
                   "options": {
                     "$ref": "#/definitions/filePatternsOptions"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "criteria": {
+            "type": "object",
+            "required": ["author_seniority"]
+          }
+        },
+        "required": ["criteria"]
+      },
+      "then": {
+        "properties": {
+          "criteria": {
+            "type": "object",
+            "properties": {
+              "author_seniority": {
+                "type": "object",
+                "required": ["weight"],
+                "additionalProperties": true,
+                "properties": {
+                  "weight": { "type": "number" },
+                  "enabled": { "type": "boolean" },
+                  "options": {
+                    "$ref": "#/definitions/authorSeniorityOptions"
                   }
                 }
               }
