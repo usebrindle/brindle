@@ -342,6 +342,89 @@ describe("createOctokitGithubApiClient", () => {
     });
   });
 
+  it("maps getRepositoryCommitCommittedAtIso to rest.repos.getCommit committer date", async () => {
+    const reposGetCommit = vi.fn().mockResolvedValue({
+      data: {
+        commit: {
+          committer: { date: "2026-04-01T08:30:00Z", name: "GitHub", email: "noreply@github.com" },
+        },
+      },
+    });
+    const octokit = {
+      rest: {
+        pulls: { get: vi.fn(), listFiles: vi.fn() },
+        checks: { create: vi.fn() },
+        issues: { createComment: vi.fn() },
+        repos: { getContent: vi.fn(), getCommit: reposGetCommit },
+      },
+      paginate: vi.fn(),
+    } as unknown as Octokit;
+
+    const githubApiClient = createOctokitGithubApiClient(octokit);
+    await expect(
+      githubApiClient.getRepositoryCommitCommittedAtIso({
+        repositoryOwner: "acme",
+        repositoryName: "demo",
+        ref: "abc123deadbeef",
+      }),
+    ).resolves.toBe("2026-04-01T08:30:00Z");
+    expect(reposGetCommit).toHaveBeenCalledWith({
+      owner: "acme",
+      repo: "demo",
+      ref: "abc123deadbeef",
+    });
+  });
+
+  it("returns null from getRepositoryCommitCommittedAtIso when GitHub returns 404", async () => {
+    const reposGetCommit = vi.fn().mockRejectedValue(
+      new RequestError("Not Found", 404, {
+        request: { method: "GET", url: "https://api.github.com/repos/o/r/commits/x", headers: {} },
+      }),
+    );
+    const octokit = {
+      rest: {
+        pulls: { get: vi.fn(), listFiles: vi.fn() },
+        checks: { create: vi.fn() },
+        issues: { createComment: vi.fn() },
+        repos: { getCommit: reposGetCommit },
+      },
+      paginate: vi.fn(),
+    } as unknown as Octokit;
+
+    const githubApiClient = createOctokitGithubApiClient(octokit);
+    await expect(
+      githubApiClient.getRepositoryCommitCommittedAtIso({
+        repositoryOwner: "o",
+        repositoryName: "r",
+        ref: "missing",
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it("returns null from getRepositoryCommitCommittedAtIso when committer date is missing", async () => {
+    const reposGetCommit = vi.fn().mockResolvedValue({
+      data: { commit: { committer: null } },
+    });
+    const octokit = {
+      rest: {
+        pulls: { get: vi.fn(), listFiles: vi.fn() },
+        checks: { create: vi.fn() },
+        issues: { createComment: vi.fn() },
+        repos: { getCommit: reposGetCommit },
+      },
+      paginate: vi.fn(),
+    } as unknown as Octokit;
+
+    const githubApiClient = createOctokitGithubApiClient(octokit);
+    await expect(
+      githubApiClient.getRepositoryCommitCommittedAtIso({
+        repositoryOwner: "o",
+        repositoryName: "r",
+        ref: "sha",
+      }),
+    ).resolves.toBeNull();
+  });
+
   it("rethrows getRepositoryFileTextAtRef when GitHub returns a non-404 error", async () => {
     const serverError = new RequestError("Internal Error", 500, {
       request: { method: "GET", url: "https://api.github.com/repos/o/r/contents/x", headers: {} },
