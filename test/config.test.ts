@@ -1,3 +1,7 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -680,5 +684,33 @@ describe("assertValidScoringConfig", () => {
       expect(error).toBeInstanceOf(MergeRiskConfigError);
       expect((error as MergeRiskConfigError).cause).toBeDefined();
     }
+  });
+});
+
+describe("repo .merge-risk.yml dogfood", () => {
+  it("loads with schema validation and score() includes service_criticality", () => {
+    const repositoryRootDirectory = join(dirname(fileURLToPath(import.meta.url)), "..");
+    const yamlText = readFileSync(join(repositoryRootDirectory, ".merge-risk.yml"), "utf8");
+    const scoringConfig = loadScoringConfigFromMergeRiskYaml(yamlText);
+    expect(scoringConfig.services?.github_action_extension?.globs?.[0]).toBe("extensions/github-action/**");
+    expect(scoringConfig.criteria.service_criticality?.weight).toBe(6);
+
+    const context: PRContext = {
+      repoSlug: "usebrindle/brindle",
+      changeNumber: 1,
+      headSha: "abc",
+      baseRef: "main",
+      author: "dev",
+      title: "Test",
+      body: "",
+      labels: [],
+      createdAt: "2026-01-01T00:00:00.000Z",
+      files: [{ path: "schema/merge-risk-config.schema.json", status: "modified", additions: 1, deletions: 0 }],
+      totalAdditions: 1,
+      totalDeletions: 0,
+    };
+    const scoreResult = score(context, scoringConfig);
+    const criterionNames = scoreResult.breakdown.map((row) => row.name);
+    expect(criterionNames).toContain("Service criticality");
   });
 });
