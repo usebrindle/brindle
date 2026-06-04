@@ -120,9 +120,26 @@ const defaultScoreFromInput = (input: ServiceCriticalityEvaluateInput): number =
     typeof input.default_score === "number" && Number.isFinite(input.default_score) ? input.default_score : 0,
   );
 
-const noMatchDetail = (): Record<string, unknown> => ({
+const detailNoServiceMatch = (): Record<string, unknown> => ({
   touchedServiceIds: [] as string[],
   matchedServices: false,
+});
+
+/** Default-path outcomes: score is the configured default; no services matched. */
+const criterionResultDefaultOnly = (score: number, justification: string): CriterionResult => ({
+  score,
+  justification,
+  detail: detailNoServiceMatch(),
+});
+
+const criterionResultForMatchedServices = (touchedServiceIds: string[], rawScore: number): CriterionResult => ({
+  score: rawScore,
+  justification: `Touches service(s) ${touchedServiceIds.join(", ")} (max configured score ${rawScore}).`,
+  detail: {
+    touchedServiceIds,
+    matchedServices: true,
+    aggregation: "max",
+  },
 });
 
 const evaluateServiceCriticality = (context: PRContext, options: unknown): CriterionResult => {
@@ -131,42 +148,25 @@ const evaluateServiceCriticality = (context: PRContext, options: unknown): Crite
   const defaultRaw = defaultScoreFromInput(input);
 
   if (changedPaths.length === 0) {
-    return {
-      score: defaultRaw,
-      justification: "No changed files; using default service criticality score.",
-      detail: noMatchDetail(),
-    };
+    return criterionResultDefaultOnly(defaultRaw, "No changed files; using default service criticality score.");
   }
 
   const catalog = input.services;
   if (catalog === undefined || Object.keys(catalog).length === 0) {
-    return {
-      score: defaultRaw,
-      justification: "No services catalog configured; using default service criticality score.",
-      detail: noMatchDetail(),
-    };
+    return criterionResultDefaultOnly(defaultRaw, "No services catalog configured; using default service criticality score.");
   }
 
   const touchedServiceIds = sortedServiceIdsTouchingPaths(changedPaths, catalog);
   if (touchedServiceIds.length === 0) {
-    return {
-      score: defaultRaw,
-      justification: "No changed paths matched configured service globs; using default score.",
-      detail: noMatchDetail(),
-    };
+    return criterionResultDefaultOnly(
+      defaultRaw,
+      "No changed paths matched configured service globs; using default score.",
+    );
   }
 
   const scoresByServiceId = input.scores ?? {};
   const rawScore = maxConfiguredScoreAcrossServices(touchedServiceIds, scoresByServiceId);
-  return {
-    score: rawScore,
-    justification: `Touches service(s) ${touchedServiceIds.join(", ")} (max configured score ${rawScore}).`,
-    detail: {
-      touchedServiceIds,
-      matchedServices: true,
-      aggregation: "max",
-    },
-  };
+  return criterionResultForMatchedServices(touchedServiceIds, rawScore);
 };
 
 /**
