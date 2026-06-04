@@ -12,6 +12,7 @@ import micromatch from "micromatch";
 import type { Criterion, CriterionResult, PRContext } from "../types.js";
 
 import type {
+  ServiceCatalogEntry,
   ServiceCriticalityEvaluateInput,
   ServicesCatalog,
 } from "./serviceCriticality.types.js";
@@ -35,14 +36,14 @@ const sanitizeScoresMap = (raw: unknown): Record<string, number> => {
   if (record === undefined) {
     return {};
   }
-  const out: Record<string, number> = {};
-  for (const [serviceId, rawScore] of Object.entries(record)) {
-    if (typeof rawScore !== "number" || !Number.isFinite(rawScore)) {
-      continue;
-    }
-    out[serviceId] = clampScoreValue(rawScore);
-  }
-  return out;
+  return Object.fromEntries(
+    Object.entries(record).flatMap(([serviceId, rawScore]) => {
+      if (typeof rawScore !== "number" || !Number.isFinite(rawScore)) {
+        return [];
+      }
+      return [[serviceId, clampScoreValue(rawScore)] as const];
+    }),
+  );
 };
 
 const parseEvaluateInput = (options: unknown): ServiceCriticalityEvaluateInput => {
@@ -67,45 +68,105 @@ const parseEvaluateInput = (options: unknown): ServiceCriticalityEvaluateInput =
   return input;
 };
 
-const touchedServiceIdsForPaths = (paths: string[], catalog: ServicesCatalog): string[] => {
-  const touched: string[] = [];
-  const sortedServiceIds = Object.keys(catalog).sort((leftId, rightId) => leftId.localeCompare(rightId));
-  for (const serviceId of sortedServiceIds) {
-    const entry = catalog[serviceId];
-    if (entry === undefined || !Array.isArray(entry.globs)) {
-      continue;
-    }
-    let matchedThisService = false;
-    for (const globPattern of entry.globs) {
-      if (typeof globPattern !== "string" || globPattern.trim() === "") {
-        continue;
-      }
-      const trimmedGlob = globPattern.trim();
-      if (paths.some((pathValue) => micromatch.isMatch(pathValue, trimmedGlob, micromatchOptions))) {
-        matchedThisService = true;
-        break;
-      }
-    }
-    if (matchedThisService) {
-      touched.push(serviceId);
-    }
+const pathMatchesGlob = (pathValue: string, globPattern: string): boolean =>
+  micromatch.isMatch(pathValue, globPattern, micromatchOptions);
+
+const trimmedGlobPatternsFromEntry = (entry: ServiceCatalogEntry | undefined): string[] => {
+  if (entry === undefined || !Array.isArray(entry.globs)) {
+    return [];
   }
-  return touched;
+  return entry.globs
+    .filter((globPattern): globPattern is string => typeof globPattern === "string" && globPattern.trim() !== "")
+    .map((globPattern) => globPattern.trim());
 };
 
-const maxScoreForTouchedServices = (
+const anyChangedPathMatchesAnyGlob = (changedPaths: string[], globPatterns: string[]): boolean =>
+  changedPaths.some((pathValue) => globPatterns.some((globPattern) => pathMatchesGlob(pathValue, globPattern)));
+
+const sortedServiceIdsTouchingPaths = (changedPaths: string[], catalog: ServicesCatalog): string[] =>
+  Object.keys(catalog)
+    .sort((leftId, rightId) => leftId.localeCompare(rightId))
+    .filter((serviceId) => {
+      const globPatterns = trimmedGlobPatternsFromEntry(catalog[serviceId]);
+      return globPatterns.length > 0 && anyChangedPathMatchesAnyGlob(changedPaths, globPatterns);
+    });
+
+const configuredScoreForServiceOrZero = (
+  scoresByServiceId: Record<string, number>,
+  serviceId: string,
+): number => {
+  const configured = scoresByServiceId[serviceId];
+  if (typeof configured !== "number" || !Number.isFinite(configured)) {
+    return 0;
+  }
+  return configured;
+};
+
+const maxConfiguredScoreAcrossServices = (
   touchedServiceIds: string[],
   scoresByServiceId: Record<string, number>,
 ): number => {
-  let highest = 0;
-  for (const serviceId of touchedServiceIds) {
-    const configured = scoresByServiceId[serviceId];
-    const contribution = typeof configured === "number" && Number.isFinite(configured) ? configured : 0;
-    if (contribution > highest) {
-      highest = contribution;
-    }
+  if (touchedServiceIds.length === 0) {
+    return 0;
   }
-  return clampScoreValue(highest);
+  const perServiceScores = touchedServiceIds.map((serviceId) =>
+    configuredScoreForServiceOrZero(scoresByServiceId, serviceId),
+  );
+  return clampScoreValue(Math.max(...perServiceScores));
+};
+
+const defaultScoreFromInput = (input: ServiceCriticalityEvaluateInput): number =>
+  clampScoreValue(
+    typeof input.default_score === "number" && Number.isFinite(input.default_score) ? input.default_score : 0,
+  );
+
+const noMatchDetail = (): Record<string, unknown> => ({
+  touchedServiceIds: [] as string[],
+  matchedServices: false,
+});
+
+const evaluateServiceCriticality = (context: PRContext, options: unknown): CriterionResult => {
+  const input = parseEvaluateInput(options);
+  const changedPaths = changedPathsFromContext(context);
+  const defaultRaw = defaultScoreFromInput(input);
+
+  if (changedPaths.length === 0) {
+    return {
+      score: defaultRaw,
+      justification: "No changed files; using default service criticality score.",
+      detail: noMatchDetail(),
+    };
+  }
+
+  const catalog = input.services;
+  if (catalog === undefined || Object.keys(catalog).length === 0) {
+    return {
+      score: defaultRaw,
+      justification: "No services catalog configured; using default service criticality score.",
+      detail: noMatchDetail(),
+    };
+  }
+
+  const touchedServiceIds = sortedServiceIdsTouchingPaths(changedPaths, catalog);
+  if (touchedServiceIds.length === 0) {
+    return {
+      score: defaultRaw,
+      justification: "No changed paths matched configured service globs; using default score.",
+      detail: noMatchDetail(),
+    };
+  }
+
+  const scoresByServiceId = input.scores ?? {};
+  const rawScore = maxConfiguredScoreAcrossServices(touchedServiceIds, scoresByServiceId);
+  return {
+    score: rawScore,
+    justification: `Touches service(s) ${touchedServiceIds.join(", ")} (max configured score ${rawScore}).`,
+    detail: {
+      touchedServiceIds,
+      matchedServices: true,
+      aggregation: "max",
+    },
+  };
 };
 
 /**
@@ -118,49 +179,5 @@ export const serviceCriticalityCriterion: Criterion = {
    * @param options - `criteria.service_criticality.options` plus optional runtime `services` merge (see module doc).
    * @returns Raw score 0–100: max per touched service when `aggregation` is `max` (MVP default).
    */
-  evaluate: (context: PRContext, options: unknown): CriterionResult => {
-    const input = parseEvaluateInput(options);
-    const paths = changedPathsFromContext(context);
-    const defaultRaw = clampScoreValue(
-      typeof input.default_score === "number" && Number.isFinite(input.default_score) ? input.default_score : 0,
-    );
-
-    if (paths.length === 0) {
-      return {
-        score: defaultRaw,
-        justification: "No changed files; using default service criticality score.",
-        detail: { touchedServiceIds: [] as string[], matchedServices: false },
-      };
-    }
-
-    const catalog = input.services;
-    if (catalog === undefined || Object.keys(catalog).length === 0) {
-      return {
-        score: defaultRaw,
-        justification: "No services catalog configured; using default service criticality score.",
-        detail: { touchedServiceIds: [] as string[], matchedServices: false },
-      };
-    }
-
-    const touchedServiceIds = touchedServiceIdsForPaths(paths, catalog);
-    if (touchedServiceIds.length === 0) {
-      return {
-        score: defaultRaw,
-        justification: "No changed paths matched configured service globs; using default score.",
-        detail: { touchedServiceIds: [] as string[], matchedServices: false },
-      };
-    }
-
-    const scoresByServiceId = input.scores ?? {};
-    const rawScore = maxScoreForTouchedServices(touchedServiceIds, scoresByServiceId);
-    return {
-      score: rawScore,
-      justification: `Touches service(s) ${touchedServiceIds.join(", ")} (max configured score ${rawScore}).`,
-      detail: {
-        touchedServiceIds,
-        matchedServices: true,
-        aggregation: "max",
-      },
-    };
-  },
+  evaluate: evaluateServiceCriticality,
 };
