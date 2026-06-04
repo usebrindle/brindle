@@ -35755,7 +35755,7 @@ module.exports = {
 __nccwpck_require__.a(module, async (__webpack_handle_async_dependencies__, __webpack_async_result__) => { try {
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0__ = __nccwpck_require__(7484);
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__nccwpck_require__.n(_actions_core__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(1340);
+/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(4518);
 /**
  * GitHub Actions entry: scores the pull request from base-branch config and publishes results.
  *
@@ -35776,7 +35776,7 @@ __webpack_async_result__();
 
 /***/ }),
 
-/***/ 1340:
+/***/ 4518:
 /***/ ((__unused_webpack_module, __webpack_exports__, __nccwpck_require__) => {
 
 
@@ -40911,11 +40911,99 @@ const builtInCriteria = {
     test_coverage: testCoverageCriterion,
 };
 
-;// CONCATENATED MODULE: ./core/mutators/builtins.ts
+;// CONCATENATED MODULE: ./core/mutators/mutatorPrimitives.ts
 /**
- * Map from YAML mutator id to implementation. Empty until mutator slices land.
+ * Reads `multiplier` from mutator options when present and valid for a strict multiplicative bump.
+ *
+ * @param options - Typically `mutators.<id>.options` from config (validated by JSON Schema in a later slice).
+ * @returns A finite number strictly greater than 1, or `null` when absent or invalid.
  */
-const builtInMutators = {};
+const readExclusiveMinimumOneMultiplier = (options) => {
+    if (options === null || options === undefined || typeof options !== "object" || Array.isArray(options)) {
+        return null;
+    }
+    const raw = options.multiplier;
+    if (typeof raw !== "number" || !Number.isFinite(raw) || raw <= 1) {
+        return null;
+    }
+    return raw;
+};
+/**
+ * @param spec - Display name and pure predicate; multiplier is read from options via {@link readExclusiveMinimumOneMultiplier}.
+ * @returns A {@link Mutator} suitable for {@link import("./builtins.js").builtInMutators}.
+ */
+const createConditionalMultiplierMutator = (spec) => ({
+    name: spec.name,
+    apply: (context, options) => {
+        if (!spec.applies(context, options)) {
+            return null;
+        }
+        const multiplier = readExclusiveMinimumOneMultiplier(options);
+        if (multiplier === null) {
+            throw new Error(`Mutator "${spec.name}" matched but options.multiplier is missing or invalid (expected a finite number > 1).`);
+        }
+        return multiplier;
+    },
+});
+
+;// CONCATENATED MODULE: ./core/mutators/juniorAuthor.ts
+
+const juniorAuthor_normalizedLogin = (login) => login.trim().toLowerCase();
+/**
+ * @param options - `mutators.junior_author.options`; validated in a later schema slice.
+ * @returns Sanitized non-empty logins (matching is case-insensitive).
+ */
+const juniorLoginsFromOptions = (options) => {
+    if (options === null || options === undefined || typeof options !== "object" || Array.isArray(options)) {
+        return [];
+    }
+    const record = options;
+    const raw = record.logins;
+    if (!Array.isArray(raw)) {
+        return [];
+    }
+    const out = [];
+    for (const item of raw) {
+        if (typeof item !== "string") {
+            continue;
+        }
+        const trimmed = item.trim();
+        if (trimmed === "") {
+            continue;
+        }
+        out.push(trimmed);
+    }
+    return out;
+};
+const authorMatchesJuniorLogins = (author, options) => {
+    const authorKey = juniorAuthor_normalizedLogin(author);
+    if (authorKey === "") {
+        return false;
+    }
+    const logins = juniorLoginsFromOptions(options);
+    for (const login of logins) {
+        if (juniorAuthor_normalizedLogin(login) === authorKey) {
+            return true;
+        }
+    }
+    return false;
+};
+/**
+ * Registered under YAML id `junior_author`. Multiplies when {@link PRContext.author} matches any configured login.
+ */
+const juniorAuthorMutator = createConditionalMultiplierMutator({
+    name: "Junior author",
+    applies: (context, options) => authorMatchesJuniorLogins(context.author, options),
+});
+
+;// CONCATENATED MODULE: ./core/mutators/builtins.ts
+
+/**
+ * Map from YAML mutator id to implementation.
+ */
+const builtInMutators = {
+    junior_author: juniorAuthorMutator,
+};
 
 ;// CONCATENATED MODULE: ./core/scorer.ts
 /**
@@ -41121,7 +41209,7 @@ const finalizeScoreResult = (partialScore, thresholds, disabledCriteria) => ({
     disabledCriteria,
 });
 /**
- * Score a change using the built-in criterion and mutator registries (`criteria` grows per slice; mutators stay empty until wired).
+ * Score a change using the built-in criterion and mutator registries (`criteria` / `mutators` grow per slice).
  *
  * @param context - Platform-neutral change data produced by an adapter.
  * @param config - Weights, thresholds, and mutator ids (full schema validation comes in a later slice).
