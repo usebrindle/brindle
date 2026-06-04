@@ -35755,7 +35755,7 @@ module.exports = {
 __nccwpck_require__.a(module, async (__webpack_handle_async_dependencies__, __webpack_async_result__) => { try {
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0__ = __nccwpck_require__(7484);
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__nccwpck_require__.n(_actions_core__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(9395);
+/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(5940);
 /**
  * GitHub Actions entry: scores the pull request from base-branch config and publishes results.
  *
@@ -35776,7 +35776,7 @@ __webpack_async_result__();
 
 /***/ }),
 
-/***/ 9395:
+/***/ 5940:
 /***/ ((__unused_webpack_module, __webpack_exports__, __nccwpck_require__) => {
 
 
@@ -40420,6 +40420,85 @@ const authorSeniorityCriterion = {
     },
 };
 
+;// CONCATENATED MODULE: ./core/criteria/branchAge.ts
+const DEFAULT_MAX_AGE_HOURS_FOR_CAP = 168;
+const MILLISECONDS_PER_HOUR = 60 * 60 * 1000;
+/**
+ * @param options - `criteria.branch_age.options` from config, or `unknown` until schema validation lands.
+ * @returns Positive hour count at which raw score reaches 100; falls back when options are missing or invalid.
+ */
+const maxAgeHoursForCapFromOptions = (options) => {
+    if (options === null || options === undefined)
+        return DEFAULT_MAX_AGE_HOURS_FOR_CAP;
+    if (typeof options !== "object" || Array.isArray(options))
+        return DEFAULT_MAX_AGE_HOURS_FOR_CAP;
+    const record = options;
+    const configured = record.max_age_hours_for_cap;
+    if (typeof configured !== "number" || !Number.isFinite(configured) || configured <= 0) {
+        return DEFAULT_MAX_AGE_HOURS_FOR_CAP;
+    }
+    return configured;
+};
+const temporalInputsPresent = (context) => {
+    const classifiedAtIso = context.classifiedAtIso;
+    const headCommitCommittedAtIso = context.headCommitCommittedAtIso;
+    return (typeof classifiedAtIso === "string" &&
+        classifiedAtIso.trim() !== "" &&
+        typeof headCommitCommittedAtIso === "string" &&
+        headCommitCommittedAtIso.trim() !== "");
+};
+/**
+ * @param context - Hydrated change; requires parseable {@link PRContext.classifiedAtIso} and {@link PRContext.headCommitCommittedAtIso}.
+ * @returns Non-negative age in hours, or `null` when timestamps do not parse to finite instants.
+ */
+const headCommitAgeHoursFromContext = (context) => {
+    const classifiedAtMs = Date.parse(context.classifiedAtIso);
+    const headCommittedAtMs = Date.parse(context.headCommitCommittedAtIso);
+    if (!Number.isFinite(classifiedAtMs) || !Number.isFinite(headCommittedAtMs)) {
+        return null;
+    }
+    const deltaMs = classifiedAtMs - headCommittedAtMs;
+    if (!Number.isFinite(deltaMs)) {
+        return null;
+    }
+    return Math.max(0, deltaMs / MILLISECONDS_PER_HOUR);
+};
+/**
+ * Criterion registered under YAML key `branch_age`. Requires adapter-hydrated head commit and classification instants.
+ */
+const branchAgeCriterion = {
+    name: "Head commit age",
+    isEnabled: (context) => temporalInputsPresent(context),
+    /**
+     * @param context - Hydrated {@link PRContext}; must not be mutated.
+     * @param options - Parsed `criteria.branch_age.options` (see {@link ./branchAge.types.js}); unknown until a later config slice validates YAML.
+     * @returns Raw score 0–100 vs cap, justification, and optional `detail` for audit.
+     */
+    evaluate: (context, options) => {
+        const ageHours = headCommitAgeHoursFromContext(context);
+        if (ageHours === null) {
+            return {
+                score: 0,
+                justification: "Head commit age could not be computed from the hydrated timestamps.",
+                selfDisable: true,
+            };
+        }
+        const maxAgeHoursForCap = maxAgeHoursForCapFromOptions(options);
+        const rawCriterionScore = Math.min(100, (ageHours / maxAgeHoursForCap) * 100);
+        const ageHoursRounded = Math.round(ageHours * 100) / 100;
+        return {
+            score: rawCriterionScore,
+            justification: `Head commit is about ${ageHoursRounded}h old (cap ${maxAgeHoursForCap}h for raw score 100).`,
+            detail: {
+                ageHours: ageHoursRounded,
+                maxAgeHoursForCap,
+                classifiedAtIso: context.classifiedAtIso,
+                headCommitCommittedAtIso: context.headCommitCommittedAtIso,
+            },
+        };
+    },
+};
+
 ;// CONCATENATED MODULE: ./core/criteria/diffSize.ts
 const DEFAULT_CAP_LINES = 400;
 /**
@@ -40639,11 +40718,13 @@ const testCoverageCriterion = {
 
 
 
+
 /**
  * Map from YAML criterion id (e.g. `diff_size`) to implementation. Consumers rely on stable ids across releases.
  */
 const builtInCriteria = {
     author_seniority: authorSeniorityCriterion,
+    branch_age: branchAgeCriterion,
     diff_size: diffSizeCriterion,
     file_patterns: filePatternsCriterion,
     test_coverage: testCoverageCriterion,
