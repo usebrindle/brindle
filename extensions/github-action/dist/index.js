@@ -40788,8 +40788,23 @@ const toActiveCriterion = (criterionId, criterionImplementation, criterionConfig
     options: criterionConfiguration.options,
     evaluated,
 });
-const buildActiveOrDisabled = (criterionId, context, criterionConfiguration, criterionImplementation) => {
-    const evaluated = criterionImplementation.evaluate(context, criterionConfiguration.options);
+/**
+ * Merges root-level `services` into evaluate options for `service_criticality` (ADR 0009); validated YAML keeps
+ * `services` at the document root only.
+ */
+const mergeOptionsForCriterionEvaluation = (criterionId, config, options) => {
+    if (criterionId !== "service_criticality")
+        return options;
+    if (config.services === undefined)
+        return options;
+    const baseRecord = options !== null && options !== undefined && typeof options === "object" && !Array.isArray(options)
+        ? { ...options }
+        : {};
+    return { ...baseRecord, services: config.services };
+};
+const buildActiveOrDisabled = (criterionId, context, config, criterionConfiguration, criterionImplementation) => {
+    const evaluateOptions = mergeOptionsForCriterionEvaluation(criterionId, config, criterionConfiguration.options);
+    const evaluated = criterionImplementation.evaluate(context, evaluateOptions);
     if (evaluated.selfDisable === true)
         return { type: "disabled", id: criterionId };
     return {
@@ -40797,13 +40812,13 @@ const buildActiveOrDisabled = (criterionId, context, criterionConfiguration, cri
         active: toActiveCriterion(criterionId, criterionImplementation, criterionConfiguration, evaluated),
     };
 };
-const resolveOneCriterion = (criterionId, context, criterionConfiguration, criterionImplementation) => {
+const resolveOneCriterion = (criterionId, context, config, criterionConfiguration, criterionImplementation) => {
     const gate = criterionGate(context, criterionConfiguration, criterionImplementation);
     if (gate === "omit")
         return { type: "omit" };
     if (gate === "disabled")
         return { type: "disabled", id: criterionId };
-    return buildActiveOrDisabled(criterionId, context, criterionConfiguration, criterionImplementation);
+    return buildActiveOrDisabled(criterionId, context, config, criterionConfiguration, criterionImplementation);
 };
 const applyCriterionResolution = (criterionResolution, activeCriteria, disabledCriterionIds) => {
     if (criterionResolution.type === "omit")
@@ -40814,7 +40829,7 @@ const applyCriterionResolution = (criterionResolution, activeCriteria, disabledC
         activeCriteria.push(criterionResolution.active);
 };
 const accumulateForCriterionId = (criterionId, context, config, criteria, activeCriteria, disabledCriterionIds) => {
-    const criterionResolution = resolveOneCriterion(criterionId, context, config.criteria[criterionId], criteria[criterionId]);
+    const criterionResolution = resolveOneCriterion(criterionId, context, config, config.criteria[criterionId], criteria[criterionId]);
     applyCriterionResolution(criterionResolution, activeCriteria, disabledCriterionIds);
 };
 const collectActiveCriteria = (context, config, criteria) => {
