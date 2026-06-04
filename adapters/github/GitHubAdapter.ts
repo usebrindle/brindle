@@ -11,7 +11,10 @@ import { IstanbulCoverageParseError, parseIstanbulCoverageJson } from "../../cor
 import type { AutoMergeOutcome, MergeMethod, PRContext, RiskReport } from "../../core/types.js";
 import type { PlatformAdapter } from "../PlatformAdapter.js";
 
-import type { GitHubAdapterDependencies } from "./githubAdapter.types.js";
+import type {
+  GitHubAdapterDependencies,
+  GitHubTemporalContextHydration,
+} from "./githubAdapter.types.js";
 import { mapGitHubPullAndFilesToPRContext } from "./mapGitHubPullToPrContext.js";
 
 const mapGithubNativeAutoMergeFailureToOutcome = (cause: unknown): AutoMergeOutcome => {
@@ -77,6 +80,21 @@ export class GitHubAdapter implements PlatformAdapter {
       }
     }
 
+    const headCommitCommittedAtIso = await githubApiClient.getRepositoryCommitCommittedAtIso({
+      repositoryOwner: pullRequestLookup.repositoryOwner,
+      repositoryName: pullRequestLookup.repositoryName,
+      ref: pullSnapshot.headSha,
+    });
+
+    const classifiedAtIso = new Date().toISOString();
+
+    const temporalHydration: GitHubTemporalContextHydration = {
+      classifiedAtIso,
+      ...(headCommitCommittedAtIso !== null && headCommitCommittedAtIso.trim() !== ""
+        ? { headCommitCommittedAtIso: headCommitCommittedAtIso }
+        : {}),
+    };
+
     return mapGitHubPullAndFilesToPRContext(
       pullRequestLookup.repositoryOwner,
       pullRequestLookup.repositoryName,
@@ -84,6 +102,7 @@ export class GitHubAdapter implements PlatformAdapter {
       pullSnapshot,
       fileSnapshots,
       coverageReport,
+      temporalHydration,
     );
   }
 

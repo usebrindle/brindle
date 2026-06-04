@@ -108,7 +108,7 @@ merge-risk-classifier/
 The directory tree above is still the **v4 product target**, with Brindle-specific filenames called out inline. The [Brindle](https://github.com/usebrindle/brindle) repository matches it as follows:
 
 - **Root and docs.** The package root is **`brindle/`** (not `merge-risk-classifier/`). Design docs and ADRs live under **`docs/designs/`** and **`docs/adrs/`** (not `docs/design/`).
-- **Criteria.** Shipped built-ins: **`diff_size`**, **`file_patterns`**, **`test_coverage`**, **`author_seniority`** (see **`authorSeniority.ts`** + **`authorSeniority.types.ts`**), each with a sibling **`*.types.ts`** where applicable. They are registered in **`core/criteria/builtins.ts`**. There is no `registry.ts`. `serviceCriticality` and `branchAge` are not present yet.
+- **Criteria.** Shipped built-ins: **`diff_size`**, **`file_patterns`**, **`test_coverage`**, **`author_seniority`** (see **`authorSeniority.ts`** + **`authorSeniority.types.ts`**), each with a sibling **`*.types.ts`** where applicable. They are registered in **`core/criteria/builtins.ts`**. There is no `registry.ts`. `serviceCriticality` and **`branchAge`** (`branch_age` criterion) are not present yet. **`PRContext`** may include optional **`classifiedAtIso`** and **`headCommitCommittedAtIso`** (GitHub: REST `repos.getCommit` committer date + adapter clock anchor) for upcoming temporal criteria; no `branch_age` criterion is registered until a later change.
 - **Mutators.** **`core/mutators/builtins.ts`** is the extension point and is still empty. `juniorAuthor` and `criticalService` are not present yet.
 - **Dogfood.** This repo's **`.merge-risk.yml`** enables **`file_patterns`**, **`author_seniority`**, and **`diff_size`** so merge-risk scoring on our own pull requests exercises path rules (notably the committed GitHub Action bundle under `extensions/github-action/dist/` and files under `schema/`) plus login-tier rules (including common automation accounts).
 
@@ -187,6 +187,10 @@ export interface PRContext {
   totalDeletions: number;
   coverage?: CoverageReport;
   baselineCoverage?: CoverageReport;
+  /** ISO instant when the adapter classified this run; paired with head commit time for temporal criteria (ADR 0004). */
+  classifiedAtIso?: string;
+  /** ISO committer timestamp for `headSha` when the platform commit API succeeds. */
+  headCommitCommittedAtIso?: string;
 }
 
 export interface ScoreResult {

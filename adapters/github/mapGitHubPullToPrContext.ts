@@ -6,7 +6,7 @@
  */
 import type { ChangedFile, CoverageReport, PRContext } from "../../core/types.js";
 
-import type { GitHubPullFileSnapshot, GitHubPullSnapshot } from "./githubAdapter.types.js";
+import type { GitHubPullFileSnapshot, GitHubPullSnapshot, GitHubTemporalContextHydration } from "./githubAdapter.types.js";
 
 const changedFilesFromSnapshots = (fileSnapshots: GitHubPullFileSnapshot[]): ChangedFile[] =>
   fileSnapshots.map((fileSnapshot) => ({
@@ -28,6 +28,8 @@ const sumDeletions = (changedFiles: ChangedFile[]): number =>
  * @param pullRequestNumber - GitHub pull request number.
  * @param pullSnapshot - Fields read from the pull request resource.
  * @param fileSnapshots - Rows from the pull request files listing (caller paginates).
+ * @param coverageReport - Optional Istanbul-derived coverage attached by the adapter.
+ * @param temporalHydration - Optional adapter-hydrated instants for pure temporal criteria (ADR 0004).
  */
 export const mapGitHubPullAndFilesToPRContext = (
   repositoryOwner: string,
@@ -36,6 +38,7 @@ export const mapGitHubPullAndFilesToPRContext = (
   pullSnapshot: GitHubPullSnapshot,
   fileSnapshots: GitHubPullFileSnapshot[],
   coverageReport?: CoverageReport,
+  temporalHydration?: GitHubTemporalContextHydration,
 ): PRContext => {
   const changedFiles = changedFilesFromSnapshots(fileSnapshots);
   return {
@@ -52,5 +55,13 @@ export const mapGitHubPullAndFilesToPRContext = (
     totalAdditions: sumAdditions(changedFiles),
     totalDeletions: sumDeletions(changedFiles),
     ...(coverageReport === undefined ? {} : { coverage: coverageReport }),
+    ...(temporalHydration === undefined
+      ? {}
+      : {
+          classifiedAtIso: temporalHydration.classifiedAtIso,
+          ...(temporalHydration.headCommitCommittedAtIso === undefined
+            ? {}
+            : { headCommitCommittedAtIso: temporalHydration.headCommitCommittedAtIso }),
+        }),
   };
 };
