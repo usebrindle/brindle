@@ -3,10 +3,21 @@ thresholds:
   medium: 60
 criteria:
   diff_size:
-    weight: 100
+    weight: 70
     options:
       # Line churn vs cap → raw score; calibrate so typical PRs map to tiers by repo norms (not tiny caps).
       max_lines_for_cap: 800
+  file_patterns:
+    weight: 30
+    options:
+      aggregation: max
+      patterns:
+        # Bundled Action output: large generated diff; nudge risk when it changes.
+        - glob: "**/extensions/github-action/dist/**"
+          score: 35
+        # Merge-risk schema affects all consumers of .merge-risk.yml
+        - glob: "schema/**"
+          score: 25
 
 # Optional native auto-merge (ADR 0002). Requires workflow `contents: write` and repo auto-merge enabled.
 # auto_merge:
