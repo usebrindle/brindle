@@ -35755,7 +35755,7 @@ module.exports = {
 __nccwpck_require__.a(module, async (__webpack_handle_async_dependencies__, __webpack_async_result__) => { try {
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0__ = __nccwpck_require__(7484);
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__nccwpck_require__.n(_actions_core__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(7898);
+/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(4485);
 /**
  * GitHub Actions entry: scores the pull request from base-branch config and publishes results.
  *
@@ -35776,7 +35776,7 @@ __webpack_async_result__();
 
 /***/ }),
 
-/***/ 7898:
+/***/ 4485:
 /***/ ((__unused_webpack_module, __webpack_exports__, __nccwpck_require__) => {
 
 
@@ -44934,6 +44934,232 @@ var jsYaml = {
 /* harmony default export */ const js_yaml = ((/* unused pure expression or super */ null && (jsYaml)));
 
 
+;// CONCATENATED MODULE: ./core/rules/declarativeRule.ts
+/** Prefix for internal criterion ids so `declarative_rules` keys never collide with `criteria` keys. */
+const DECLARATIVE_CRITERION_ID_PREFIX = "declarative:";
+/**
+ * @param declarativeRuleId - Key under `declarative_rules` in config (not including prefix).
+ * @returns Internal criterion id passed to the scorer pipeline.
+ */
+const declarativeCriterionId = (declarativeRuleId) => `${DECLARATIVE_CRITERION_ID_PREFIX}${declarativeRuleId}`;
+const clampScore = (value) => Math.min(100, Math.max(0, value));
+const normalizedLabelSet = (labels) => new Set(labels.map((label) => label.trim().toLowerCase()).filter((label) => label.length > 0));
+const labelsAnyFromOptions = (options) => {
+    if (options === null || options === undefined || typeof options !== "object" || Array.isArray(options)) {
+        return [];
+    }
+    const record = options;
+    const raw = record.labels_any;
+    if (!Array.isArray(raw))
+        return [];
+    const out = [];
+    for (const entry of raw) {
+        if (typeof entry !== "string")
+            continue;
+        const trimmed = entry.trim();
+        if (trimmed.length > 0)
+            out.push(trimmed.toLowerCase());
+    }
+    return out;
+};
+const scoreFromOptions = (options) => {
+    if (options === null || options === undefined || typeof options !== "object" || Array.isArray(options)) {
+        return 0;
+    }
+    const record = options;
+    const rawScore = record.score;
+    if (typeof rawScore !== "number" || !Number.isFinite(rawScore))
+        return 0;
+    return clampScore(rawScore);
+};
+/**
+ * Fixed `labels_any` + `score` interpreter shared by declarative rules and trusted plugin documents (ADR 0001).
+ *
+ * @param context - Hydrated change data.
+ * @param options - Object with optional `labels_any` string array and optional numeric `score` (0–100).
+ */
+const evaluateLabelsAnyCriterionResult = (context, options) => {
+    const needles = labelsAnyFromOptions(options);
+    const configuredScore = scoreFromOptions(options);
+    if (needles.length === 0) {
+        return {
+            score: 0,
+            justification: "No labels_any entries configured.",
+        };
+    }
+    const prLabels = normalizedLabelSet(context.labels);
+    const matched = needles.filter((needle) => prLabels.has(needle));
+    if (matched.length === 0) {
+        return {
+            score: 0,
+            justification: "None of the configured labels_any values are present on this change.",
+            detail: { labels_any: needles },
+        };
+    }
+    return {
+        score: configuredScore,
+        justification: `Matched label(s): ${matched.join(", ")}.`,
+        detail: { matched_labels: matched, labels_any: needles },
+    };
+};
+const createLabelsAnyDeclarativeCriterion = (declarativeRuleId) => ({
+    name: `Declarative rule: ${declarativeRuleId}`,
+    evaluate: (context, options) => evaluateLabelsAnyCriterionResult(context, options),
+});
+/**
+ * Builds criterion implementations for every key in `config.declarative_rules`, keyed by {@link declarativeCriterionId}.
+ *
+ * @param config - Parsed scoring config (declarative section optional).
+ * @returns Map entries to merge with built-in criteria before scoring.
+ */
+const buildDeclarativeRuleCriteriaMap = (config) => {
+    const declarativeRules = config.declarative_rules;
+    if (declarativeRules === undefined)
+        return {};
+    const sortedRuleIds = Object.keys(declarativeRules).sort((leftRuleId, rightRuleId) => leftRuleId.localeCompare(rightRuleId));
+    const result = {};
+    for (const declarativeRuleId of sortedRuleIds) {
+        result[declarativeCriterionId(declarativeRuleId)] = createLabelsAnyDeclarativeCriterion(declarativeRuleId);
+    }
+    return result;
+};
+
+;// CONCATENATED MODULE: ./core/plugins/trustedPluginPaths.ts
+/**
+ * Pure path guardrails for trusted plugin locations (ADR 0001: stay under configured directory).
+ * No filesystem or network I/O.
+ *
+ * @see docs/designs/lld-merge-risk-classifier.md
+ */
+const repositoryRelativePathContainsNul = (rawPath) => rawPath.includes("\0");
+const trimmedRepositoryRelativePathOrNull = (rawPath) => {
+    const trimmed = rawPath.trim();
+    return trimmed.length === 0 ? null : trimmed;
+};
+const trimmedPathLooksAbsolutePosixOrWindows = (trimmedPath) => trimmedPath.startsWith("/") || /^[A-Za-z]:/.test(trimmedPath);
+/**
+ * Collapses `.` / `..` / empty segments. Returns `null` when `..` would escape above the repo-relative root.
+ */
+const normalizedPathSegmentsOrNull = (pathSegments) => pathSegments.reduce((stack, segment) => {
+    if (stack === null) {
+        return null;
+    }
+    if (segment === "" || segment === ".") {
+        return stack;
+    }
+    if (segment === "..") {
+        if (stack.length === 0) {
+            return null;
+        }
+        return stack.slice(0, -1);
+    }
+    return [...stack, segment];
+}, []);
+const joinedRepositoryRelativePathOrDot = (normalizedSegments) => normalizedSegments.length === 0 ? "." : normalizedSegments.join("/");
+/**
+ * Normalizes a repository-relative path to POSIX-style segments (`/` only, no `.` / `..` left).
+ *
+ * @param rawPath - User-supplied path from YAML (may contain backslashes on Windows-authored configs).
+ * @returns Normalized path using `/`, or `null` when the path is empty, absolute, escapes above repo root, or contains NUL.
+ */
+const normalizeRepositoryRelativePosixPath = (rawPath) => {
+    if (repositoryRelativePathContainsNul(rawPath)) {
+        return null;
+    }
+    const trimmedPath = trimmedRepositoryRelativePathOrNull(rawPath);
+    if (trimmedPath === null) {
+        return null;
+    }
+    if (trimmedPathLooksAbsolutePosixOrWindows(trimmedPath)) {
+        return null;
+    }
+    const pathSegments = trimmedPath.replaceAll("\\", "/").split("/");
+    const normalizedSegments = normalizedPathSegmentsOrNull(pathSegments);
+    if (normalizedSegments === null) {
+        return null;
+    }
+    return joinedRepositoryRelativePathOrDot(normalizedSegments);
+};
+/**
+ * @param normalizedDirectory - Output of {@link normalizeRepositoryRelativePosixPath} for the plugin root.
+ * @param normalizedCandidateFilePath - Output of {@link normalizeRepositoryRelativePosixPath} for a plugin file.
+ * @returns `true` when the candidate is a file path strictly inside the directory (not the directory itself).
+ */
+const isNormalizedPathStrictlyInsideDirectory = (normalizedDirectory, normalizedCandidateFilePath) => {
+    if (normalizedDirectory === "." || normalizedDirectory.length === 0) {
+        return false;
+    }
+    const prefix = `${normalizedDirectory}/`;
+    return (normalizedCandidateFilePath.length > prefix.length &&
+        normalizedCandidateFilePath.startsWith(prefix));
+};
+const isResolvedTrustedPluginPath = (outcome) => outcome.ok;
+const validateSingleTrustedPluginPath = (options) => {
+    const { rawPluginPath, pathIndex, normalizedDirectory } = options;
+    if (typeof rawPluginPath !== "string") {
+        return {
+            ok: false,
+            message: `trusted_plugins.paths[${pathIndex}] must be a string.`,
+        };
+    }
+    const normalizedPluginPath = normalizeRepositoryRelativePosixPath(rawPluginPath);
+    if (normalizedPluginPath === null) {
+        return {
+            ok: false,
+            message: `trusted_plugins.paths[${pathIndex}] is not a valid repository-relative path: ${JSON.stringify(rawPluginPath)}.`,
+        };
+    }
+    if (!isNormalizedPathStrictlyInsideDirectory(normalizedDirectory, normalizedPluginPath)) {
+        return {
+            ok: false,
+            message: `trusted_plugins.paths[${pathIndex}] (${JSON.stringify(normalizedPluginPath)}) must resolve strictly inside ` +
+                `trusted_plugins.directory (${JSON.stringify(normalizedDirectory)}).`,
+        };
+    }
+    return { ok: true, normalizedPath: normalizedPluginPath };
+};
+const validatedNormalizedDirectoryOrFailure = (directory) => {
+    if (typeof directory !== "string") {
+        return { ok: false, message: "trusted_plugins.directory must be a string." };
+    }
+    const normalizedDirectory = normalizeRepositoryRelativePosixPath(directory);
+    if (normalizedDirectory === null) {
+        return {
+            ok: false,
+            message: `trusted_plugins.directory is not a valid repository-relative path: ${JSON.stringify(directory)}.`,
+        };
+    }
+    if (normalizedDirectory === ".") {
+        return {
+            ok: false,
+            message: "trusted_plugins.directory must not resolve to '.'; use an explicit folder (e.g. `.merge-risk-plugins`).",
+        };
+    }
+    return { ok: true, normalizedDirectory };
+};
+/**
+ * Validates {@link TrustedPluginsConfiguration}: every plugin path normalizes and stays strictly under `directory`.
+ *
+ * @param trustedPlugins - Parsed config fragment (caller ensures shape; defensive checks for non-strings).
+ */
+const validateTrustedPluginsPathsStayUnderDirectory = (trustedPlugins) => {
+    if (!Array.isArray(trustedPlugins.paths)) {
+        return { ok: false, message: "trusted_plugins.paths must be an array." };
+    }
+    const directoryOutcome = validatedNormalizedDirectoryOrFailure(trustedPlugins.directory);
+    if (!directoryOutcome.ok) {
+        return directoryOutcome;
+    }
+    const { normalizedDirectory } = directoryOutcome;
+    const perPathOutcomes = trustedPlugins.paths.map((rawPluginPath, pathIndex) => validateSingleTrustedPluginPath({ rawPluginPath, pathIndex, normalizedDirectory }));
+    if (!perPathOutcomes.every(isResolvedTrustedPluginPath)) {
+        const rejectedPath = perPathOutcomes.find((outcome) => !outcome.ok);
+        return rejectedPath ?? { ok: false, message: "trusted_plugins.paths validation failed unexpectedly." };
+    }
+    const normalizedPluginPaths = perPathOutcomes.map((outcome) => outcome.normalizedPath);
+    return { ok: true, normalizedDirectory, normalizedPluginPaths };
+};
+
 ;// CONCATENATED MODULE: ./core/plugins/loadTrustedPlugins.ts
 /**
  * Resolves base-branch trusted plugin **files** into {@link Criterion} implementations plus matching
@@ -44954,7 +45180,7 @@ const TRUSTED_PLUGIN_CRITERION_ID_PREFIX = "plugin:";
 const trustedPluginCriterionId = (normalizedPluginPath) => `${TRUSTED_PLUGIN_CRITERION_ID_PREFIX}${normalizedPluginPath}`;
 const parseTrustedPluginYamlToUnknown = (yamlText, normalizedPluginPath) => {
     try {
-        return { ok: true, value: yaml.load(yamlText, { schema: yaml.CORE_SCHEMA }) };
+        return { ok: true, value: load(yamlText, { schema: CORE_SCHEMA }) };
     }
     catch (cause) {
         const detail = cause instanceof Error ? cause.message : String(cause);
@@ -45057,96 +45283,6 @@ const loadTrustedPlugins = (options) => {
         };
     }
     return { ok: true, criteria, criterionConfigurations };
-};
-
-;// CONCATENATED MODULE: ./core/rules/declarativeRule.ts
-/** Prefix for internal criterion ids so `declarative_rules` keys never collide with `criteria` keys. */
-const DECLARATIVE_CRITERION_ID_PREFIX = "declarative:";
-/**
- * @param declarativeRuleId - Key under `declarative_rules` in config (not including prefix).
- * @returns Internal criterion id passed to the scorer pipeline.
- */
-const declarativeCriterionId = (declarativeRuleId) => `${DECLARATIVE_CRITERION_ID_PREFIX}${declarativeRuleId}`;
-const clampScore = (value) => Math.min(100, Math.max(0, value));
-const normalizedLabelSet = (labels) => new Set(labels.map((label) => label.trim().toLowerCase()).filter((label) => label.length > 0));
-const labelsAnyFromOptions = (options) => {
-    if (options === null || options === undefined || typeof options !== "object" || Array.isArray(options)) {
-        return [];
-    }
-    const record = options;
-    const raw = record.labels_any;
-    if (!Array.isArray(raw))
-        return [];
-    const out = [];
-    for (const entry of raw) {
-        if (typeof entry !== "string")
-            continue;
-        const trimmed = entry.trim();
-        if (trimmed.length > 0)
-            out.push(trimmed.toLowerCase());
-    }
-    return out;
-};
-const scoreFromOptions = (options) => {
-    if (options === null || options === undefined || typeof options !== "object" || Array.isArray(options)) {
-        return 0;
-    }
-    const record = options;
-    const rawScore = record.score;
-    if (typeof rawScore !== "number" || !Number.isFinite(rawScore))
-        return 0;
-    return clampScore(rawScore);
-};
-/**
- * Fixed `labels_any` + `score` interpreter shared by declarative rules and trusted plugin documents (ADR 0001).
- *
- * @param context - Hydrated change data.
- * @param options - Object with optional `labels_any` string array and optional numeric `score` (0–100).
- */
-const declarativeRule_evaluateLabelsAnyCriterionResult = (context, options) => {
-    const needles = labelsAnyFromOptions(options);
-    const configuredScore = scoreFromOptions(options);
-    if (needles.length === 0) {
-        return {
-            score: 0,
-            justification: "No labels_any entries configured.",
-        };
-    }
-    const prLabels = normalizedLabelSet(context.labels);
-    const matched = needles.filter((needle) => prLabels.has(needle));
-    if (matched.length === 0) {
-        return {
-            score: 0,
-            justification: "None of the configured labels_any values are present on this change.",
-            detail: { labels_any: needles },
-        };
-    }
-    return {
-        score: configuredScore,
-        justification: `Matched label(s): ${matched.join(", ")}.`,
-        detail: { matched_labels: matched, labels_any: needles },
-    };
-};
-const createLabelsAnyDeclarativeCriterion = (declarativeRuleId) => ({
-    name: `Declarative rule: ${declarativeRuleId}`,
-    evaluate: (context, options) => declarativeRule_evaluateLabelsAnyCriterionResult(context, options),
-});
-/**
- * Builds criterion implementations for every key in `config.declarative_rules`, keyed by {@link declarativeCriterionId}.
- *
- * @param config - Parsed scoring config (declarative section optional).
- * @returns Map entries to merge with built-in criteria before scoring.
- */
-const buildDeclarativeRuleCriteriaMap = (config) => {
-    const declarativeRules = config.declarative_rules;
-    if (declarativeRules === undefined)
-        return {};
-    const sortedRuleIds = Object.keys(declarativeRules).sort((leftRuleId, rightRuleId) => leftRuleId.localeCompare(rightRuleId));
-    const result = {};
-    for (const declarativeRuleId of sortedRuleIds) {
-        result[declarativeCriterionId(declarativeRuleId)] = createLabelsAnyDeclarativeCriterion(declarativeRuleId);
-    }
-    return result;
 };
 
 ;// CONCATENATED MODULE: ./core/scorer.ts
@@ -45761,6 +45897,8 @@ const BRINDLE_VERSION = "0.0.0";
 
 
 
+
+
 const buildMergeRiskReportOptionsFromGithubActionInputs = (autoMerge, reportPolicyFromInputs) => ({
     failOnHigh: reportPolicyFromInputs.failOnHigh,
     informationalCheckConclusion: reportPolicyFromInputs.informationalCheckConclusion,
@@ -45840,6 +45978,45 @@ const fetchMergeRiskYamlTextFromGithubBaseRef = async (options) => {
             "If this pull request only adds the file, set input skip_when_merge_risk_missing_on_base to true until the base branch has it, or merge the config in an earlier change.", { cause });
     }
 };
+/**
+ * Loads trusted plugin YAML from the PR base ref (Contents API) and resolves {@link TrustedPluginsScoringArtifacts}
+ * for {@link score}. Throws when path validation fails, a file is missing on the base ref, or plugin YAML is invalid.
+ *
+ * @see docs/adrs/0001-no-pr-head-execution.md
+ */
+const loadTrustedPluginsScoringArtifactsFromGithubBaseRef = async (options) => {
+    const { octokit, repositoryOwner, repositoryName, baseRefName, trustedPlugins } = options;
+    const pathValidation = validateTrustedPluginsPathsStayUnderDirectory(trustedPlugins);
+    if (!pathValidation.ok) {
+        throw new Error(`Invalid trusted_plugins: ${pathValidation.message}`);
+    }
+    const pluginFileContentsByNormalizedPath = new Map();
+    for (const normalizedPluginPath of pathValidation.normalizedPluginPaths) {
+        try {
+            const { data } = await octokit.rest.repos.getContent({
+                owner: repositoryOwner,
+                repo: repositoryName,
+                path: normalizedPluginPath,
+                ref: baseRefName,
+            });
+            const yamlText = decodeGithubRepositoryContentFile(data, normalizedPluginPath);
+            pluginFileContentsByNormalizedPath.set(normalizedPluginPath, yamlText);
+        }
+        catch (cause) {
+            const message = cause instanceof Error ? cause.message : String(cause);
+            throw new Error(`Could not load trusted plugin file ${JSON.stringify(normalizedPluginPath)} from base ref "${baseRefName}" (${message}). ` +
+                "Ensure the file exists on the base branch (see ADR 0001).", { cause });
+        }
+    }
+    const loadOutcome = loadTrustedPlugins({ trustedPlugins, pluginFileContentsByNormalizedPath });
+    if (!loadOutcome.ok) {
+        throw new Error(`Trusted plugin load failed: ${loadOutcome.message}`);
+    }
+    return {
+        criteria: loadOutcome.criteria,
+        criterionConfigurations: loadOutcome.criterionConfigurations,
+    };
+};
 const resolveGithubAuthTokenFromActionInputs = () => {
     const fromInput = (0,core.getInput)("github_token");
     if (fromInput !== "") {
@@ -45886,6 +46063,15 @@ const runMergeRiskGithubAction = async () => {
         throw cause;
     }
     const { scoringConfig, autoMerge } = mergeRiskRepositoryYaml;
+    const trustedPluginsArtifacts = scoringConfig.trusted_plugins === undefined
+        ? undefined
+        : await loadTrustedPluginsScoringArtifactsFromGithubBaseRef({
+            octokit,
+            repositoryOwner,
+            repositoryName,
+            baseRefName,
+            trustedPlugins: scoringConfig.trusted_plugins,
+        });
     const informationalCheckConclusion = (0,core.getBooleanInput)("informational_check_conclusion");
     const failOnHigh = (0,core.getBooleanInput)("fail_on_high");
     const coverageReportPath = (0,core.getInput)("coverage_report_path").trim();
@@ -45904,7 +46090,7 @@ const runMergeRiskGithubAction = async () => {
             : undefined,
     });
     const pullRequestContext = await githubAdapter.buildContext();
-    const scoreResult = score(pullRequestContext, scoringConfig);
+    const scoreResult = score(pullRequestContext, scoringConfig, trustedPluginsArtifacts);
     const riskReport = buildRiskReport(scoreResult, buildMergeRiskReportOptionsFromGithubActionInputs(autoMerge, {
         informationalCheckConclusion,
         failOnHigh,
