@@ -11,6 +11,15 @@ services:
     globs:
       - "schema/**"
 
+# Optional declarative rule for CI: add label merge-risk-dogfood-declarative on a test PR to verify breakdown (low weight).
+declarative_rules:
+  dogfood_declarative_label:
+    weight: 2
+    options:
+      labels_any:
+        - merge-risk-dogfood-declarative
+      score: 18
+
 criteria:
   diff_size:
     weight: 54
