@@ -499,8 +499,10 @@ export const scoreWithRegistries = (
   const mergedCriteria: Record<string, Criterion> = {
     ...criteria,
     ...buildDeclarativeRuleCriteriaMap(config),
-    ...(trustedPluginsArtifacts?.criteria ?? {}),
   };
+  if (trustedPluginsArtifacts !== undefined) {
+    Object.assign(mergedCriteria, trustedPluginsArtifacts.criteria);
+  }
   const { actives, disabledCriteria } = collectActiveCriteria(
     context,
     config,
