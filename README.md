@@ -433,7 +433,7 @@ More criteria (service criticality, branch age) and additional mutators are docu
 - [ ] More criteria ... service criticality, branch age
 - [x] Junior author mutator (`junior_author`) — schema-validated
 - [x] Critical service mutator (`critical_service`) — schema-validated; dogfood in-repo under **`mutators.critical_service`**
-- [x] Declarative rules (`declarative_rules`) — labels_any MVP; schema-validated in **`merge-risk-config.schema.json`**
+- [x] Declarative rules (`declarative_rules`) — labels_any MVP; schema-validated; dogfood rule and label **`merge-risk-dogfood-declarative`** in this repo’s `.merge-risk.yml`
 - [ ] Coverage formats ... lcov and Cobertura
 - [ ] GitLab CI component
 - [ ] Bitbucket Pipe

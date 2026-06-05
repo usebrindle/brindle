@@ -1051,6 +1051,11 @@ describe("repo .merge-risk.yml dogfood", () => {
       service_ids: ["merge_risk_schema", "github_action_extension"],
       multiplier: 1.05,
     });
+    expect(scoringConfig.declarative_rules?.dogfood_declarative_label?.weight).toBe(2);
+    expect(scoringConfig.declarative_rules?.dogfood_declarative_label?.options).toMatchObject({
+      labels_any: ["merge-risk-dogfood-declarative"],
+      score: 18,
+    });
 
     const context: PRContext = {
       repoSlug: "usebrindle/brindle",
@@ -1069,7 +1074,18 @@ describe("repo .merge-risk.yml dogfood", () => {
     const scoreResult = score(context, scoringConfig);
     const criterionNames = scoreResult.breakdown.map((row) => row.name);
     expect(criterionNames).toContain("Service criticality");
+    expect(criterionNames).toContain("Declarative rule: dogfood_declarative_label");
     expect(scoreResult.mutatorsApplied).toContain("critical_service");
+
+    const labeledContext: PRContext = {
+      ...context,
+      labels: ["merge-risk-dogfood-declarative"],
+    };
+    const labeledScore = score(labeledContext, scoringConfig);
+    const declarativeRow = labeledScore.breakdown.find(
+      (row) => row.name === "Declarative rule: dogfood_declarative_label",
+    );
+    expect(declarativeRow?.score).toBe(18);
 
     const botContext: PRContext = { ...context, author: "dependabot[bot]" };
     const botScore = score(botContext, scoringConfig);
