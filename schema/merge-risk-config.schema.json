@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://brindle.dev/schema/merge-risk-config.schema.json",
   "title": "Merge risk scoring config (subset)",
-  "description": "YAML shape under .merge-risk.yml consumed by the scorer. Additional top-level keys are allowed for forward compatibility.",
+  "description": "YAML shape under .merge-risk.yml consumed by the scorer. Validates optional `declarative_rules`, `trusted_plugins`, and criterion/mutator options when those keys are present. Additional top-level keys are allowed for forward compatibility.",
   "definitions": {
     "filePatternsOptions": {
       "type": "object",
@@ -149,6 +149,18 @@
           }
         }
       }
+    },
+    "trustedPluginsConfiguration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["directory", "paths"],
+      "properties": {
+        "directory": { "type": "string", "minLength": 1 },
+        "paths": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
     }
   },
   "type": "object",
@@ -208,6 +220,9 @@
       "additionalProperties": {
         "$ref": "#/definitions/declarativeRulesEntry"
       }
+    },
+    "trusted_plugins": {
+      "$ref": "#/definitions/trustedPluginsConfiguration"
     }
   },
   "allOf": [
