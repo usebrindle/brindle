@@ -31,11 +31,13 @@ Brindle gives every pull request a **risk score from 0 to 100**, then sorts it i
 - [Add file-pattern scoring (optional)](#add-file-pattern-scoring-optional)
 - [Add author seniority scoring (optional)](#add-author-seniority-scoring-optional)
 - [Declarative rules (optional)](#declarative-rules-optional)
+- [Trusted plugins (optional)](#trusted-plugins-optional)
 - [What you get on every PR](#what-you-get-on-every-pr)
 - [Full input reference](#full-input-reference)
 - [Criteria reference](#criteria-reference)
 - [Mutators reference](#mutators-reference)
 - [Declarative rules reference](#declarative-rules-reference)
+- [Trusted plugins reference](#trusted-plugins-reference)
 - [Roadmap](#roadmap)
 - [Documentation](#documentation)
 - [Contributing](#contributing)
@@ -380,6 +382,43 @@ declarative_rules:
 
 ---
 
+## Trusted plugins (optional)
+
+**`trusted_plugins`** is an optional top-level block that lists **repository-relative paths** to small YAML **plugin definition files** on the **base branch** only ([ADR 0001](docs/adrs/0001-no-pr-head-execution.md)). The Action fetches each file via the GitHub Contents API at the PR base ref, then merges the resulting criteria into the same weight pool as **`criteria`** and **`declarative_rules`**. Breakdown rows use names of the form **`Trusted plugin: path/to/file.yaml`**.
+
+- **`directory`** ... non-empty string; every path under **`paths`** must resolve **strictly inside** this directory (path guardrails reject `..` escapes and absolute paths).
+- **`paths`** ... list of non-empty strings; each path must stay under **`directory`**.
+
+MVP plugin file shape (each file is its own document):
+
+- **`kind`**: must be **`labels_any`** today.
+- **`weight`**: finite number **> 0** (this criterion’s share of the pool; same idea as `criteria.*.weight`).
+- **`labels_any`** / **`score`**: same MVP semantics as declarative **`options`** (`labels_any` list, `score` 0–100).
+
+```yaml
+criteria:
+  diff_size:
+    weight: 90
+    options:
+      max_lines_for_cap: 400
+trusted_plugins:
+  directory: ".merge-risk-plugins"
+  paths:
+    - ".merge-risk-plugins/risk-labels.yaml"
+```
+
+Example **`.merge-risk-plugins/risk-labels.yaml`**:
+
+```yaml
+kind: labels_any
+weight: 10
+labels_any:
+  - production
+score: 75
+```
+
+---
+
 ## What you get on every PR
 
 A check run and a comment. The comment leads with the verdict ... tier, score, and one plain sentence on what to do ... followed by a collapsible breakdown of every criterion's contribution, so anyone can see exactly why a change scored the way it did. The check conclusion follows the tier, so a HIGH PR can block merge under branch protection when you want it to.
@@ -420,6 +459,13 @@ Because the scoring is deterministic, the same change always gets the same score
 | Each key under **`declarative_rules`** | `weight`, optional `enabled`, optional `options` | Extra weighted signals interpreted by the engine (same pool as **`criteria`**). |
 | (MVP) `options` | `labels_any` (list of non-empty strings), `score` (0–100) | Raw score is **`score`** when any PR label matches any entry in **`labels_any`** (case-insensitive); otherwise 0. |
 
+## Trusted plugins reference
+
+| Field | Shape | What it does |
+|---|---|---|
+| **`trusted_plugins`** | `directory` (non-empty string), `paths` (list of non-empty strings) | Opt-in list of base-branch YAML plugin files; each path must lie strictly under **`directory`**. |
+| Plugin file (MVP) | `kind: labels_any`, `weight` (> 0), optional `labels_any`, optional `score` (0–100) | One extra weighted criterion per file; fetched at scoring time from the base ref only. |
+
 More criteria (service criticality, branch age) and additional mutators are documented in the [LLD](docs/designs/).
 
 ## Roadmap
@@ -434,6 +480,7 @@ More criteria (service criticality, branch age) and additional mutators are docu
 - [x] Junior author mutator (`junior_author`) — schema-validated
 - [x] Critical service mutator (`critical_service`) — schema-validated; dogfood in-repo under **`mutators.critical_service`**
 - [x] Declarative rules (`declarative_rules`) — labels_any MVP; schema-validated; dogfood rule and label **`merge-risk-dogfood-declarative`** in this repo’s `.merge-risk.yml`
+- [x] Trusted plugins (`trusted_plugins`) — base-ref YAML files, `labels_any` MVP; schema-validated; wired in the GitHub Action
 - [ ] Coverage formats ... lcov and Cobertura
 - [ ] GitLab CI component
 - [ ] Bitbucket Pipe
