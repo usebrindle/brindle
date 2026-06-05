@@ -35755,7 +35755,7 @@ module.exports = {
 __nccwpck_require__.a(module, async (__webpack_handle_async_dependencies__, __webpack_async_result__) => { try {
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0__ = __nccwpck_require__(7484);
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__nccwpck_require__.n(_actions_core__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(4205);
+/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(9292);
 /**
  * GitHub Actions entry: scores the pull request from base-branch config and publishes results.
  *
@@ -35776,7 +35776,7 @@ __webpack_async_result__();
 
 /***/ }),
 
-/***/ 4205:
+/***/ 9292:
 /***/ ((__unused_webpack_module, __webpack_exports__, __nccwpck_require__) => {
 
 
@@ -41081,6 +41081,90 @@ const builtInMutators = {
     junior_author: juniorAuthorMutator,
 };
 
+;// CONCATENATED MODULE: ./core/rules/declarativeRule.ts
+/** Prefix for internal criterion ids so `declarative_rules` keys never collide with `criteria` keys. */
+const DECLARATIVE_CRITERION_ID_PREFIX = "declarative:";
+/**
+ * @param declarativeRuleId - Key under `declarative_rules` in config (not including prefix).
+ * @returns Internal criterion id passed to the scorer pipeline.
+ */
+const declarativeCriterionId = (declarativeRuleId) => `${DECLARATIVE_CRITERION_ID_PREFIX}${declarativeRuleId}`;
+const clampScore = (value) => Math.min(100, Math.max(0, value));
+const normalizedLabelSet = (labels) => new Set(labels.map((label) => label.trim().toLowerCase()).filter((label) => label.length > 0));
+const labelsAnyFromOptions = (options) => {
+    if (options === null || options === undefined || typeof options !== "object" || Array.isArray(options)) {
+        return [];
+    }
+    const record = options;
+    const raw = record.labels_any;
+    if (!Array.isArray(raw))
+        return [];
+    const out = [];
+    for (const entry of raw) {
+        if (typeof entry !== "string")
+            continue;
+        const trimmed = entry.trim();
+        if (trimmed.length > 0)
+            out.push(trimmed.toLowerCase());
+    }
+    return out;
+};
+const scoreFromOptions = (options) => {
+    if (options === null || options === undefined || typeof options !== "object" || Array.isArray(options)) {
+        return 0;
+    }
+    const record = options;
+    const rawScore = record.score;
+    if (typeof rawScore !== "number" || !Number.isFinite(rawScore))
+        return 0;
+    return clampScore(rawScore);
+};
+const evaluateLabelsAny = (context, options) => {
+    const needles = labelsAnyFromOptions(options);
+    const configuredScore = scoreFromOptions(options);
+    if (needles.length === 0) {
+        return {
+            score: 0,
+            justification: "No labels_any entries configured for this declarative rule.",
+        };
+    }
+    const prLabels = normalizedLabelSet(context.labels);
+    const matched = needles.filter((needle) => prLabels.has(needle));
+    if (matched.length === 0) {
+        return {
+            score: 0,
+            justification: "None of the configured labels_any values are present on this change.",
+            detail: { labels_any: needles },
+        };
+    }
+    return {
+        score: configuredScore,
+        justification: `Matched declarative label(s): ${matched.join(", ")}.`,
+        detail: { matched_labels: matched, labels_any: needles },
+    };
+};
+const createLabelsAnyDeclarativeCriterion = (declarativeRuleId) => ({
+    name: `Declarative rule: ${declarativeRuleId}`,
+    evaluate: (context, options) => evaluateLabelsAny(context, options),
+});
+/**
+ * Builds criterion implementations for every key in `config.declarative_rules`, keyed by {@link declarativeCriterionId}.
+ *
+ * @param config - Parsed scoring config (declarative section optional).
+ * @returns Map entries to merge with built-in criteria before scoring.
+ */
+const buildDeclarativeRuleCriteriaMap = (config) => {
+    const declarativeRules = config.declarative_rules;
+    if (declarativeRules === undefined)
+        return {};
+    const sortedRuleIds = Object.keys(declarativeRules).sort((leftRuleId, rightRuleId) => leftRuleId.localeCompare(rightRuleId));
+    const result = {};
+    for (const declarativeRuleId of sortedRuleIds) {
+        result[declarativeCriterionId(declarativeRuleId)] = createLabelsAnyDeclarativeCriterion(declarativeRuleId);
+    }
+    return result;
+};
+
 ;// CONCATENATED MODULE: ./core/scorer.ts
 /**
  * Pure merge-risk scoring: resolve criteria, normalize weights, apply mutators, map to tier.
@@ -41090,7 +41174,8 @@ const builtInMutators = {
  */
 
 
-const clampScore = (scoreValue) => Math.min(100, Math.max(0, scoreValue));
+
+const scorer_clampScore = (scoreValue) => Math.min(100, Math.max(0, scoreValue));
 const thresholdsAreInvalid = (thresholds) => {
     const { low, medium } = thresholds;
     return (!Number.isFinite(low) ||
@@ -41113,6 +41198,26 @@ const tierForScore = (value, thresholds) => {
     return "HIGH";
 };
 const sortedCriterionIds = (criteria) => Object.keys(criteria).sort((leftCriterionId, rightCriterionId) => leftCriterionId.localeCompare(rightCriterionId));
+const sortedDeclarativeCriterionIds = (config) => {
+    const declarativeRules = config.declarative_rules;
+    if (declarativeRules === undefined)
+        return [];
+    return Object.keys(declarativeRules)
+        .sort((leftRuleId, rightRuleId) => leftRuleId.localeCompare(rightRuleId))
+        .map((declarativeRuleId) => `${DECLARATIVE_CRITERION_ID_PREFIX}${declarativeRuleId}`);
+};
+/** Built-in `criteria` keys first (sorted), then declarative rules (sorted), each as `declarative:<ruleId>`. */
+const sortedAllCriterionIds = (config) => [
+    ...sortedCriterionIds(config.criteria),
+    ...sortedDeclarativeCriterionIds(config),
+];
+const getCriterionConfiguration = (config, criterionId) => {
+    if (criterionId.startsWith(DECLARATIVE_CRITERION_ID_PREFIX)) {
+        const declarativeRuleId = criterionId.slice(DECLARATIVE_CRITERION_ID_PREFIX.length);
+        return config.declarative_rules?.[declarativeRuleId];
+    }
+    return config.criteria[criterionId];
+};
 const criterionGate = (context, criterionConfiguration, criterionImplementation) => {
     if (criterionConfiguration === undefined)
         return "omit";
@@ -41188,13 +41293,13 @@ const applyCriterionResolution = (criterionResolution, activeCriteria, disabledC
         activeCriteria.push(criterionResolution.active);
 };
 const accumulateForCriterionId = (criterionId, context, config, criteria, activeCriteria, disabledCriterionIds) => {
-    const criterionResolution = resolveOneCriterion(criterionId, context, config, config.criteria[criterionId], criteria[criterionId]);
+    const criterionResolution = resolveOneCriterion(criterionId, context, config, getCriterionConfiguration(config, criterionId), criteria[criterionId]);
     applyCriterionResolution(criterionResolution, activeCriteria, disabledCriterionIds);
 };
 const collectActiveCriteria = (context, config, criteria) => {
     const disabledCriteria = [];
     const actives = [];
-    for (const criterionId of sortedCriterionIds(config.criteria)) {
+    for (const criterionId of sortedAllCriterionIds(config)) {
         accumulateForCriterionId(criterionId, context, config, criteria, actives, disabledCriteria);
     }
     return { actives, disabledCriteria };
@@ -41208,7 +41313,7 @@ const emptyScoreResult = (thresholds, disabledCriteria) => ({
 });
 const weightedPartsForActive = (activeCriterion, weightSum) => {
     const { evaluated } = activeCriterion;
-    const raw = clampScore(evaluated.score);
+    const raw = scorer_clampScore(evaluated.score);
     const normalizedWeight = (activeCriterion.configWeight * 100) / weightSum;
     const weighted = raw * (normalizedWeight / 100);
     return { raw, normalizedWeight, weighted, evaluated };
@@ -41257,7 +41362,7 @@ const applyOneMutatorEntry = (mutatorId, mutatorConfiguration, mutatorImplementa
     if (factor === null)
         return { nextScore: runningScore, didApply: false };
     assertValidMutatorFactor(mutatorId, factor);
-    return { nextScore: clampScore(runningScore * factor), didApply: true };
+    return { nextScore: scorer_clampScore(runningScore * factor), didApply: true };
 };
 const foldOneMutatorEntry = (mutatorId, mutatorConfiguration, mutators, context, runningScore, appliedMutatorIds, scoringConfig) => {
     const mutatorImplementation = mutators[mutatorId];
@@ -41267,7 +41372,7 @@ const foldOneMutatorEntry = (mutatorId, mutatorConfiguration, mutators, context,
     return nextScore;
 };
 const applyMutators = (context, baseScore, scoringConfig, mutators) => {
-    let runningScore = clampScore(baseScore);
+    let runningScore = scorer_clampScore(baseScore);
     const mutatorsApplied = [];
     const mutatorConfig = scoringConfig.mutators;
     for (const [mutatorId, mutatorConfiguration] of sortedMutatorEntries(mutatorConfig)) {
@@ -41311,15 +41416,22 @@ const score = (context, config) => scoreWithRegistries(context, config, builtInC
 /**
  * Score with explicit registries (used by tests and future trusted-plugin wiring).
  *
+ * Declarative rules from `config.declarative_rules` are always merged into the criterion registry
+ * (keys `declarative:<ruleId>`) in addition to the `criteria` argument.
+ *
  * @param context - Platform-neutral change data.
  * @param config - Weights and thresholds.
- * @param criteria - Implementations keyed like `config.criteria`.
+ * @param criteria - Built-in (or test) implementations keyed like `config.criteria`.
  * @param mutators - Implementations keyed like `config.mutators`.
  * @returns Same shape as {@link score}.
  */
 const scoreWithRegistries = (context, config, criteria, mutators) => {
     assertValidThresholds(config.thresholds);
-    const { actives, disabledCriteria } = collectActiveCriteria(context, config, criteria);
+    const mergedCriteria = {
+        ...criteria,
+        ...buildDeclarativeRuleCriteriaMap(config),
+    };
+    const { actives, disabledCriteria } = collectActiveCriteria(context, config, mergedCriteria);
     if (actives.length === 0)
         return emptyScoreResult(config.thresholds, disabledCriteria);
     return finalizeScoreResult(scoreActiveSubset(context, actives, config, mutators), config.thresholds, disabledCriteria);
