@@ -28,5 +28,8 @@ jobs:
       - name: Test
         run: npm run test -- --coverage
 
+      - name: Build and pack merge-risk-core workspace package
+        run: npm run build:merge-risk-core && npm pack -w @usebrindle/merge-risk-core --dry-run
+
       - name: Verify GitHub Action bundle (ncc drift)
         run: npm run build:github-action && git diff --exit-code extensions/github-action/dist
