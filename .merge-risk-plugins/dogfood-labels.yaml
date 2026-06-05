@@ -1,0 +1,7 @@
+# Dogfood trusted plugin: add label `merge-risk-dogfood-trusted-plugin` on a test PR to exercise
+# base-ref fetch + breakdown (same MVP semantics as declarative_rules; low weight).
+kind: labels_any
+weight: 2
+labels_any:
+  - merge-risk-dogfood-trusted-plugin
+score: 18
