@@ -35785,6 +35785,8 @@ __nccwpck_require__.d(__webpack_exports__, {
   u: () => (/* binding */ runMergeRiskGithubAction)
 });
 
+// UNUSED EXPORTS: mergeRiskGithubActionOutputKeys
+
 // EXTERNAL MODULE: ./node_modules/@actions/core/lib/core.js
 var core = __nccwpck_require__(7484);
 ;// CONCATENATED MODULE: external "node:fs/promises"
@@ -45899,6 +45901,23 @@ const BRINDLE_VERSION = "0.0.0";
 
 
 
+/**
+ * GitHub Actions job output names (must match `outputs` in {@link ./action.yml}).
+ *
+ * @see docs/designs/lld-merge-risk-classifier.md
+ */
+const mergeRiskGithubActionOutputKeys = {
+    riskTier: "risk_tier",
+    riskScore: "risk_score",
+    criteriaBreakdown: "criteria_breakdown",
+    autoMergeOutcome: "auto_merge_outcome",
+};
+const writeMergeRiskGithubActionJobOutputs = (scoreResult, riskReport) => {
+    (0,core.setOutput)(mergeRiskGithubActionOutputKeys.riskTier, scoreResult.tier);
+    (0,core.setOutput)(mergeRiskGithubActionOutputKeys.riskScore, String(scoreResult.score));
+    (0,core.setOutput)(mergeRiskGithubActionOutputKeys.criteriaBreakdown, JSON.stringify(scoreResult.breakdown));
+    (0,core.setOutput)(mergeRiskGithubActionOutputKeys.autoMergeOutcome, riskReport.autoMergeOutcome);
+};
 const buildMergeRiskReportOptionsFromGithubActionInputs = (autoMerge, reportPolicyFromInputs) => ({
     failOnHigh: reportPolicyFromInputs.failOnHigh,
     informationalCheckConclusion: reportPolicyFromInputs.informationalCheckConclusion,
@@ -46128,6 +46147,7 @@ const runMergeRiskGithubAction = async () => {
         informationalCheckConclusion,
         failOnHigh,
     }));
+    writeMergeRiskGithubActionJobOutputs(scoreResult, riskReport);
     await githubAdapter.writeResult(riskReport);
     if (riskReport.autoMergeOutcome === "eligible") {
         const mergeMethod = autoMerge?.method ?? "squash";
