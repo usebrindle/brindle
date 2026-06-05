@@ -323,6 +323,36 @@ You may set **`enabled: false`** on the mutator entry to keep the block in confi
 
 ---
 
+## Add critical service mutator (optional)
+
+The **`critical_service`** mutator **multiplies** the weighted score after criteria when the change touches at least one logical service listed under **`service_ids`**, using the same **root `services`** catalog and micromatch rules as **`service_criticality`** ([ADR 0009](docs/adrs/0009-service-criticality-criterion-config.md)). The scorer merges **`services`** into mutator options at apply time (you do not embed the catalog under `mutators.critical_service.options`).
+
+**1.** Declare root **`services`** (if you have not already). **2.** Add **`critical_service`** under **`mutators`** with required **`options`**:
+
+```yaml
+services:
+  payments:
+    globs:
+      - "src/payments/**"
+criteria:
+  diff_size:
+    weight: 100
+mutators:
+  critical_service:
+    options:
+      service_ids:
+        - "payments"
+      multiplier: 1.25   # must be strictly greater than 1
+```
+
+**`service_ids`** ... non-empty array of non-empty strings; each id should match a key under root **`services`**.
+
+**`multiplier`** ... strictly greater than 1 (same rule as `junior_author`).
+
+With **`enabled: false`**, **`options` is still required** when `critical_service` is present.
+
+---
+
 ## What you get on every PR
 
 A check run and a comment. The comment leads with the verdict ... tier, score, and one plain sentence on what to do ... followed by a collapsible breakdown of every criterion's contribution, so anyone can see exactly why a change scored the way it did. The check conclusion follows the tier, so a HIGH PR can block merge under branch protection when you want it to.
@@ -354,6 +384,7 @@ Because the scoring is deterministic, the same change always gets the same score
 | Mutator | Options | What it does |
 |---|---|---|
 | `junior_author` | `logins` (non-empty list of non-empty strings), `multiplier` (number &gt; 1) | Multiplies the running score when `PRContext.author` matches any listed login (case-insensitive). |
+| `critical_service` | `service_ids` (non-empty list of non-empty strings), `multiplier` (number &gt; 1) | Multiplies when any changed path matches root **`services`** globs for a listed service id. |
 
 More criteria (service criticality, branch age) and additional mutators are documented in the [LLD](docs/designs/).
 
@@ -366,7 +397,8 @@ More criteria (service criticality, branch age) and additional mutators are docu
 - [x] File pattern criterion (`file_patterns`)
 - [x] Author seniority criterion (`author_seniority`)
 - [ ] More criteria ... service criticality, branch age
-- [x] Junior author mutator (`junior_author`) — schema-validated; further mutators (e.g. `critical_service`) planned
+- [x] Junior author mutator (`junior_author`) — schema-validated
+- [x] Critical service mutator (`critical_service`) — schema-validated; optional dogfood in a later slice
 - [ ] Coverage formats ... lcov and Cobertura
 - [ ] GitLab CI component
 - [ ] Bitbucket Pipe
