@@ -43,6 +43,12 @@ inputs:
       action_required (ADR 0003). Ignored when informational_check_conclusion is true.
     required: false
     default: "false"
+  post_risk_summary_comment:
+    description: >
+      When true (default), posts merge-risk summary markdown as a pull request comment in addition to the Check Run.
+      Set false to publish only the Check Run (still uses pull-requests:write for the check; comment API is skipped).
+    required: false
+    default: "true"
 
 outputs:
   risk_tier:

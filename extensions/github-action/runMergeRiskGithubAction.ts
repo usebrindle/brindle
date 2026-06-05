@@ -334,6 +334,7 @@ export const runMergeRiskGithubAction = async (): Promise<void> => {
 
   const informationalCheckConclusion = getBooleanInput("informational_check_conclusion");
   const failOnHigh = getBooleanInput("fail_on_high");
+  const postRiskSummaryComment = getBooleanInput("post_risk_summary_comment");
 
   const coverageReportPath = getInput("coverage_report_path").trim();
   const testCoverageCriterionConfig = scoringConfig.criteria.test_coverage;
@@ -349,6 +350,7 @@ export const runMergeRiskGithubAction = async (): Promise<void> => {
     repositoryOwner,
     repositoryName,
     pullRequestNumber,
+    postRiskSummaryComment,
     istanbulCoverageHydration: shouldHydrateIstanbulCoverage
       ? { repositoryRelativePath: coverageReportPath, shouldHydrate: true }
       : undefined,

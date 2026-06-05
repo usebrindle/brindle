@@ -148,6 +148,9 @@ describe("runMergeRiskGithubAction", () => {
       if (name === "fail_on_high") {
         return false;
       }
+      if (name === "post_risk_summary_comment") {
+        return true;
+      }
       return false;
     });
   });
@@ -176,5 +179,28 @@ describe("runMergeRiskGithubAction", () => {
     expect(parsedBreakdown).toHaveLength(1);
     expect(parsedBreakdown[0]!.name).toBe("Diff size");
     expect(parsedBreakdown[0]!.weighted).toBe(5);
+  });
+
+  it("skips the pull request comment when post_risk_summary_comment is false", async () => {
+    actionTestHarness.getBooleanInput.mockImplementation((name: string) => {
+      if (name === "post_risk_summary_comment") {
+        return false;
+      }
+      if (name === "skip_when_merge_risk_missing_on_base") {
+        return false;
+      }
+      if (name === "informational_check_conclusion") {
+        return true;
+      }
+      if (name === "fail_on_high") {
+        return false;
+      }
+      return false;
+    });
+
+    await runMergeRiskGithubAction();
+
+    expect(actionTestHarness.checksCreate).toHaveBeenCalledTimes(1);
+    expect(actionTestHarness.issuesCreateComment).not.toHaveBeenCalled();
   });
 });
