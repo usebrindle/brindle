@@ -1004,6 +1004,88 @@ declarative_rules:
   });
 });
 
+describe("trusted_plugins in merge-risk YAML", () => {
+  const baseWithDiffSize = `
+thresholds:
+  low: 30
+  medium: 60
+criteria:
+  diff_size:
+    weight: 100
+    options:
+      max_lines_for_cap: 200
+`;
+
+  it("accepts trusted_plugins with directory and paths", () => {
+    const yamlText = `
+${baseWithDiffSize}
+trusted_plugins:
+  directory: ".merge-risk-plugins"
+  paths:
+    - ".merge-risk-plugins/a.yaml"
+    - ".merge-risk-plugins/b.yaml"
+`;
+    const scoringConfig = loadScoringConfigFromMergeRiskYaml(yamlText);
+    expect(scoringConfig.trusted_plugins?.directory).toBe(".merge-risk-plugins");
+    expect(scoringConfig.trusted_plugins?.paths).toEqual([
+      ".merge-risk-plugins/a.yaml",
+      ".merge-risk-plugins/b.yaml",
+    ]);
+  });
+
+  it("accepts trusted_plugins with an empty paths array", () => {
+    const yamlText = `
+${baseWithDiffSize}
+trusted_plugins:
+  directory: ".merge-risk-plugins"
+  paths: []
+`;
+    const scoringConfig = loadScoringConfigFromMergeRiskYaml(yamlText);
+    expect(scoringConfig.trusted_plugins?.paths).toEqual([]);
+  });
+
+  it("throws when trusted_plugins omits directory", () => {
+    const yamlText = `
+${baseWithDiffSize}
+trusted_plugins:
+  paths:
+    - ".merge-risk-plugins/a.yaml"
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(/config failed schema validation/i);
+  });
+
+  it("throws when trusted_plugins omits paths", () => {
+    const yamlText = `
+${baseWithDiffSize}
+trusted_plugins:
+  directory: ".merge-risk-plugins"
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(/config failed schema validation/i);
+  });
+
+  it("throws when trusted_plugins has an unknown top-level key", () => {
+    const yamlText = `
+${baseWithDiffSize}
+trusted_plugins:
+  directory: ".merge-risk-plugins"
+  paths: []
+  extra: true
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(/config failed schema validation/i);
+  });
+
+  it("throws when paths contains a non-string entry", () => {
+    const yamlText = `
+${baseWithDiffSize}
+trusted_plugins:
+  directory: ".merge-risk-plugins"
+  paths:
+    - 1
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(/config failed schema validation/i);
+  });
+});
+
 describe("assertValidScoringConfig", () => {
   it("rejects a plain array", () => {
     expect(() => assertValidScoringConfig([])).toThrow(MergeRiskConfigError);
