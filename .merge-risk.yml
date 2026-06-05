@@ -53,6 +53,15 @@ criteria:
         github_action_extension: 32
         merge_risk_schema: 28
 
+# Multiplicative bump for the same automation logins listed under author_seniority (exercises mutators on bot PRs).
+mutators:
+  junior_author:
+    options:
+      logins:
+        - "dependabot[bot]"
+        - "github-actions[bot]"
+      multiplier: 1.06
+
 # Optional native auto-merge (ADR 0002). Requires workflow `contents: write` and repo auto-merge enabled.
 # auto_merge:
 #   enabled: true
