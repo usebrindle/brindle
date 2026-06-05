@@ -82,6 +82,8 @@ out
 .nuxt
 # Root-level dist only; the GitHub Action ships a committed bundle under extensions/github-action/dist/
 /dist
+# Workspace package build output (CI builds before npm pack; not committed)
+/packages/merge-risk-core/dist/
 .output
 
 # Gatsby files

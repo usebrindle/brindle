@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "description": "Platform-agnostic merge-risk classifier and CI extensions",
   "engines": {
     "node": ">=20"
@@ -10,6 +13,7 @@
   "scripts": {
     "build:core": "npm run typecheck",
     "build:github-action": "ncc build extensions/github-action/index.ts -o extensions/github-action/dist",
+    "build:merge-risk-core": "npm run build -w @usebrindle/merge-risk-core",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

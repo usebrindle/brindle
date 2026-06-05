@@ -1,0 +1,35 @@
+{
+  "name": "@usebrindle/merge-risk-core",
+  "version": "0.1.0",
+  "description": "Platform-agnostic merge-risk classifier core (scorer, config, report). Adapters and CI extensions are not included.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/usebrindle/brindle.git",
+    "directory": "packages/merge-risk-core"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup"
+  },
+  "peerDependencies": {
+    "ajv": "^8.17.0",
+    "js-yaml": "^4.1.0",
+    "micromatch": "^4.0.5"
+  },
+  "devDependencies": {
+    "tsup": "^8.3.5"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
