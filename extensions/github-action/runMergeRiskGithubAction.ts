@@ -17,8 +17,11 @@ import {
   MergeRiskConfigError,
   score,
 } from "../../core/index.js";
+import { loadTrustedPlugins } from "../../core/plugins/loadTrustedPlugins.js";
+import type { TrustedPluginsScoringArtifacts } from "../../core/plugins/loadTrustedPlugins.js";
+import { validateTrustedPluginsPathsStayUnderDirectory } from "../../core/plugins/trustedPluginPaths.js";
 import type { BuildRiskReportOptions } from "../../core/report.types.js";
-import type { MergeRiskAutoMergeConfig } from "../../core/types.js";
+import type { MergeRiskAutoMergeConfig, TrustedPluginsConfiguration } from "../../core/types.js";
 
 const buildMergeRiskReportOptionsFromGithubActionInputs = (
   autoMerge: MergeRiskAutoMergeConfig | undefined,
@@ -134,6 +137,54 @@ const fetchMergeRiskYamlTextFromGithubBaseRef = async (options: {
   }
 };
 
+/**
+ * Loads trusted plugin YAML from the PR base ref (Contents API) and resolves {@link TrustedPluginsScoringArtifacts}
+ * for {@link score}. Throws when path validation fails, a file is missing on the base ref, or plugin YAML is invalid.
+ *
+ * @see docs/adrs/0001-no-pr-head-execution.md
+ */
+const loadTrustedPluginsScoringArtifactsFromGithubBaseRef = async (options: {
+  octokit: Octokit;
+  repositoryOwner: string;
+  repositoryName: string;
+  baseRefName: string;
+  trustedPlugins: TrustedPluginsConfiguration;
+}): Promise<TrustedPluginsScoringArtifacts> => {
+  const { octokit, repositoryOwner, repositoryName, baseRefName, trustedPlugins } = options;
+  const pathValidation = validateTrustedPluginsPathsStayUnderDirectory(trustedPlugins);
+  if (!pathValidation.ok) {
+    throw new Error(`Invalid trusted_plugins: ${pathValidation.message}`);
+  }
+  const pluginFileContentsByNormalizedPath = new Map<string, string>();
+  for (const normalizedPluginPath of pathValidation.normalizedPluginPaths) {
+    try {
+      const { data } = await octokit.rest.repos.getContent({
+        owner: repositoryOwner,
+        repo: repositoryName,
+        path: normalizedPluginPath,
+        ref: baseRefName,
+      });
+      const yamlText = decodeGithubRepositoryContentFile(data, normalizedPluginPath);
+      pluginFileContentsByNormalizedPath.set(normalizedPluginPath, yamlText);
+    } catch (cause: unknown) {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      throw new Error(
+        `Could not load trusted plugin file ${JSON.stringify(normalizedPluginPath)} from base ref "${baseRefName}" (${message}). ` +
+          "Ensure the file exists on the base branch (see ADR 0001).",
+        { cause },
+      );
+    }
+  }
+  const loadOutcome = loadTrustedPlugins({ trustedPlugins, pluginFileContentsByNormalizedPath });
+  if (!loadOutcome.ok) {
+    throw new Error(`Trusted plugin load failed: ${loadOutcome.message}`);
+  }
+  return {
+    criteria: loadOutcome.criteria,
+    criterionConfigurations: loadOutcome.criterionConfigurations,
+  };
+};
+
 const resolveGithubAuthTokenFromActionInputs = (): string => {
   const fromInput = getInput("github_token");
   if (fromInput !== "") {
@@ -190,6 +241,17 @@ export const runMergeRiskGithubAction = async (): Promise<void> => {
 
   const { scoringConfig, autoMerge } = mergeRiskRepositoryYaml;
 
+  const trustedPluginsArtifacts: TrustedPluginsScoringArtifacts | undefined =
+    scoringConfig.trusted_plugins === undefined
+      ? undefined
+      : await loadTrustedPluginsScoringArtifactsFromGithubBaseRef({
+          octokit,
+          repositoryOwner,
+          repositoryName,
+          baseRefName,
+          trustedPlugins: scoringConfig.trusted_plugins,
+        });
+
   const informationalCheckConclusion = getBooleanInput("informational_check_conclusion");
   const failOnHigh = getBooleanInput("fail_on_high");
 
@@ -213,7 +275,7 @@ export const runMergeRiskGithubAction = async (): Promise<void> => {
   });
 
   const pullRequestContext = await githubAdapter.buildContext();
-  const scoreResult = score(pullRequestContext, scoringConfig);
+  const scoreResult = score(pullRequestContext, scoringConfig, trustedPluginsArtifacts);
   const riskReport = buildRiskReport(
     scoreResult,
     buildMergeRiskReportOptionsFromGithubActionInputs(autoMerge, {
