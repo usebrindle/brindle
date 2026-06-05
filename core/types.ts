@@ -4,6 +4,7 @@
  */
 
 import type { ServicesCatalog } from "./criteria/serviceCriticality.types.js";
+import type { TrustedPluginsConfiguration } from "./plugins/trustedPlugins.types.js";
 
 /**
  * How the platform merges the PR when auto-merge runs (metadata for adapters; not used by the scorer yet).
@@ -147,6 +148,11 @@ export interface ScoringConfig {
    * Present only when declared in base-branch `.merge-risk.yml`.
    */
   services?: ServicesCatalog;
+  /**
+   * Optional trusted plugin definitions: base-branch paths only (ADR 0001). Path guardrails live under
+   * {@link ./plugins/trustedPluginPaths.js}; loading and scoring wiring ship in later slices.
+   */
+  trusted_plugins?: TrustedPluginsConfiguration;
 }
 
 /**
@@ -207,3 +213,5 @@ export interface RiskReport {
   /** What happened when attempting native auto-merge (decision in core; execution in adapter). */
   autoMergeOutcome: AutoMergeOutcome;
 }
+
+export type { TrustedPluginsConfiguration } from "./plugins/trustedPlugins.types.js";
