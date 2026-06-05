@@ -45430,8 +45430,10 @@ const scoreWithRegistries = (context, config, criteria, mutators, trustedPlugins
     const mergedCriteria = {
         ...criteria,
         ...buildDeclarativeRuleCriteriaMap(config),
-        ...(trustedPluginsArtifacts?.criteria ?? {}),
     };
+    if (trustedPluginsArtifacts !== undefined) {
+        Object.assign(mergedCriteria, trustedPluginsArtifacts.criteria);
+    }
     const { actives, disabledCriteria } = collectActiveCriteria(context, config, mergedCriteria, trustedPluginsArtifacts?.criteria, trustedPluginsArtifacts?.criterionConfigurations);
     if (actives.length === 0)
         return emptyScoreResult(config.thresholds, disabledCriteria);
