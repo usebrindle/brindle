@@ -35755,7 +35755,7 @@ module.exports = {
 __nccwpck_require__.a(module, async (__webpack_handle_async_dependencies__, __webpack_async_result__) => { try {
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0__ = __nccwpck_require__(7484);
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__nccwpck_require__.n(_actions_core__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(9292);
+/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(7898);
 /**
  * GitHub Actions entry: scores the pull request from base-branch config and publishes results.
  *
@@ -35776,7 +35776,7 @@ __webpack_async_result__();
 
 /***/ }),
 
-/***/ 9292:
+/***/ 7898:
 /***/ ((__unused_webpack_module, __webpack_exports__, __nccwpck_require__) => {
 
 
@@ -41081,370 +41081,6 @@ const builtInMutators = {
     junior_author: juniorAuthorMutator,
 };
 
-;// CONCATENATED MODULE: ./core/rules/declarativeRule.ts
-/** Prefix for internal criterion ids so `declarative_rules` keys never collide with `criteria` keys. */
-const DECLARATIVE_CRITERION_ID_PREFIX = "declarative:";
-/**
- * @param declarativeRuleId - Key under `declarative_rules` in config (not including prefix).
- * @returns Internal criterion id passed to the scorer pipeline.
- */
-const declarativeCriterionId = (declarativeRuleId) => `${DECLARATIVE_CRITERION_ID_PREFIX}${declarativeRuleId}`;
-const clampScore = (value) => Math.min(100, Math.max(0, value));
-const normalizedLabelSet = (labels) => new Set(labels.map((label) => label.trim().toLowerCase()).filter((label) => label.length > 0));
-const labelsAnyFromOptions = (options) => {
-    if (options === null || options === undefined || typeof options !== "object" || Array.isArray(options)) {
-        return [];
-    }
-    const record = options;
-    const raw = record.labels_any;
-    if (!Array.isArray(raw))
-        return [];
-    const out = [];
-    for (const entry of raw) {
-        if (typeof entry !== "string")
-            continue;
-        const trimmed = entry.trim();
-        if (trimmed.length > 0)
-            out.push(trimmed.toLowerCase());
-    }
-    return out;
-};
-const scoreFromOptions = (options) => {
-    if (options === null || options === undefined || typeof options !== "object" || Array.isArray(options)) {
-        return 0;
-    }
-    const record = options;
-    const rawScore = record.score;
-    if (typeof rawScore !== "number" || !Number.isFinite(rawScore))
-        return 0;
-    return clampScore(rawScore);
-};
-/**
- * Fixed `labels_any` + `score` interpreter shared by declarative rules and trusted plugin documents (ADR 0001).
- *
- * @param context - Hydrated change data.
- * @param options - Object with optional `labels_any` string array and optional numeric `score` (0–100).
- */
-const evaluateLabelsAnyCriterionResult = (context, options) => {
-    const needles = labelsAnyFromOptions(options);
-    const configuredScore = scoreFromOptions(options);
-    if (needles.length === 0) {
-        return {
-            score: 0,
-            justification: "No labels_any entries configured.",
-        };
-    }
-    const prLabels = normalizedLabelSet(context.labels);
-    const matched = needles.filter((needle) => prLabels.has(needle));
-    if (matched.length === 0) {
-        return {
-            score: 0,
-            justification: "None of the configured labels_any values are present on this change.",
-            detail: { labels_any: needles },
-        };
-    }
-    return {
-        score: configuredScore,
-        justification: `Matched label(s): ${matched.join(", ")}.`,
-        detail: { matched_labels: matched, labels_any: needles },
-    };
-};
-const createLabelsAnyDeclarativeCriterion = (declarativeRuleId) => ({
-    name: `Declarative rule: ${declarativeRuleId}`,
-    evaluate: (context, options) => evaluateLabelsAnyCriterionResult(context, options),
-});
-/**
- * Builds criterion implementations for every key in `config.declarative_rules`, keyed by {@link declarativeCriterionId}.
- *
- * @param config - Parsed scoring config (declarative section optional).
- * @returns Map entries to merge with built-in criteria before scoring.
- */
-const buildDeclarativeRuleCriteriaMap = (config) => {
-    const declarativeRules = config.declarative_rules;
-    if (declarativeRules === undefined)
-        return {};
-    const sortedRuleIds = Object.keys(declarativeRules).sort((leftRuleId, rightRuleId) => leftRuleId.localeCompare(rightRuleId));
-    const result = {};
-    for (const declarativeRuleId of sortedRuleIds) {
-        result[declarativeCriterionId(declarativeRuleId)] = createLabelsAnyDeclarativeCriterion(declarativeRuleId);
-    }
-    return result;
-};
-
-;// CONCATENATED MODULE: ./core/scorer.ts
-/**
- * Pure merge-risk scoring: resolve criteria, normalize weights, apply mutators, map to tier.
- *
- * @see docs/designs/lld-merge-risk-classifier.md
- * @see docs/adrs/0004-pure-criteria-over-hydrated-context.md
- */
-
-
-
-const scorer_clampScore = (scoreValue) => Math.min(100, Math.max(0, scoreValue));
-const thresholdsAreInvalid = (thresholds) => {
-    const { low, medium } = thresholds;
-    return (!Number.isFinite(low) ||
-        !Number.isFinite(medium) ||
-        low < 0 ||
-        medium > 100 ||
-        low >= medium);
-};
-const assertValidThresholds = (thresholds) => {
-    if (thresholdsAreInvalid(thresholds)) {
-        const { low, medium } = thresholds;
-        throw new Error(`Invalid thresholds: expected 0 <= low < medium <= 100, got low=${low}, medium=${medium}`);
-    }
-};
-const tierForScore = (value, thresholds) => {
-    if (value <= thresholds.low)
-        return "LOW";
-    if (value <= thresholds.medium)
-        return "MEDIUM";
-    return "HIGH";
-};
-const sortedCriterionIds = (criteria) => Object.keys(criteria).sort((leftCriterionId, rightCriterionId) => leftCriterionId.localeCompare(rightCriterionId));
-const sortedDeclarativeCriterionIds = (config) => {
-    const declarativeRules = config.declarative_rules;
-    if (declarativeRules === undefined)
-        return [];
-    return Object.keys(declarativeRules)
-        .sort((leftRuleId, rightRuleId) => leftRuleId.localeCompare(rightRuleId))
-        .map((declarativeRuleId) => `${DECLARATIVE_CRITERION_ID_PREFIX}${declarativeRuleId}`);
-};
-/** Built-in `criteria` keys first (sorted), then declarative rules (sorted), each as `declarative:<ruleId>`. */
-const sortedAllCriterionIds = (config) => [
-    ...sortedCriterionIds(config.criteria),
-    ...sortedDeclarativeCriterionIds(config),
-];
-const getCriterionConfiguration = (config, criterionId) => {
-    if (criterionId.startsWith(DECLARATIVE_CRITERION_ID_PREFIX)) {
-        const declarativeRuleId = criterionId.slice(DECLARATIVE_CRITERION_ID_PREFIX.length);
-        return config.declarative_rules?.[declarativeRuleId];
-    }
-    return config.criteria[criterionId];
-};
-const criterionGate = (context, criterionConfiguration, criterionImplementation) => {
-    if (criterionConfiguration === undefined)
-        return "omit";
-    if (criterionConfiguration.enabled === false)
-        return "disabled";
-    if (criterionImplementation === undefined)
-        return "disabled";
-    if (criterionImplementation.isEnabled &&
-        !criterionImplementation.isEnabled(context, criterionConfiguration.options)) {
-        return "disabled";
-    }
-    return "continue";
-};
-const toActiveCriterion = (criterionId, criterionImplementation, criterionConfiguration, evaluated) => ({
-    id: criterionId,
-    criterion: criterionImplementation,
-    configWeight: criterionConfiguration.weight,
-    options: criterionConfiguration.options,
-    evaluated,
-});
-/**
- * Merges root-level `services` into evaluate options for `service_criticality` (ADR 0009); validated YAML keeps
- * `services` at the document root only.
- */
-const mergeOptionsForCriterionEvaluation = (criterionId, config, options) => {
-    if (criterionId !== "service_criticality")
-        return options;
-    if (config.services === undefined)
-        return options;
-    const baseRecord = options !== null && options !== undefined && typeof options === "object" && !Array.isArray(options)
-        ? { ...options }
-        : {};
-    return { ...baseRecord, services: config.services };
-};
-/**
- * Merges root-level `services` into mutator apply options for `critical_service` (ADR 0009), mirroring
- * {@link mergeOptionsForCriterionEvaluation} for `service_criticality`.
- */
-const mergeOptionsForMutatorApplication = (mutatorId, config, options) => {
-    if (mutatorId !== "critical_service")
-        return options;
-    if (config.services === undefined)
-        return options;
-    const baseRecord = options !== null && options !== undefined && typeof options === "object" && !Array.isArray(options)
-        ? { ...options }
-        : {};
-    return { ...baseRecord, services: config.services };
-};
-const buildActiveOrDisabled = (criterionId, context, config, criterionConfiguration, criterionImplementation) => {
-    const evaluateOptions = mergeOptionsForCriterionEvaluation(criterionId, config, criterionConfiguration.options);
-    const evaluated = criterionImplementation.evaluate(context, evaluateOptions);
-    if (evaluated.selfDisable === true)
-        return { type: "disabled", id: criterionId };
-    return {
-        type: "active",
-        active: toActiveCriterion(criterionId, criterionImplementation, criterionConfiguration, evaluated),
-    };
-};
-const resolveOneCriterion = (criterionId, context, config, criterionConfiguration, criterionImplementation) => {
-    const gate = criterionGate(context, criterionConfiguration, criterionImplementation);
-    if (gate === "omit")
-        return { type: "omit" };
-    if (gate === "disabled")
-        return { type: "disabled", id: criterionId };
-    return buildActiveOrDisabled(criterionId, context, config, criterionConfiguration, criterionImplementation);
-};
-const applyCriterionResolution = (criterionResolution, activeCriteria, disabledCriterionIds) => {
-    if (criterionResolution.type === "omit")
-        return;
-    if (criterionResolution.type === "disabled")
-        disabledCriterionIds.push(criterionResolution.id);
-    else
-        activeCriteria.push(criterionResolution.active);
-};
-const accumulateForCriterionId = (criterionId, context, config, criteria, activeCriteria, disabledCriterionIds) => {
-    const criterionResolution = resolveOneCriterion(criterionId, context, config, getCriterionConfiguration(config, criterionId), criteria[criterionId]);
-    applyCriterionResolution(criterionResolution, activeCriteria, disabledCriterionIds);
-};
-const collectActiveCriteria = (context, config, criteria) => {
-    const disabledCriteria = [];
-    const actives = [];
-    for (const criterionId of sortedAllCriterionIds(config)) {
-        accumulateForCriterionId(criterionId, context, config, criteria, actives, disabledCriteria);
-    }
-    return { actives, disabledCriteria };
-};
-const emptyScoreResult = (thresholds, disabledCriteria) => ({
-    score: 0,
-    tier: tierForScore(0, thresholds),
-    breakdown: [],
-    mutatorsApplied: [],
-    disabledCriteria,
-});
-const weightedPartsForActive = (activeCriterion, weightSum) => {
-    const { evaluated } = activeCriterion;
-    const raw = scorer_clampScore(evaluated.score);
-    const normalizedWeight = (activeCriterion.configWeight * 100) / weightSum;
-    const weighted = raw * (normalizedWeight / 100);
-    return { raw, normalizedWeight, weighted, evaluated };
-};
-const toBreakdownRow = (activeCriterion, weightedParts) => ({
-    name: activeCriterion.criterion.name,
-    score: weightedParts.raw,
-    weight: weightedParts.normalizedWeight,
-    weighted: weightedParts.weighted,
-    justification: weightedParts.evaluated.justification,
-    detail: weightedParts.evaluated.detail,
-});
-const appendOneBreakdownRow = (activeCriterion, weightSum, breakdown) => {
-    const weightedParts = weightedPartsForActive(activeCriterion, weightSum);
-    breakdown.push(toBreakdownRow(activeCriterion, weightedParts));
-    return weightedParts.weighted;
-};
-const computeBreakdown = (actives, weightSum) => {
-    const breakdown = [];
-    let baseScore = 0;
-    for (const activeCriterion of actives) {
-        baseScore += appendOneBreakdownRow(activeCriterion, weightSum, breakdown);
-    }
-    return { breakdown, baseScore };
-};
-const sortedMutatorEntries = (mutatorConfig) => {
-    const mutatorConfigurationsById = mutatorConfig ?? {};
-    return Object.keys(mutatorConfigurationsById)
-        .sort((leftMutatorId, rightMutatorId) => leftMutatorId.localeCompare(rightMutatorId))
-        .map((mutatorId) => [
-        mutatorId,
-        mutatorConfigurationsById[mutatorId],
-    ]);
-};
-const assertValidMutatorFactor = (mutatorId, factor) => {
-    if (Number.isFinite(factor) && factor > 0)
-        return;
-    throw new Error(`Mutator "${mutatorId}" returned invalid factor: ${String(factor)}`);
-};
-const applyOneMutatorEntry = (mutatorId, mutatorConfiguration, mutatorImplementation, context, runningScore, scoringConfig) => {
-    if (mutatorConfiguration.enabled === false || mutatorImplementation === undefined) {
-        return { nextScore: runningScore, didApply: false };
-    }
-    const mergedOptions = mergeOptionsForMutatorApplication(mutatorId, scoringConfig, mutatorConfiguration.options);
-    const factor = mutatorImplementation.apply(context, mergedOptions);
-    if (factor === null)
-        return { nextScore: runningScore, didApply: false };
-    assertValidMutatorFactor(mutatorId, factor);
-    return { nextScore: scorer_clampScore(runningScore * factor), didApply: true };
-};
-const foldOneMutatorEntry = (mutatorId, mutatorConfiguration, mutators, context, runningScore, appliedMutatorIds, scoringConfig) => {
-    const mutatorImplementation = mutators[mutatorId];
-    const { nextScore, didApply } = applyOneMutatorEntry(mutatorId, mutatorConfiguration, mutatorImplementation, context, runningScore, scoringConfig);
-    if (didApply)
-        appliedMutatorIds.push(mutatorId);
-    return nextScore;
-};
-const applyMutators = (context, baseScore, scoringConfig, mutators) => {
-    let runningScore = scorer_clampScore(baseScore);
-    const mutatorsApplied = [];
-    const mutatorConfig = scoringConfig.mutators;
-    for (const [mutatorId, mutatorConfiguration] of sortedMutatorEntries(mutatorConfig)) {
-        runningScore = foldOneMutatorEntry(mutatorId, mutatorConfiguration, mutators, context, runningScore, mutatorsApplied, scoringConfig);
-    }
-    mutatorsApplied.sort((leftMutatorId, rightMutatorId) => leftMutatorId.localeCompare(rightMutatorId));
-    return { score: runningScore, mutatorsApplied };
-};
-const requirePositiveWeightSum = (weightSum) => {
-    if (weightSum > 0)
-        return;
-    throw new Error("Sum of active criterion weights must be positive");
-};
-const scoreActiveSubset = (context, actives, config, mutators) => {
-    const weightSum = actives.reduce((runningWeightSum, activeCriterion) => runningWeightSum + activeCriterion.configWeight, 0);
-    requirePositiveWeightSum(weightSum);
-    actives.sort((leftActive, rightActive) => leftActive.id.localeCompare(rightActive.id));
-    const { breakdown, baseScore } = computeBreakdown(actives, weightSum);
-    const mutatorPass = applyMutators(context, baseScore, config, mutators);
-    return {
-        breakdown,
-        score: mutatorPass.score,
-        mutatorsApplied: mutatorPass.mutatorsApplied,
-    };
-};
-const finalizeScoreResult = (partialScore, thresholds, disabledCriteria) => ({
-    score: partialScore.score,
-    tier: tierForScore(partialScore.score, thresholds),
-    breakdown: partialScore.breakdown,
-    mutatorsApplied: partialScore.mutatorsApplied,
-    disabledCriteria,
-});
-/**
- * Score a change using the built-in criterion and mutator registries (`criteria` / `mutators` grow per slice).
- *
- * @param context - Platform-neutral change data produced by an adapter.
- * @param config - Weights, thresholds, and mutator ids (full schema validation comes in a later slice).
- * @returns Aggregated score, tier, per-criterion breakdown, and mutator ids that ran.
- */
-const score = (context, config) => scoreWithRegistries(context, config, builtInCriteria, builtInMutators);
-/**
- * Score with explicit registries (used by tests and future trusted-plugin wiring).
- *
- * Declarative rules from `config.declarative_rules` are always merged into the criterion registry
- * (keys `declarative:<ruleId>`) in addition to the `criteria` argument.
- *
- * @param context - Platform-neutral change data.
- * @param config - Weights and thresholds.
- * @param criteria - Built-in (or test) implementations keyed like `config.criteria`.
- * @param mutators - Implementations keyed like `config.mutators`.
- * @returns Same shape as {@link score}.
- */
-const scoreWithRegistries = (context, config, criteria, mutators) => {
-    assertValidThresholds(config.thresholds);
-    const mergedCriteria = {
-        ...criteria,
-        ...buildDeclarativeRuleCriteriaMap(config),
-    };
-    const { actives, disabledCriteria } = collectActiveCriteria(context, config, mergedCriteria);
-    if (actives.length === 0)
-        return emptyScoreResult(config.thresholds, disabledCriteria);
-    return finalizeScoreResult(scoreActiveSubset(context, actives, config, mutators), config.thresholds, disabledCriteria);
-};
-
-// EXTERNAL MODULE: ./node_modules/ajv/dist/ajv.js
-var ajv = __nccwpck_require__(2463);
 ;// CONCATENATED MODULE: ./node_modules/js-yaml/dist/js-yaml.mjs
 
 /*! js-yaml 4.1.0 https://github.com/nodeca/js-yaml @license MIT */
@@ -45298,6 +44934,514 @@ var jsYaml = {
 /* harmony default export */ const js_yaml = ((/* unused pure expression or super */ null && (jsYaml)));
 
 
+;// CONCATENATED MODULE: ./core/plugins/loadTrustedPlugins.ts
+/**
+ * Resolves base-branch trusted plugin **files** into {@link Criterion} implementations plus matching
+ * {@link CriterionConfiguration} entries (weight from the file). No network I/O; callers supply file text.
+ *
+ * @see docs/adrs/0001-no-pr-head-execution.md
+ * @see docs/designs/lld-merge-risk-classifier.md
+ */
+
+
+
+/** Prefix for internal criterion ids so trusted plugins never collide with `criteria` or `declarative:` keys. */
+const TRUSTED_PLUGIN_CRITERION_ID_PREFIX = "plugin:";
+/**
+ * @param normalizedPluginPath - Path after {@link validateTrustedPluginsPathsStayUnderDirectory} normalization.
+ * @returns Internal criterion id for the scorer pipeline (slice 3 wiring).
+ */
+const trustedPluginCriterionId = (normalizedPluginPath) => `${TRUSTED_PLUGIN_CRITERION_ID_PREFIX}${normalizedPluginPath}`;
+const parseTrustedPluginYamlToUnknown = (yamlText, normalizedPluginPath) => {
+    try {
+        return { ok: true, value: yaml.load(yamlText, { schema: yaml.CORE_SCHEMA }) };
+    }
+    catch (cause) {
+        const detail = cause instanceof Error ? cause.message : String(cause);
+        return {
+            ok: false,
+            message: `Invalid YAML in trusted plugin ${JSON.stringify(normalizedPluginPath)}: ${detail}.`,
+        };
+    }
+};
+const readPositiveFiniteWeight = (record, normalizedPluginPath) => {
+    const rawWeight = record.weight;
+    if (typeof rawWeight !== "number" || !Number.isFinite(rawWeight) || rawWeight <= 0) {
+        return {
+            ok: false,
+            message: `Trusted plugin ${JSON.stringify(normalizedPluginPath)} must set a finite weight > 0.`,
+        };
+    }
+    return { ok: true, weight: rawWeight };
+};
+const labelsAnyOptionsFromPluginRecord = (record) => ({
+    labels_any: record.labels_any,
+    score: record.score,
+});
+const parseLabelsAnyPluginDocument = (parsedRoot, normalizedPluginPath) => {
+    if (parsedRoot === null || parsedRoot === undefined || typeof parsedRoot !== "object" || Array.isArray(parsedRoot)) {
+        return {
+            ok: false,
+            message: `Trusted plugin ${JSON.stringify(normalizedPluginPath)} must be a YAML mapping at the root.`,
+        };
+    }
+    const record = parsedRoot;
+    const rawKind = record.kind;
+    if (rawKind !== "labels_any") {
+        return {
+            ok: false,
+            message: `Trusted plugin ${JSON.stringify(normalizedPluginPath)} has unsupported or missing kind (expected "labels_any").`,
+        };
+    }
+    const weightOutcome = readPositiveFiniteWeight(record, normalizedPluginPath);
+    if (!weightOutcome.ok) {
+        return weightOutcome;
+    }
+    return {
+        ok: true,
+        weight: weightOutcome.weight,
+        labelsAnyOptions: labelsAnyOptionsFromPluginRecord(record),
+    };
+};
+const createLabelsAnyTrustedPluginCriterion = (options) => {
+    const { normalizedPluginPath, labelsAnyOptions } = options;
+    const frozenOptions = { ...labelsAnyOptions };
+    return {
+        name: `Trusted plugin: ${normalizedPluginPath}`,
+        evaluate: (context, _configOptions) => evaluateLabelsAnyCriterionResult(context, frozenOptions),
+    };
+};
+/**
+ * Builds criteria and configurations from validated paths and in-memory file bodies (typically fetched
+ * at the base ref by an adapter). Returns an error when path validation fails, a file is missing from the map,
+ * YAML is invalid, or the document does not match the supported MVP shape.
+ *
+ * @param trustedPlugins - Optional section from {@link ScoringConfig}; when omitted, returns empty maps.
+ * @param pluginFileContentsByNormalizedPath - Keys are normalized paths from validation (see {@link validateTrustedPluginsPathsStayUnderDirectory}).
+ */
+const loadTrustedPlugins = (options) => {
+    const { trustedPlugins, pluginFileContentsByNormalizedPath } = options;
+    if (trustedPlugins === undefined) {
+        return { ok: true, criteria: {}, criterionConfigurations: {} };
+    }
+    const pathValidation = validateTrustedPluginsPathsStayUnderDirectory(trustedPlugins);
+    if (!pathValidation.ok) {
+        return pathValidation;
+    }
+    const sortedNormalizedPaths = [...pathValidation.normalizedPluginPaths].sort((leftPath, rightPath) => leftPath.localeCompare(rightPath));
+    const criteria = {};
+    const criterionConfigurations = {};
+    for (const normalizedPluginPath of sortedNormalizedPaths) {
+        const yamlText = pluginFileContentsByNormalizedPath.get(normalizedPluginPath);
+        if (yamlText === undefined) {
+            return {
+                ok: false,
+                message: `Missing trusted plugin file body for path ${JSON.stringify(normalizedPluginPath)}.`,
+            };
+        }
+        const yamlParseOutcome = parseTrustedPluginYamlToUnknown(yamlText, normalizedPluginPath);
+        if (!yamlParseOutcome.ok) {
+            return yamlParseOutcome;
+        }
+        const documentOutcome = parseLabelsAnyPluginDocument(yamlParseOutcome.value, normalizedPluginPath);
+        if (!documentOutcome.ok) {
+            return documentOutcome;
+        }
+        const criterionId = trustedPluginCriterionId(normalizedPluginPath);
+        criteria[criterionId] = createLabelsAnyTrustedPluginCriterion({
+            normalizedPluginPath,
+            labelsAnyOptions: documentOutcome.labelsAnyOptions,
+        });
+        criterionConfigurations[criterionId] = {
+            weight: documentOutcome.weight,
+        };
+    }
+    return { ok: true, criteria, criterionConfigurations };
+};
+
+;// CONCATENATED MODULE: ./core/rules/declarativeRule.ts
+/** Prefix for internal criterion ids so `declarative_rules` keys never collide with `criteria` keys. */
+const DECLARATIVE_CRITERION_ID_PREFIX = "declarative:";
+/**
+ * @param declarativeRuleId - Key under `declarative_rules` in config (not including prefix).
+ * @returns Internal criterion id passed to the scorer pipeline.
+ */
+const declarativeCriterionId = (declarativeRuleId) => `${DECLARATIVE_CRITERION_ID_PREFIX}${declarativeRuleId}`;
+const clampScore = (value) => Math.min(100, Math.max(0, value));
+const normalizedLabelSet = (labels) => new Set(labels.map((label) => label.trim().toLowerCase()).filter((label) => label.length > 0));
+const labelsAnyFromOptions = (options) => {
+    if (options === null || options === undefined || typeof options !== "object" || Array.isArray(options)) {
+        return [];
+    }
+    const record = options;
+    const raw = record.labels_any;
+    if (!Array.isArray(raw))
+        return [];
+    const out = [];
+    for (const entry of raw) {
+        if (typeof entry !== "string")
+            continue;
+        const trimmed = entry.trim();
+        if (trimmed.length > 0)
+            out.push(trimmed.toLowerCase());
+    }
+    return out;
+};
+const scoreFromOptions = (options) => {
+    if (options === null || options === undefined || typeof options !== "object" || Array.isArray(options)) {
+        return 0;
+    }
+    const record = options;
+    const rawScore = record.score;
+    if (typeof rawScore !== "number" || !Number.isFinite(rawScore))
+        return 0;
+    return clampScore(rawScore);
+};
+/**
+ * Fixed `labels_any` + `score` interpreter shared by declarative rules and trusted plugin documents (ADR 0001).
+ *
+ * @param context - Hydrated change data.
+ * @param options - Object with optional `labels_any` string array and optional numeric `score` (0–100).
+ */
+const declarativeRule_evaluateLabelsAnyCriterionResult = (context, options) => {
+    const needles = labelsAnyFromOptions(options);
+    const configuredScore = scoreFromOptions(options);
+    if (needles.length === 0) {
+        return {
+            score: 0,
+            justification: "No labels_any entries configured.",
+        };
+    }
+    const prLabels = normalizedLabelSet(context.labels);
+    const matched = needles.filter((needle) => prLabels.has(needle));
+    if (matched.length === 0) {
+        return {
+            score: 0,
+            justification: "None of the configured labels_any values are present on this change.",
+            detail: { labels_any: needles },
+        };
+    }
+    return {
+        score: configuredScore,
+        justification: `Matched label(s): ${matched.join(", ")}.`,
+        detail: { matched_labels: matched, labels_any: needles },
+    };
+};
+const createLabelsAnyDeclarativeCriterion = (declarativeRuleId) => ({
+    name: `Declarative rule: ${declarativeRuleId}`,
+    evaluate: (context, options) => declarativeRule_evaluateLabelsAnyCriterionResult(context, options),
+});
+/**
+ * Builds criterion implementations for every key in `config.declarative_rules`, keyed by {@link declarativeCriterionId}.
+ *
+ * @param config - Parsed scoring config (declarative section optional).
+ * @returns Map entries to merge with built-in criteria before scoring.
+ */
+const buildDeclarativeRuleCriteriaMap = (config) => {
+    const declarativeRules = config.declarative_rules;
+    if (declarativeRules === undefined)
+        return {};
+    const sortedRuleIds = Object.keys(declarativeRules).sort((leftRuleId, rightRuleId) => leftRuleId.localeCompare(rightRuleId));
+    const result = {};
+    for (const declarativeRuleId of sortedRuleIds) {
+        result[declarativeCriterionId(declarativeRuleId)] = createLabelsAnyDeclarativeCriterion(declarativeRuleId);
+    }
+    return result;
+};
+
+;// CONCATENATED MODULE: ./core/scorer.ts
+/**
+ * Pure merge-risk scoring: resolve criteria, normalize weights, apply mutators, map to tier.
+ *
+ * @see docs/designs/lld-merge-risk-classifier.md
+ * @see docs/adrs/0004-pure-criteria-over-hydrated-context.md
+ */
+
+
+
+
+const scorer_clampScore = (scoreValue) => Math.min(100, Math.max(0, scoreValue));
+const thresholdsAreInvalid = (thresholds) => {
+    const { low, medium } = thresholds;
+    return (!Number.isFinite(low) ||
+        !Number.isFinite(medium) ||
+        low < 0 ||
+        medium > 100 ||
+        low >= medium);
+};
+const assertValidThresholds = (thresholds) => {
+    if (thresholdsAreInvalid(thresholds)) {
+        const { low, medium } = thresholds;
+        throw new Error(`Invalid thresholds: expected 0 <= low < medium <= 100, got low=${low}, medium=${medium}`);
+    }
+};
+const tierForScore = (value, thresholds) => {
+    if (value <= thresholds.low)
+        return "LOW";
+    if (value <= thresholds.medium)
+        return "MEDIUM";
+    return "HIGH";
+};
+const sortedCriterionIds = (criteria) => Object.keys(criteria).sort((leftCriterionId, rightCriterionId) => leftCriterionId.localeCompare(rightCriterionId));
+const sortedDeclarativeCriterionIds = (config) => {
+    const declarativeRules = config.declarative_rules;
+    if (declarativeRules === undefined)
+        return [];
+    return Object.keys(declarativeRules)
+        .sort((leftRuleId, rightRuleId) => leftRuleId.localeCompare(rightRuleId))
+        .map((declarativeRuleId) => `${DECLARATIVE_CRITERION_ID_PREFIX}${declarativeRuleId}`);
+};
+const sortedTrustedPluginCriterionIds = (trustedPluginCriteria) => {
+    if (trustedPluginCriteria === undefined)
+        return [];
+    return Object.keys(trustedPluginCriteria).sort((leftCriterionId, rightCriterionId) => leftCriterionId.localeCompare(rightCriterionId));
+};
+/**
+ * Built-in `criteria` keys first (sorted), then declarative rules (sorted), then trusted plugins (sorted),
+ * each with their respective id prefixes.
+ */
+const sortedAllCriterionIds = (config, trustedPluginCriteria) => [
+    ...sortedCriterionIds(config.criteria),
+    ...sortedDeclarativeCriterionIds(config),
+    ...sortedTrustedPluginCriterionIds(trustedPluginCriteria),
+];
+const getCriterionConfiguration = (config, criterionId, trustedPluginCriterionConfigurations) => {
+    if (criterionId.startsWith(DECLARATIVE_CRITERION_ID_PREFIX)) {
+        const declarativeRuleId = criterionId.slice(DECLARATIVE_CRITERION_ID_PREFIX.length);
+        return config.declarative_rules?.[declarativeRuleId];
+    }
+    if (criterionId.startsWith(TRUSTED_PLUGIN_CRITERION_ID_PREFIX)) {
+        return trustedPluginCriterionConfigurations?.[criterionId];
+    }
+    return config.criteria[criterionId];
+};
+const criterionGate = (context, criterionConfiguration, criterionImplementation) => {
+    if (criterionConfiguration === undefined)
+        return "omit";
+    if (criterionConfiguration.enabled === false)
+        return "disabled";
+    if (criterionImplementation === undefined)
+        return "disabled";
+    if (criterionImplementation.isEnabled &&
+        !criterionImplementation.isEnabled(context, criterionConfiguration.options)) {
+        return "disabled";
+    }
+    return "continue";
+};
+const toActiveCriterion = (criterionId, criterionImplementation, criterionConfiguration, evaluated) => ({
+    id: criterionId,
+    criterion: criterionImplementation,
+    configWeight: criterionConfiguration.weight,
+    options: criterionConfiguration.options,
+    evaluated,
+});
+/**
+ * Merges root-level `services` into evaluate options for `service_criticality` (ADR 0009); validated YAML keeps
+ * `services` at the document root only.
+ */
+const mergeOptionsForCriterionEvaluation = (criterionId, config, options) => {
+    if (criterionId !== "service_criticality")
+        return options;
+    if (config.services === undefined)
+        return options;
+    const baseRecord = options !== null && options !== undefined && typeof options === "object" && !Array.isArray(options)
+        ? { ...options }
+        : {};
+    return { ...baseRecord, services: config.services };
+};
+/**
+ * Merges root-level `services` into mutator apply options for `critical_service` (ADR 0009), mirroring
+ * {@link mergeOptionsForCriterionEvaluation} for `service_criticality`.
+ */
+const mergeOptionsForMutatorApplication = (mutatorId, config, options) => {
+    if (mutatorId !== "critical_service")
+        return options;
+    if (config.services === undefined)
+        return options;
+    const baseRecord = options !== null && options !== undefined && typeof options === "object" && !Array.isArray(options)
+        ? { ...options }
+        : {};
+    return { ...baseRecord, services: config.services };
+};
+const buildActiveOrDisabled = (criterionId, context, config, criterionConfiguration, criterionImplementation) => {
+    const evaluateOptions = mergeOptionsForCriterionEvaluation(criterionId, config, criterionConfiguration.options);
+    const evaluated = criterionImplementation.evaluate(context, evaluateOptions);
+    if (evaluated.selfDisable === true)
+        return { type: "disabled", id: criterionId };
+    return {
+        type: "active",
+        active: toActiveCriterion(criterionId, criterionImplementation, criterionConfiguration, evaluated),
+    };
+};
+const resolveOneCriterion = (criterionId, context, config, criterionConfiguration, criterionImplementation) => {
+    const gate = criterionGate(context, criterionConfiguration, criterionImplementation);
+    if (gate === "omit")
+        return { type: "omit" };
+    if (gate === "disabled")
+        return { type: "disabled", id: criterionId };
+    return buildActiveOrDisabled(criterionId, context, config, criterionConfiguration, criterionImplementation);
+};
+const applyCriterionResolution = (criterionResolution, activeCriteria, disabledCriterionIds) => {
+    if (criterionResolution.type === "omit")
+        return;
+    if (criterionResolution.type === "disabled")
+        disabledCriterionIds.push(criterionResolution.id);
+    else
+        activeCriteria.push(criterionResolution.active);
+};
+const accumulateForCriterionId = (criterionId, context, config, criteria, trustedPluginCriterionConfigurations, activeCriteria, disabledCriterionIds) => {
+    const criterionResolution = resolveOneCriterion(criterionId, context, config, getCriterionConfiguration(config, criterionId, trustedPluginCriterionConfigurations), criteria[criterionId]);
+    applyCriterionResolution(criterionResolution, activeCriteria, disabledCriterionIds);
+};
+const collectActiveCriteria = (context, config, criteria, trustedPluginCriteria, trustedPluginCriterionConfigurations) => {
+    const disabledCriteria = [];
+    const actives = [];
+    for (const criterionId of sortedAllCriterionIds(config, trustedPluginCriteria)) {
+        accumulateForCriterionId(criterionId, context, config, criteria, trustedPluginCriterionConfigurations, actives, disabledCriteria);
+    }
+    return { actives, disabledCriteria };
+};
+const emptyScoreResult = (thresholds, disabledCriteria) => ({
+    score: 0,
+    tier: tierForScore(0, thresholds),
+    breakdown: [],
+    mutatorsApplied: [],
+    disabledCriteria,
+});
+const weightedPartsForActive = (activeCriterion, weightSum) => {
+    const { evaluated } = activeCriterion;
+    const raw = scorer_clampScore(evaluated.score);
+    const normalizedWeight = (activeCriterion.configWeight * 100) / weightSum;
+    const weighted = raw * (normalizedWeight / 100);
+    return { raw, normalizedWeight, weighted, evaluated };
+};
+const toBreakdownRow = (activeCriterion, weightedParts) => ({
+    name: activeCriterion.criterion.name,
+    score: weightedParts.raw,
+    weight: weightedParts.normalizedWeight,
+    weighted: weightedParts.weighted,
+    justification: weightedParts.evaluated.justification,
+    detail: weightedParts.evaluated.detail,
+});
+const appendOneBreakdownRow = (activeCriterion, weightSum, breakdown) => {
+    const weightedParts = weightedPartsForActive(activeCriterion, weightSum);
+    breakdown.push(toBreakdownRow(activeCriterion, weightedParts));
+    return weightedParts.weighted;
+};
+const computeBreakdown = (actives, weightSum) => {
+    const breakdown = [];
+    let baseScore = 0;
+    for (const activeCriterion of actives) {
+        baseScore += appendOneBreakdownRow(activeCriterion, weightSum, breakdown);
+    }
+    return { breakdown, baseScore };
+};
+const sortedMutatorEntries = (mutatorConfig) => {
+    const mutatorConfigurationsById = mutatorConfig ?? {};
+    return Object.keys(mutatorConfigurationsById)
+        .sort((leftMutatorId, rightMutatorId) => leftMutatorId.localeCompare(rightMutatorId))
+        .map((mutatorId) => [
+        mutatorId,
+        mutatorConfigurationsById[mutatorId],
+    ]);
+};
+const assertValidMutatorFactor = (mutatorId, factor) => {
+    if (Number.isFinite(factor) && factor > 0)
+        return;
+    throw new Error(`Mutator "${mutatorId}" returned invalid factor: ${String(factor)}`);
+};
+const applyOneMutatorEntry = (mutatorId, mutatorConfiguration, mutatorImplementation, context, runningScore, scoringConfig) => {
+    if (mutatorConfiguration.enabled === false || mutatorImplementation === undefined) {
+        return { nextScore: runningScore, didApply: false };
+    }
+    const mergedOptions = mergeOptionsForMutatorApplication(mutatorId, scoringConfig, mutatorConfiguration.options);
+    const factor = mutatorImplementation.apply(context, mergedOptions);
+    if (factor === null)
+        return { nextScore: runningScore, didApply: false };
+    assertValidMutatorFactor(mutatorId, factor);
+    return { nextScore: scorer_clampScore(runningScore * factor), didApply: true };
+};
+const foldOneMutatorEntry = (mutatorId, mutatorConfiguration, mutators, context, runningScore, appliedMutatorIds, scoringConfig) => {
+    const mutatorImplementation = mutators[mutatorId];
+    const { nextScore, didApply } = applyOneMutatorEntry(mutatorId, mutatorConfiguration, mutatorImplementation, context, runningScore, scoringConfig);
+    if (didApply)
+        appliedMutatorIds.push(mutatorId);
+    return nextScore;
+};
+const applyMutators = (context, baseScore, scoringConfig, mutators) => {
+    let runningScore = scorer_clampScore(baseScore);
+    const mutatorsApplied = [];
+    const mutatorConfig = scoringConfig.mutators;
+    for (const [mutatorId, mutatorConfiguration] of sortedMutatorEntries(mutatorConfig)) {
+        runningScore = foldOneMutatorEntry(mutatorId, mutatorConfiguration, mutators, context, runningScore, mutatorsApplied, scoringConfig);
+    }
+    mutatorsApplied.sort((leftMutatorId, rightMutatorId) => leftMutatorId.localeCompare(rightMutatorId));
+    return { score: runningScore, mutatorsApplied };
+};
+const requirePositiveWeightSum = (weightSum) => {
+    if (weightSum > 0)
+        return;
+    throw new Error("Sum of active criterion weights must be positive");
+};
+const scoreActiveSubset = (context, actives, config, mutators) => {
+    const weightSum = actives.reduce((runningWeightSum, activeCriterion) => runningWeightSum + activeCriterion.configWeight, 0);
+    requirePositiveWeightSum(weightSum);
+    actives.sort((leftActive, rightActive) => leftActive.id.localeCompare(rightActive.id));
+    const { breakdown, baseScore } = computeBreakdown(actives, weightSum);
+    const mutatorPass = applyMutators(context, baseScore, config, mutators);
+    return {
+        breakdown,
+        score: mutatorPass.score,
+        mutatorsApplied: mutatorPass.mutatorsApplied,
+    };
+};
+const finalizeScoreResult = (partialScore, thresholds, disabledCriteria) => ({
+    score: partialScore.score,
+    tier: tierForScore(partialScore.score, thresholds),
+    breakdown: partialScore.breakdown,
+    mutatorsApplied: partialScore.mutatorsApplied,
+    disabledCriteria,
+});
+/**
+ * Score a change using the built-in criterion and mutator registries (`criteria` / `mutators` grow per slice).
+ *
+ * @param context - Platform-neutral change data produced by an adapter.
+ * @param config - Weights, thresholds, and mutator ids (full schema validation comes in a later slice).
+ * @param trustedPluginsArtifacts - Optional trusted plugins produced by {@link import("./plugins/loadTrustedPlugins.js").loadTrustedPlugins} (base-branch file bodies); omitted when not used.
+ * @returns Aggregated score, tier, per-criterion breakdown, and mutator ids that ran.
+ */
+const score = (context, config, trustedPluginsArtifacts) => scoreWithRegistries(context, config, builtInCriteria, builtInMutators, trustedPluginsArtifacts);
+/**
+ * Score with explicit registries (used by tests and adapter wiring).
+ *
+ * Declarative rules from `config.declarative_rules` are always merged into the criterion registry
+ * (keys `declarative:<ruleId>`) in addition to the `criteria` argument. Trusted plugins from
+ * `trustedPluginsArtifacts` merge after declarative (keys `plugin:<normalizedPath>`).
+ *
+ * @param context - Platform-neutral change data.
+ * @param config - Weights and thresholds.
+ * @param criteria - Built-in (or test) implementations keyed like `config.criteria`.
+ * @param mutators - Implementations keyed like `config.mutators`.
+ * @param trustedPluginsArtifacts - Optional criteria + configurations from {@link import("./plugins/loadTrustedPlugins.js").loadTrustedPlugins}.
+ * @returns Same shape as {@link score}.
+ */
+const scoreWithRegistries = (context, config, criteria, mutators, trustedPluginsArtifacts) => {
+    assertValidThresholds(config.thresholds);
+    const mergedCriteria = {
+        ...criteria,
+        ...buildDeclarativeRuleCriteriaMap(config),
+    };
+    if (trustedPluginsArtifacts !== undefined) {
+        Object.assign(mergedCriteria, trustedPluginsArtifacts.criteria);
+    }
+    const { actives, disabledCriteria } = collectActiveCriteria(context, config, mergedCriteria, trustedPluginsArtifacts?.criteria, trustedPluginsArtifacts?.criterionConfigurations);
+    if (actives.length === 0)
+        return emptyScoreResult(config.thresholds, disabledCriteria);
+    return finalizeScoreResult(scoreActiveSubset(context, actives, config, mutators), config.thresholds, disabledCriteria);
+};
+
+// EXTERNAL MODULE: ./node_modules/ajv/dist/ajv.js
+var ajv = __nccwpck_require__(2463);
 ;// CONCATENATED MODULE: ./schema/merge-risk-config.schema.json
 const merge_risk_config_schema_namespaceObject = /*#__PURE__*/JSON.parse('{"$schema":"http://json-schema.org/draft-07/schema#","$id":"https://brindle.dev/schema/merge-risk-config.schema.json","title":"Merge risk scoring config (subset)","description":"YAML shape under .merge-risk.yml consumed by the scorer. Additional top-level keys are allowed for forward compatibility.","definitions":{"filePatternsOptions":{"type":"object","additionalProperties":false,"properties":{"patterns":{"type":"array","items":{"type":"object","required":["glob","score"],"additionalProperties":false,"properties":{"glob":{"type":"string","minLength":1},"score":{"type":"number","minimum":0,"maximum":100}}}},"aggregation":{"type":"string","enum":["max"]}}},"authorSeniorityOptions":{"type":"object","additionalProperties":false,"properties":{"rules":{"type":"array","items":{"type":"object","required":["login","score"],"additionalProperties":false,"properties":{"login":{"type":"string","minLength":1},"score":{"type":"number","minimum":0,"maximum":100}}}},"default_score":{"type":"number","minimum":0,"maximum":100},"aggregation":{"type":"string","enum":["max"]}}},"serviceCatalogEntry":{"type":"object","additionalProperties":false,"required":["globs"],"properties":{"globs":{"type":"array","minItems":1,"items":{"type":"string","minLength":1}}}},"serviceCriticalityOptions":{"type":"object","additionalProperties":false,"properties":{"aggregation":{"type":"string","enum":["max"]},"scores":{"type":"object","additionalProperties":{"type":"number","minimum":0,"maximum":100}},"default_score":{"type":"number","minimum":0,"maximum":100}}},"branchAgeOptions":{"type":"object","additionalProperties":false,"properties":{"max_age_hours_for_cap":{"type":"number","exclusiveMinimum":0}}},"juniorAuthorMutatorOptions":{"type":"object","additionalProperties":false,"required":["logins","multiplier"],"properties":{"logins":{"type":"array","minItems":1,"items":{"type":"string","minLength":1}},"multiplier":{"type":"number","exclusiveMinimum":1}}},"criticalServiceMutatorOptions":{"type":"object","additionalProperties":false,"required":["service_ids","multiplier"],"properties":{"service_ids":{"type":"array","minItems":1,"items":{"type":"string","minLength":1}},"multiplier":{"type":"number","exclusiveMinimum":1}}},"declarativeRulesEntry":{"type":"object","required":["weight"],"additionalProperties":false,"properties":{"weight":{"type":"number"},"enabled":{"type":"boolean"},"options":{"type":"object","additionalProperties":false,"properties":{"labels_any":{"type":"array","items":{"type":"string","minLength":1}},"score":{"type":"number","minimum":0,"maximum":100}}}}}},"type":"object","required":["thresholds","criteria"],"additionalProperties":true,"properties":{"thresholds":{"type":"object","required":["low","medium"],"additionalProperties":true,"properties":{"low":{"type":"number"},"medium":{"type":"number"}}},"criteria":{"type":"object","additionalProperties":{"type":"object","required":["weight"],"additionalProperties":true,"properties":{"enabled":{"type":"boolean"},"weight":{"type":"number"},"options":{}}}},"mutators":{"type":"object","additionalProperties":{"type":"object","additionalProperties":true,"properties":{"enabled":{"type":"boolean"},"options":{}}}},"auto_merge":{"type":"object","additionalProperties":true,"properties":{"enabled":{"type":"boolean"},"tier":{"type":"string"},"method":{"type":"string"}}},"services":{"type":"object","additionalProperties":{"$ref":"#/definitions/serviceCatalogEntry"}},"declarative_rules":{"type":"object","additionalProperties":{"$ref":"#/definitions/declarativeRulesEntry"}}},"allOf":[{"if":{"properties":{"criteria":{"type":"object","required":["file_patterns"]}},"required":["criteria"]},"then":{"properties":{"criteria":{"type":"object","properties":{"file_patterns":{"type":"object","required":["weight"],"additionalProperties":true,"properties":{"weight":{"type":"number"},"enabled":{"type":"boolean"},"options":{"$ref":"#/definitions/filePatternsOptions"}}}}}}}},{"if":{"properties":{"criteria":{"type":"object","required":["author_seniority"]}},"required":["criteria"]},"then":{"properties":{"criteria":{"type":"object","properties":{"author_seniority":{"type":"object","required":["weight"],"additionalProperties":true,"properties":{"weight":{"type":"number"},"enabled":{"type":"boolean"},"options":{"$ref":"#/definitions/authorSeniorityOptions"}}}}}}}},{"if":{"properties":{"criteria":{"type":"object","required":["service_criticality"]}},"required":["criteria"]},"then":{"properties":{"criteria":{"type":"object","properties":{"service_criticality":{"type":"object","required":["weight"],"additionalProperties":true,"properties":{"weight":{"type":"number"},"enabled":{"type":"boolean"},"options":{"$ref":"#/definitions/serviceCriticalityOptions"}}}}}}}},{"if":{"properties":{"criteria":{"type":"object","required":["branch_age"]}},"required":["criteria"]},"then":{"properties":{"criteria":{"type":"object","properties":{"branch_age":{"type":"object","required":["weight"],"additionalProperties":true,"properties":{"weight":{"type":"number"},"enabled":{"type":"boolean"},"options":{"$ref":"#/definitions/branchAgeOptions"}}}}}}}},{"if":{"properties":{"mutators":{"type":"object","required":["junior_author"]}},"required":["mutators"]},"then":{"properties":{"mutators":{"type":"object","properties":{"junior_author":{"type":"object","additionalProperties":false,"properties":{"enabled":{"type":"boolean"},"options":{"$ref":"#/definitions/juniorAuthorMutatorOptions"}},"required":["options"]}}}}}},{"if":{"properties":{"mutators":{"type":"object","required":["critical_service"]}},"required":["mutators"]},"then":{"properties":{"mutators":{"type":"object","properties":{"critical_service":{"type":"object","additionalProperties":false,"properties":{"enabled":{"type":"boolean"},"options":{"$ref":"#/definitions/criticalServiceMutatorOptions"}},"required":["options"]}}}}}}]}');
 ;// CONCATENATED MODULE: ./core/config.ts
