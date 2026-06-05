@@ -932,6 +932,78 @@ describe("parseMergeRiskAutoMergeSection", () => {
   });
 });
 
+describe("declarative_rules in merge-risk YAML", () => {
+  const baseWithDiffSize = `
+thresholds:
+  low: 30
+  medium: 60
+criteria:
+  diff_size:
+    weight: 100
+    options:
+      max_lines_for_cap: 200
+`;
+
+  it("accepts declarative_rules with labels_any and score", () => {
+    const yamlText = `
+${baseWithDiffSize}
+declarative_rules:
+  label_risk:
+    weight: 10
+    options:
+      labels_any:
+        - database
+        - security
+      score: 40
+`;
+    const scoringConfig = loadScoringConfigFromMergeRiskYaml(yamlText);
+    expect(scoringConfig.declarative_rules?.label_risk?.weight).toBe(10);
+    expect(scoringConfig.declarative_rules?.label_risk?.options).toEqual({
+      labels_any: ["database", "security"],
+      score: 40,
+    });
+  });
+
+  it("throws when declarative rule omits weight", () => {
+    const yamlText = `
+${baseWithDiffSize}
+declarative_rules:
+  bad:
+    options:
+      labels_any: [x]
+      score: 1
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(/config failed schema validation/i);
+  });
+
+  it("throws when declarative score is above 100", () => {
+    const yamlText = `
+${baseWithDiffSize}
+declarative_rules:
+  bad:
+    weight: 1
+    options:
+      labels_any: [a]
+      score: 101
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(/config failed schema validation/i);
+  });
+
+  it("throws when declarative_rules entry has unknown top-level key", () => {
+    const yamlText = `
+${baseWithDiffSize}
+declarative_rules:
+  bad:
+    weight: 1
+    extra_key: true
+    options:
+      labels_any: [a]
+      score: 1
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(/config failed schema validation/i);
+  });
+});
+
 describe("assertValidScoringConfig", () => {
   it("rejects a plain array", () => {
     expect(() => assertValidScoringConfig([])).toThrow(MergeRiskConfigError);
