@@ -35755,7 +35755,7 @@ module.exports = {
 __nccwpck_require__.a(module, async (__webpack_handle_async_dependencies__, __webpack_async_result__) => { try {
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0__ = __nccwpck_require__(7484);
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__nccwpck_require__.n(_actions_core__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(4485);
+/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(8725);
 /**
  * GitHub Actions entry: scores the pull request from base-branch config and publishes results.
  *
@@ -35776,7 +35776,7 @@ __webpack_async_result__();
 
 /***/ }),
 
-/***/ 4485:
+/***/ 8725:
 /***/ ((__unused_webpack_module, __webpack_exports__, __nccwpck_require__) => {
 
 
@@ -39991,6 +39991,15 @@ const parseIstanbulCoverageJson = (jsonText) => {
     };
 };
 
+;// CONCATENATED MODULE: ./core/coverage/adapter.ts
+
+/**
+ * @param options.format - Which parser to use (Istanbul `coverage-final` JSON only for now).
+ * @param options.text - Raw file body from the platform (UTF-8).
+ * @returns Neutral statement aggregates for `test_coverage`.
+ */
+const parseCoverageArtifactText = (options) => parseIstanbulCoverageJson(options.text);
+
 ;// CONCATENATED MODULE: ./adapters/github/mapGitHubPullToPrContext.ts
 const changedFilesFromSnapshots = (fileSnapshots) => fileSnapshots.map((fileSnapshot) => ({
     path: fileSnapshot.path,
@@ -40047,6 +40056,7 @@ const mapGitHubPullAndFilesToPRContext = (repositoryOwner, repositoryName, pullR
 
 
 
+
 const mapGithubNativeAutoMergeFailureToOutcome = (cause) => {
     if (cause instanceof dist_bundle_GraphqlResponseError) {
         return "setting_off";
@@ -40093,7 +40103,10 @@ class GitHubAdapter {
             });
             if (rawCoverageJson !== null && rawCoverageJson.trim() !== "") {
                 try {
-                    coverageReport = parseIstanbulCoverageJson(rawCoverageJson);
+                    coverageReport = parseCoverageArtifactText({
+                        format: "istanbul",
+                        text: rawCoverageJson,
+                    });
                 }
                 catch (cause) {
                     if (!(cause instanceof IstanbulCoverageParseError)) {
@@ -45875,9 +45888,12 @@ const buildRiskReport = (scoreResult, reportOptions) => ({
  *
  * Pipeline-only types (`scorer.types.ts`, per-criterion `*.types.ts`) stay out of the barrel; **`BuildRiskReportOptions`** is exported for report policy wiring.
  *
+ * - **Coverage** — `parseCoverageArtifactText` / Istanbul helpers under `./coverage/` (see `./coverage/adapter.js`).
+ *
  * @see docs/designs/lld-merge-risk-classifier.md
  */
 const BRINDLE_VERSION = "0.0.0";
+
 
 
 
