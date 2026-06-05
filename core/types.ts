@@ -136,6 +136,13 @@ export interface ScoringConfig {
   criteria: Record<string, CriterionConfiguration>;
   mutators?: Record<string, MutatorConfiguration>;
   /**
+   * Optional declarative rules (base-branch YAML only; ADR 0001). Each key is a rule id; internal scorer ids are
+   * prefixed `declarative:` so they never collide with {@link criteria} keys.
+   *
+   * @see docs/designs/lld-merge-risk-classifier.md
+   */
+  declarative_rules?: Record<string, CriterionConfiguration>;
+  /**
    * Optional catalog of logical services (repo-relative globs). Consumed by `service_criticality` (ADR 0009).
    * Present only when declared in base-branch `.merge-risk.yml`.
    */

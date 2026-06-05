@@ -6,6 +6,10 @@
  */
 import { builtInCriteria } from "./criteria/builtins.js";
 import { builtInMutators } from "./mutators/builtins.js";
+import {
+  buildDeclarativeRuleCriteriaMap,
+  DECLARATIVE_CRITERION_ID_PREFIX,
+} from "./rules/declarativeRule.js";
 import type {
   Criterion,
   CriterionBreakdown,
@@ -61,6 +65,31 @@ const sortedCriterionIds = (criteria: ScoringConfig["criteria"]): string[] =>
   Object.keys(criteria).sort((leftCriterionId, rightCriterionId) =>
     leftCriterionId.localeCompare(rightCriterionId),
   );
+
+const sortedDeclarativeCriterionIds = (config: ScoringConfig): string[] => {
+  const declarativeRules = config.declarative_rules;
+  if (declarativeRules === undefined) return [];
+  return Object.keys(declarativeRules)
+    .sort((leftRuleId, rightRuleId) => leftRuleId.localeCompare(rightRuleId))
+    .map((declarativeRuleId) => `${DECLARATIVE_CRITERION_ID_PREFIX}${declarativeRuleId}`);
+};
+
+/** Built-in `criteria` keys first (sorted), then declarative rules (sorted), each as `declarative:<ruleId>`. */
+const sortedAllCriterionIds = (config: ScoringConfig): string[] => [
+  ...sortedCriterionIds(config.criteria),
+  ...sortedDeclarativeCriterionIds(config),
+];
+
+const getCriterionConfiguration = (
+  config: ScoringConfig,
+  criterionId: string,
+): CriterionConfiguration | undefined => {
+  if (criterionId.startsWith(DECLARATIVE_CRITERION_ID_PREFIX)) {
+    const declarativeRuleId = criterionId.slice(DECLARATIVE_CRITERION_ID_PREFIX.length);
+    return config.declarative_rules?.[declarativeRuleId];
+  }
+  return config.criteria[criterionId];
+};
 
 const criterionGate = (
   context: PRContext,
@@ -194,7 +223,7 @@ const accumulateForCriterionId = (
     criterionId,
     context,
     config,
-    config.criteria[criterionId],
+    getCriterionConfiguration(config, criterionId),
     criteria[criterionId],
   );
   applyCriterionResolution(criterionResolution, activeCriteria, disabledCriterionIds);
@@ -207,7 +236,7 @@ const collectActiveCriteria = (
 ): { actives: ActiveCriterion[]; disabledCriteria: string[] } => {
   const disabledCriteria: string[] = [];
   const actives: ActiveCriterion[] = [];
-  for (const criterionId of sortedCriterionIds(config.criteria)) {
+  for (const criterionId of sortedAllCriterionIds(config)) {
     accumulateForCriterionId(criterionId, context, config, criteria, actives, disabledCriteria);
   }
   return { actives, disabledCriteria };
@@ -409,9 +438,12 @@ export const score = (context: PRContext, config: ScoringConfig): ScoreResult =>
 /**
  * Score with explicit registries (used by tests and future trusted-plugin wiring).
  *
+ * Declarative rules from `config.declarative_rules` are always merged into the criterion registry
+ * (keys `declarative:<ruleId>`) in addition to the `criteria` argument.
+ *
  * @param context - Platform-neutral change data.
  * @param config - Weights and thresholds.
- * @param criteria - Implementations keyed like `config.criteria`.
+ * @param criteria - Built-in (or test) implementations keyed like `config.criteria`.
  * @param mutators - Implementations keyed like `config.mutators`.
  * @returns Same shape as {@link score}.
  */
@@ -422,7 +454,11 @@ export const scoreWithRegistries = (
   mutators: Record<string, Mutator>,
 ): ScoreResult => {
   assertValidThresholds(config.thresholds);
-  const { actives, disabledCriteria } = collectActiveCriteria(context, config, criteria);
+  const mergedCriteria: Record<string, Criterion> = {
+    ...criteria,
+    ...buildDeclarativeRuleCriteriaMap(config),
+  };
+  const { actives, disabledCriteria } = collectActiveCriteria(context, config, mergedCriteria);
   if (actives.length === 0) return emptyScoreResult(config.thresholds, disabledCriteria);
   return finalizeScoreResult(
     scoreActiveSubset(context, actives, config, mutators),
