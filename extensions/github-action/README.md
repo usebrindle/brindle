@@ -51,6 +51,10 @@ The Contents API always reads **`merge_risk_file_path` from the pull request bas
 
 After `.merge-risk.yml` exists on the default branch, omit **`skip_when_merge_risk_missing_on_base`** or set it to **`false`** so a missing or mistyped config path fails the job again.
 
+### PR comment toggle
+
+- **`post_risk_summary_comment`** (default **true**): when **true**, the action posts the same markdown summary as a **pull request comment** after publishing the Check Run. When **false**, only the Check Run is created (no `issues.createComment` call); use this when comments are noisy or another step publishes summaries.
+
 ### Check conclusion policy (ADR 0003)
 
 - **`informational_check_conclusion`** (default **true**): the Check Run conclusion is always **`success`** so the workflow job and required checks stay green; MEDIUM/HIGH remain visible in the check summary and PR comment.
