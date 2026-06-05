@@ -4,7 +4,7 @@
  * @see docs/adrs/0001-no-pr-head-execution.md
  * @see docs/adrs/0002-native-auto-merge.md
  */
-import { getBooleanInput, getInput, info } from "@actions/core";
+import { getBooleanInput, getInput, info, setOutput } from "@actions/core";
 import { readFile } from "node:fs/promises";
 
 import { Octokit } from "@octokit/rest";
@@ -21,7 +21,31 @@ import { loadTrustedPlugins } from "../../core/plugins/loadTrustedPlugins.js";
 import type { TrustedPluginsScoringArtifacts } from "../../core/plugins/loadTrustedPlugins.js";
 import { validateTrustedPluginsPathsStayUnderDirectory } from "../../core/plugins/trustedPluginPaths.js";
 import type { BuildRiskReportOptions } from "../../core/report.types.js";
-import type { MergeRiskAutoMergeConfig, TrustedPluginsConfiguration } from "../../core/types.js";
+import type {
+  MergeRiskAutoMergeConfig,
+  RiskReport,
+  ScoreResult,
+  TrustedPluginsConfiguration,
+} from "../../core/types.js";
+
+/**
+ * GitHub Actions job output names (must match `outputs` in {@link ./action.yml}).
+ *
+ * @see docs/designs/lld-merge-risk-classifier.md
+ */
+export const mergeRiskGithubActionOutputKeys = {
+  riskTier: "risk_tier",
+  riskScore: "risk_score",
+  criteriaBreakdown: "criteria_breakdown",
+  autoMergeOutcome: "auto_merge_outcome",
+} as const;
+
+const writeMergeRiskGithubActionJobOutputs = (scoreResult: ScoreResult, riskReport: RiskReport): void => {
+  setOutput(mergeRiskGithubActionOutputKeys.riskTier, scoreResult.tier);
+  setOutput(mergeRiskGithubActionOutputKeys.riskScore, String(scoreResult.score));
+  setOutput(mergeRiskGithubActionOutputKeys.criteriaBreakdown, JSON.stringify(scoreResult.breakdown));
+  setOutput(mergeRiskGithubActionOutputKeys.autoMergeOutcome, riskReport.autoMergeOutcome);
+};
 
 const buildMergeRiskReportOptionsFromGithubActionInputs = (
   autoMerge: MergeRiskAutoMergeConfig | undefined,
@@ -339,6 +363,7 @@ export const runMergeRiskGithubAction = async (): Promise<void> => {
       failOnHigh,
     }),
   );
+  writeMergeRiskGithubActionJobOutputs(scoreResult, riskReport);
   await githubAdapter.writeResult(riskReport);
 
   if (riskReport.autoMergeOutcome === "eligible") {
