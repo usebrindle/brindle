@@ -110,6 +110,24 @@ const mergeOptionsForCriterionEvaluation = (
   return { ...baseRecord, services: config.services };
 };
 
+/**
+ * Merges root-level `services` into mutator apply options for `critical_service` (ADR 0009), mirroring
+ * {@link mergeOptionsForCriterionEvaluation} for `service_criticality`.
+ */
+const mergeOptionsForMutatorApplication = (
+  mutatorId: string,
+  config: ScoringConfig,
+  options: unknown,
+): unknown => {
+  if (mutatorId !== "critical_service") return options;
+  if (config.services === undefined) return options;
+  const baseRecord =
+    options !== null && options !== undefined && typeof options === "object" && !Array.isArray(options)
+      ? { ...(options as Record<string, unknown>) }
+      : {};
+  return { ...baseRecord, services: config.services };
+};
+
 const buildActiveOrDisabled = (
   criterionId: string,
   context: PRContext,
@@ -276,11 +294,17 @@ const applyOneMutatorEntry = (
   mutatorImplementation: Mutator | undefined,
   context: PRContext,
   runningScore: number,
+  scoringConfig: ScoringConfig,
 ): MutatorApplyResult => {
   if (mutatorConfiguration.enabled === false || mutatorImplementation === undefined) {
     return { nextScore: runningScore, didApply: false };
   }
-  const factor = mutatorImplementation.apply(context, mutatorConfiguration.options);
+  const mergedOptions = mergeOptionsForMutatorApplication(
+    mutatorId,
+    scoringConfig,
+    mutatorConfiguration.options,
+  );
+  const factor = mutatorImplementation.apply(context, mergedOptions);
   if (factor === null) return { nextScore: runningScore, didApply: false };
   assertValidMutatorFactor(mutatorId, factor);
   return { nextScore: clampScore(runningScore * factor), didApply: true };
@@ -293,6 +317,7 @@ const foldOneMutatorEntry = (
   context: PRContext,
   runningScore: number,
   appliedMutatorIds: string[],
+  scoringConfig: ScoringConfig,
 ): number => {
   const mutatorImplementation = mutators[mutatorId];
   const { nextScore, didApply } = applyOneMutatorEntry(
@@ -301,6 +326,7 @@ const foldOneMutatorEntry = (
     mutatorImplementation,
     context,
     runningScore,
+    scoringConfig,
   );
   if (didApply) appliedMutatorIds.push(mutatorId);
   return nextScore;
@@ -309,11 +335,12 @@ const foldOneMutatorEntry = (
 const applyMutators = (
   context: PRContext,
   baseScore: number,
-  mutatorConfig: ScoringConfig["mutators"],
+  scoringConfig: ScoringConfig,
   mutators: Record<string, Mutator>,
 ): { score: number; mutatorsApplied: string[] } => {
   let runningScore = clampScore(baseScore);
   const mutatorsApplied: string[] = [];
+  const mutatorConfig = scoringConfig.mutators;
   for (const [mutatorId, mutatorConfiguration] of sortedMutatorEntries(mutatorConfig)) {
     runningScore = foldOneMutatorEntry(
       mutatorId,
@@ -322,6 +349,7 @@ const applyMutators = (
       context,
       runningScore,
       mutatorsApplied,
+      scoringConfig,
     );
   }
   mutatorsApplied.sort((leftMutatorId, rightMutatorId) =>
@@ -348,7 +376,7 @@ const scoreActiveSubset = (
   requirePositiveWeightSum(weightSum);
   actives.sort((leftActive, rightActive) => leftActive.id.localeCompare(rightActive.id));
   const { breakdown, baseScore } = computeBreakdown(actives, weightSum);
-  const mutatorPass = applyMutators(context, baseScore, config.mutators, mutators);
+  const mutatorPass = applyMutators(context, baseScore, config, mutators);
   return {
     breakdown,
     score: mutatorPass.score,

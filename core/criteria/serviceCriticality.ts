@@ -7,17 +7,14 @@
  * @see docs/adrs/0009-service-criticality-criterion-config.md
  * @see docs/designs/lld-merge-risk-classifier.md
  */
-import micromatch from "micromatch";
+import type { ServiceCriticalityEvaluateInput, ServicesCatalog } from "./serviceCriticality.types.js";
+import {
+  anyChangedPathMatchesAnyGlob,
+  sortedServiceIdsTouchingChangedPaths,
+  trimmedGlobPatternsFromEntry,
+} from "../serviceCatalog/globMatchForServices.js";
 
 import type { Criterion, CriterionResult, PRContext } from "../types.js";
-
-import type {
-  ServiceCatalogEntry,
-  ServiceCriticalityEvaluateInput,
-  ServicesCatalog,
-} from "./serviceCriticality.types.js";
-
-const micromatchOptions = { dot: true } as const;
 
 const clampScoreValue = (value: number): number => Math.min(100, Math.max(0, value));
 
@@ -67,29 +64,6 @@ const parseEvaluateInput = (options: unknown): ServiceCriticalityEvaluateInput =
   }
   return input;
 };
-
-const pathMatchesGlob = (pathValue: string, globPattern: string): boolean =>
-  micromatch.isMatch(pathValue, globPattern, micromatchOptions);
-
-const trimmedGlobPatternsFromEntry = (entry: ServiceCatalogEntry | undefined): string[] => {
-  if (entry === undefined || !Array.isArray(entry.globs)) {
-    return [];
-  }
-  return entry.globs
-    .filter((globPattern): globPattern is string => typeof globPattern === "string" && globPattern.trim() !== "")
-    .map((globPattern) => globPattern.trim());
-};
-
-const anyChangedPathMatchesAnyGlob = (changedPaths: string[], globPatterns: string[]): boolean =>
-  changedPaths.some((pathValue) => globPatterns.some((globPattern) => pathMatchesGlob(pathValue, globPattern)));
-
-const sortedServiceIdsTouchingPaths = (changedPaths: string[], catalog: ServicesCatalog): string[] =>
-  Object.keys(catalog)
-    .sort((leftId, rightId) => leftId.localeCompare(rightId))
-    .filter((serviceId) => {
-      const globPatterns = trimmedGlobPatternsFromEntry(catalog[serviceId]);
-      return globPatterns.length > 0 && anyChangedPathMatchesAnyGlob(changedPaths, globPatterns);
-    });
 
 /** Human-oriented catalog line for Notes (ids + globs). */
 const formatConfiguredServicesForNotes = (catalog: ServicesCatalog): string =>
@@ -244,7 +218,7 @@ const evaluateServiceCriticality = (context: PRContext, options: unknown): Crite
     return criterionResultDefaultOnly(defaultRaw, "No services catalog configured; using default service criticality score.");
   }
 
-  const touchedServiceIds = sortedServiceIdsTouchingPaths(changedPaths, catalog);
+  const touchedServiceIds = sortedServiceIdsTouchingChangedPaths(changedPaths, catalog);
   if (touchedServiceIds.length === 0) {
     return criterionResultDefaultOnly(
       defaultRaw,

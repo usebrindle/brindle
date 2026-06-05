@@ -1,6 +1,6 @@
 ---
 name: Mutator vertical slices
-overview: Establish a small shared mutator primitive (conditional apply + validated multiplier), then ship `junior_author` and `critical_service` as thin domain modules on top—each in three shallow vertical slices (core+tests+dist, schema+README, optional dogfood+LLD), mirroring the author-seniority plan. Branches chain from `main` after each merge. **Junior author stack (slices 1–3): done on branch `slice/junior-author-dogfood-lld`** (rebase onto `origin/main` when SSH/network allows so PR stays current).
+overview: Establish a small shared mutator primitive (conditional apply + validated multiplier), then ship `junior_author` and `critical_service` as thin domain modules on top—each in three shallow vertical slices (core+tests+dist, schema+README, optional dogfood+LLD), mirroring the author-seniority plan. Branches chain from `main` after each merge. **Junior author (slices 1–3):** `slice/junior-author-dogfood-lld`. **`critical_service` slice 4 (core):** `slice/critical-service-mutator` — rebase onto latest `origin/main` after junior stack merges when SSH allows.
 todos:
   - id: branch-junior-author-core
     content: "From `main`: branch `slice/junior-author-mutator` — add `core/mutators/mutatorPrimitives.ts` (shared factory + multiplier parsing), `juniorAuthor.ts` + `juniorAuthor.types.ts` built on it, register in `builtins.ts`, tests for primitives + mutator, `npm run build:github-action` + commit `extensions/github-action/dist/`."
@@ -13,7 +13,7 @@ todos:
     status: completed
   - id: branch-critical-service-core
     content: "After junior_author stack merges: `slice/critical-service-mutator` — scorer `mergeOptionsForMutatorApplication` for `critical_service`; `criticalService.ts` + types using same `mutatorPrimitives` factory; optional tiny shared path→service matcher extracted from `serviceCriticality` if that avoids duplication without circular imports; builtins, tests, dist."
-    status: pending
+    status: completed
   - id: branch-critical-service-schema
     content: "`slice/critical-service-schema-docs` — schema for `mutators.critical_service.options`, config tests, README; dist if needed."
     status: pending
@@ -29,11 +29,17 @@ isProject: false
 
 - [`core/types.ts`](core/types.ts): `Mutator.apply(context, options) => number | null` (positive multiplier, or skip).
 - [`core/scorer.ts`](core/scorer.ts): applies mutators after weighted sum; sorts by id for deterministic `mutatorsApplied`; [`scoreWithRegistries`](core/scorer.ts) exists for tests.
-- [`core/mutators/builtins.ts`](core/mutators/builtins.ts): registers shipped mutators (**`junior_author`** today). Next: **`critical_service`**.
+- [`core/mutators/builtins.ts`](core/mutators/builtins.ts): registers **`junior_author`** and **`critical_service`**. Shared glob logic for services lives in [`core/serviceCatalog/globMatchForServices.ts`](core/serviceCatalog/globMatchForServices.ts) (used by `service_criticality` and `critical_service`).
 - [`schema/merge-risk-config.schema.json`](schema/merge-risk-config.schema.json): conditional validation for **`mutators.junior_author.options`**; other mutator keys remain permissive until their slices land.
 - CI: any slice that touches TS imports must run `npm run build:github-action` and commit [`extensions/github-action/dist/`](extensions/github-action/dist/) so [`ci.yml`](.github/workflows/ci.yml) ncc drift check passes.
 
 **Sync:** If `git pull origin main` fails locally (e.g. SSH), rebase this work onto latest `main` before opening or merging PRs so CI and history match the remote.
+
+## Progress checklist
+
+**`junior_author`:** [x] slice 1 mutator [x] slice 2 schema [x] slice 3 dogfood/LLD
+
+**`critical_service`:** [x] slice 4 core (`slice/critical-service-mutator`) — [ ] slice 5 schema/docs — [ ] slice 6 dogfood/LLD
 
 ## Shared mutator pattern (DRY, one way to build “multiplier if condition”)
 
@@ -114,7 +120,7 @@ flowchart LR
 
 **Branches (sequential from `main` after mutator 1 work is merged):**
 
-4. **`slice/critical-service-mutator`**
+4. **`slice/critical-service-mutator`** — **Done** (scorer merge for `services` on `critical_service`, `criticalService.ts` + types, `globMatchForServices` extract, tests, `dist/`).
 5. **`slice/critical-service-schema-docs`**
 6. **`slice/critical-service-dogfood-lld`** — Dogfood only makes sense if [`.merge-risk.yml`](.merge-risk.yml) already has `services` + you want a mutator line; otherwise LLD-only slice 6 is still valid.
 
