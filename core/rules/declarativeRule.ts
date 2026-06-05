@@ -47,13 +47,19 @@ const scoreFromOptions = (options: unknown): number => {
   return clampScore(rawScore);
 };
 
-const evaluateLabelsAny = (context: PRContext, options: unknown): CriterionResult => {
+/**
+ * Fixed `labels_any` + `score` interpreter shared by declarative rules and trusted plugin documents (ADR 0001).
+ *
+ * @param context - Hydrated change data.
+ * @param options - Object with optional `labels_any` string array and optional numeric `score` (0–100).
+ */
+export const evaluateLabelsAnyCriterionResult = (context: PRContext, options: unknown): CriterionResult => {
   const needles = labelsAnyFromOptions(options);
   const configuredScore = scoreFromOptions(options);
   if (needles.length === 0) {
     return {
       score: 0,
-      justification: "No labels_any entries configured for this declarative rule.",
+      justification: "No labels_any entries configured.",
     };
   }
   const prLabels = normalizedLabelSet(context.labels);
@@ -67,7 +73,7 @@ const evaluateLabelsAny = (context: PRContext, options: unknown): CriterionResul
   }
   return {
     score: configuredScore,
-    justification: `Matched declarative label(s): ${matched.join(", ")}.`,
+    justification: `Matched label(s): ${matched.join(", ")}.`,
     detail: { matched_labels: matched, labels_any: needles },
   };
 };
@@ -75,7 +81,7 @@ const evaluateLabelsAny = (context: PRContext, options: unknown): CriterionResul
 const createLabelsAnyDeclarativeCriterion = (declarativeRuleId: string): Criterion => ({
   name: `Declarative rule: ${declarativeRuleId}`,
   evaluate: (context: PRContext, options: unknown): CriterionResult =>
-    evaluateLabelsAny(context, options),
+    evaluateLabelsAnyCriterionResult(context, options),
 });
 
 /**
