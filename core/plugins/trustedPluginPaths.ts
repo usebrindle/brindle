@@ -57,7 +57,7 @@ export const normalizeRepositoryRelativePosixPath = (rawPath: string): string | 
   if (trimmedPathLooksAbsolutePosixOrWindows(trimmedPath)) {
     return null;
   }
-  const pathSegments = trimmedPath.replace(/\\/g, "/").split("/");
+  const pathSegments = trimmedPath.replaceAll("\\", "/").split("/");
   const normalizedSegments = normalizedPathSegmentsOrNull(pathSegments);
   if (normalizedSegments === null) {
     return null;
