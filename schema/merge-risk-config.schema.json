@@ -97,6 +97,22 @@
           "exclusiveMinimum": 0
         }
       }
+    },
+    "juniorAuthorMutatorOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["logins", "multiplier"],
+      "properties": {
+        "logins": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "multiplier": {
+          "type": "number",
+          "exclusiveMinimum": 1
+        }
+      }
     }
   },
   "type": "object",
@@ -275,6 +291,37 @@
                     "$ref": "#/definitions/branchAgeOptions"
                   }
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mutators": {
+            "type": "object",
+            "required": ["junior_author"]
+          }
+        },
+        "required": ["mutators"]
+      },
+      "then": {
+        "properties": {
+          "mutators": {
+            "type": "object",
+            "properties": {
+              "junior_author": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": { "type": "boolean" },
+                  "options": {
+                    "$ref": "#/definitions/juniorAuthorMutatorOptions"
+                  }
+                },
+                "required": ["options"]
               }
             }
           }
