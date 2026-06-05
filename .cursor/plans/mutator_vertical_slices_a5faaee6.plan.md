@@ -19,7 +19,7 @@ todos:
     status: completed
   - id: branch-critical-service-dogfood-lld
     content: "`slice/critical-service-dogfood-lld` — optional dogfood mutator + LLD snapshot for `critical_service`; dist if needed."
-    status: pending
+    status: completed
 isProject: false
 ---
 
@@ -39,7 +39,7 @@ isProject: false
 
 **`junior_author`:** [x] slice 1 mutator [x] slice 2 schema [x] slice 3 dogfood/LLD
 
-**`critical_service`:** [x] slice 4 core (`slice/critical-service-mutator`) — [x] slice 5 schema/docs (`slice/critical-service-schema-docs`) — [ ] slice 6 dogfood/LLD
+**`critical_service`:** [x] slice 4 core (`slice/critical-service-mutator`) — [x] slice 5 schema/docs (`slice/critical-service-schema-docs`) — [x] slice 6 dogfood/LLD (`slice/critical-service-dogfood-lld`)
 
 ## Shared mutator pattern (DRY, one way to build “multiplier if condition”)
 
@@ -122,7 +122,7 @@ flowchart LR
 
 4. **`slice/critical-service-mutator`** — **Done** (scorer merge for `services` on `critical_service`, `criticalService.ts` + types, `globMatchForServices` extract, tests, `dist/`).
 5. **`slice/critical-service-schema-docs`** — **Done** (JSON Schema, `config.test.ts`, README, LLD snapshot lines, plan).
-6. **`slice/critical-service-dogfood-lld`** — Dogfood only makes sense if [`.merge-risk.yml`](.merge-risk.yml) already has `services` + you want a mutator line; otherwise LLD-only slice 6 is still valid.
+6. **`slice/critical-service-dogfood-lld`** — **Done** ([`.merge-risk.yml`](.merge-risk.yml) **`mutators.critical_service`** for **`merge_risk_schema`** / **`github_action_extension`**, dogfood **`config.test.ts`**, LLD + README roadmap, plan).
 
 ## Cross-cutting notes
 
