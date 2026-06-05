@@ -46126,6 +46126,7 @@ const runMergeRiskGithubAction = async () => {
         });
     const informationalCheckConclusion = (0,core.getBooleanInput)("informational_check_conclusion");
     const failOnHigh = (0,core.getBooleanInput)("fail_on_high");
+    const postRiskSummaryComment = (0,core.getBooleanInput)("post_risk_summary_comment");
     const coverageReportPath = (0,core.getInput)("coverage_report_path").trim();
     const testCoverageCriterionConfig = scoringConfig.criteria.test_coverage;
     const shouldHydrateIstanbulCoverage = coverageReportPath !== "" &&
@@ -46137,6 +46138,7 @@ const runMergeRiskGithubAction = async () => {
         repositoryOwner,
         repositoryName,
         pullRequestNumber,
+        postRiskSummaryComment,
         istanbulCoverageHydration: shouldHydrateIstanbulCoverage
             ? { repositoryRelativePath: coverageReportPath, shouldHydrate: true }
             : undefined,
