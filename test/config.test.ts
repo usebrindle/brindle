@@ -12,6 +12,8 @@ import {
   parseMergeRiskAutoMergeSection,
   parseMergeRiskYamlDocument,
 } from "../core/config.js";
+import { loadTrustedPlugins, type TrustedPluginsScoringArtifacts } from "../core/plugins/loadTrustedPlugins.js";
+import { validateTrustedPluginsPathsStayUnderDirectory } from "../core/plugins/trustedPluginPaths.js";
 import { score } from "../core/index.js";
 import type { PRContext } from "../core/types.js";
 
@@ -1138,6 +1140,39 @@ describe("repo .merge-risk.yml dogfood", () => {
       labels_any: ["merge-risk-dogfood-declarative"],
       score: 18,
     });
+    expect(scoringConfig.trusted_plugins?.directory).toBe(".merge-risk-plugins");
+    expect(scoringConfig.trusted_plugins?.paths).toEqual([".merge-risk-plugins/dogfood-labels.yaml"]);
+    const trustedPluginsConfig = scoringConfig.trusted_plugins;
+    if (trustedPluginsConfig === undefined) {
+      throw new Error("expected repo .merge-risk.yml to define trusted_plugins");
+    }
+
+    const trustedPluginsPathValidation = validateTrustedPluginsPathsStayUnderDirectory(
+      trustedPluginsConfig,
+    );
+    expect(trustedPluginsPathValidation.ok).toBe(true);
+    if (!trustedPluginsPathValidation.ok) {
+      throw new Error(trustedPluginsPathValidation.message);
+    }
+    const pluginBodies = new Map<string, string>();
+    for (const normalizedPath of trustedPluginsPathValidation.normalizedPluginPaths) {
+      pluginBodies.set(
+        normalizedPath,
+        readFileSync(join(repositoryRootDirectory, normalizedPath), "utf8"),
+      );
+    }
+    const trustedPluginsLoad = loadTrustedPlugins({
+      trustedPlugins: trustedPluginsConfig,
+      pluginFileContentsByNormalizedPath: pluginBodies,
+    });
+    expect(trustedPluginsLoad.ok).toBe(true);
+    if (!trustedPluginsLoad.ok) {
+      throw new Error(trustedPluginsLoad.message);
+    }
+    const trustedPluginsArtifacts: TrustedPluginsScoringArtifacts = {
+      criteria: trustedPluginsLoad.criteria,
+      criterionConfigurations: trustedPluginsLoad.criterionConfigurations,
+    };
 
     const context: PRContext = {
       repoSlug: "usebrindle/brindle",
@@ -1153,24 +1188,35 @@ describe("repo .merge-risk.yml dogfood", () => {
       totalAdditions: 1,
       totalDeletions: 0,
     };
-    const scoreResult = score(context, scoringConfig);
+    const scoreResult = score(context, scoringConfig, trustedPluginsArtifacts);
     const criterionNames = scoreResult.breakdown.map((row) => row.name);
     expect(criterionNames).toContain("Service criticality");
     expect(criterionNames).toContain("Declarative rule: dogfood_declarative_label");
+    expect(criterionNames).toContain("Trusted plugin: .merge-risk-plugins/dogfood-labels.yaml");
     expect(scoreResult.mutatorsApplied).toContain("critical_service");
 
     const labeledContext: PRContext = {
       ...context,
       labels: ["merge-risk-dogfood-declarative"],
     };
-    const labeledScore = score(labeledContext, scoringConfig);
+    const labeledScore = score(labeledContext, scoringConfig, trustedPluginsArtifacts);
     const declarativeRow = labeledScore.breakdown.find(
       (row) => row.name === "Declarative rule: dogfood_declarative_label",
     );
     expect(declarativeRow?.score).toBe(18);
 
+    const trustedPluginLabeledContext: PRContext = {
+      ...context,
+      labels: ["merge-risk-dogfood-trusted-plugin"],
+    };
+    const trustedPluginLabeledScore = score(trustedPluginLabeledContext, scoringConfig, trustedPluginsArtifacts);
+    const trustedPluginRow = trustedPluginLabeledScore.breakdown.find(
+      (row) => row.name === "Trusted plugin: .merge-risk-plugins/dogfood-labels.yaml",
+    );
+    expect(trustedPluginRow?.score).toBe(18);
+
     const botContext: PRContext = { ...context, author: "dependabot[bot]" };
-    const botScore = score(botContext, scoringConfig);
+    const botScore = score(botContext, scoringConfig, trustedPluginsArtifacts);
     expect(botScore.mutatorsApplied).toEqual(["critical_service", "junior_author"]);
   });
 });
