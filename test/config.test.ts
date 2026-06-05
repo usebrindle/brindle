@@ -555,6 +555,172 @@ criteria:
     expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
   });
 
+  it("accepts diff_size with max_lines_for_cap", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  diff_size:
+    weight: 100
+    options:
+      max_lines_for_cap: 500
+`;
+    const scoringConfig = loadScoringConfigFromMergeRiskYaml(yamlText);
+    expect(scoringConfig.criteria.diff_size?.weight).toBe(100);
+    expect(scoringConfig.criteria.diff_size?.options).toEqual({ max_lines_for_cap: 500 });
+  });
+
+  it("accepts diff_size with empty options object", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  diff_size:
+    weight: 1
+    options: {}
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).not.toThrow();
+  });
+
+  it("accepts diff_size with no options key", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  diff_size:
+    weight: 1
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).not.toThrow();
+  });
+
+  it("throws when diff_size.options has an unknown property", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  diff_size:
+    weight: 1
+    options:
+      bogus: 1
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when diff_size.options.max_lines_for_cap is zero", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  diff_size:
+    weight: 1
+    options:
+      max_lines_for_cap: 0
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when diff_size.options.max_lines_for_cap is negative", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  diff_size:
+    weight: 1
+    options:
+      max_lines_for_cap: -10
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("accepts test_coverage with minimum_percent", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  test_coverage:
+    weight: 100
+    options:
+      minimum_percent: 85
+`;
+    const scoringConfig = loadScoringConfigFromMergeRiskYaml(yamlText);
+    expect(scoringConfig.criteria.test_coverage?.weight).toBe(100);
+    expect(scoringConfig.criteria.test_coverage?.options).toEqual({ minimum_percent: 85 });
+  });
+
+  it("accepts test_coverage with empty options object", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  test_coverage:
+    weight: 1
+    options: {}
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).not.toThrow();
+  });
+
+  it("accepts test_coverage with no options key", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  test_coverage:
+    weight: 1
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).not.toThrow();
+  });
+
+  it("throws when test_coverage.options has an unknown property", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  test_coverage:
+    weight: 1
+    options:
+      unknown: true
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when test_coverage.options.minimum_percent is zero", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  test_coverage:
+    weight: 1
+    options:
+      minimum_percent: 0
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when test_coverage.options.minimum_percent is above 100", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  test_coverage:
+    weight: 1
+    options:
+      minimum_percent: 101
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
   it("accepts junior_author mutator with valid options", () => {
     const yamlText = `
 thresholds:
