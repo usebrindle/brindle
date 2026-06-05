@@ -975,6 +975,10 @@ describe("repo .merge-risk.yml dogfood", () => {
       logins: ["dependabot[bot]", "github-actions[bot]"],
       multiplier: 1.06,
     });
+    expect(scoringConfig.mutators?.critical_service?.options).toMatchObject({
+      service_ids: ["merge_risk_schema", "github_action_extension"],
+      multiplier: 1.05,
+    });
 
     const context: PRContext = {
       repoSlug: "usebrindle/brindle",
@@ -993,9 +997,10 @@ describe("repo .merge-risk.yml dogfood", () => {
     const scoreResult = score(context, scoringConfig);
     const criterionNames = scoreResult.breakdown.map((row) => row.name);
     expect(criterionNames).toContain("Service criticality");
+    expect(scoreResult.mutatorsApplied).toContain("critical_service");
 
     const botContext: PRContext = { ...context, author: "dependabot[bot]" };
     const botScore = score(botContext, scoringConfig);
-    expect(botScore.mutatorsApplied).toContain("junior_author");
+    expect(botScore.mutatorsApplied).toEqual(["critical_service", "junior_author"]);
   });
 });

@@ -61,6 +61,12 @@ mutators:
         - "dependabot[bot]"
         - "github-actions[bot]"
       multiplier: 1.06
+  critical_service:
+    options:
+      service_ids:
+        - merge_risk_schema
+        - github_action_extension
+      multiplier: 1.05
 
 # Optional native auto-merge (ADR 0002). Requires workflow `contents: write` and repo auto-merge enabled.
 # auto_merge:
