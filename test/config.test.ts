@@ -678,6 +678,158 @@ mutators:
     expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).not.toThrow();
   });
 
+  it("accepts critical_service mutator with valid options and root services", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+services:
+  payments:
+    globs:
+      - "src/payments/**"
+criteria:
+  diff_size:
+    weight: 100
+mutators:
+  critical_service:
+    options:
+      service_ids:
+        - "payments"
+      multiplier: 1.2
+`;
+    const scoringConfig = loadScoringConfigFromMergeRiskYaml(yamlText);
+    expect(scoringConfig.mutators?.critical_service?.options).toEqual({
+      service_ids: ["payments"],
+      multiplier: 1.2,
+    });
+  });
+
+  it("throws when critical_service is present but options is omitted", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+services:
+  api:
+    globs:
+      - "src/**"
+criteria:
+  diff_size:
+    weight: 100
+mutators:
+  critical_service:
+    enabled: false
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when critical_service.options has an unknown property", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+services:
+  api:
+    globs:
+      - "src/**"
+criteria:
+  diff_size:
+    weight: 100
+mutators:
+  critical_service:
+    options:
+      service_ids: ["api"]
+      multiplier: 1.5
+      extra: true
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when critical_service.options.multiplier is 1", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+services:
+  api:
+    globs:
+      - "src/**"
+criteria:
+  diff_size:
+    weight: 100
+mutators:
+  critical_service:
+    options:
+      service_ids: ["api"]
+      multiplier: 1
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when critical_service.options.service_ids is empty", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+services:
+  api:
+    globs:
+      - "src/**"
+criteria:
+  diff_size:
+    weight: 100
+mutators:
+  critical_service:
+    options:
+      service_ids: []
+      multiplier: 1.5
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when critical_service.options.service_ids entry is empty string", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+services:
+  api:
+    globs:
+      - "src/**"
+criteria:
+  diff_size:
+    weight: 100
+mutators:
+  critical_service:
+    options:
+      service_ids: [""]
+      multiplier: 1.5
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("accepts critical_service with enabled false when options are present", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+services:
+  api:
+    globs:
+      - "src/**"
+criteria:
+  diff_size:
+    weight: 100
+mutators:
+  critical_service:
+    enabled: false
+    options:
+      service_ids: ["api"]
+      multiplier: 1.5
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).not.toThrow();
+  });
+
   it("throws when services entry omits globs", () => {
     const yamlText = `
 thresholds:
