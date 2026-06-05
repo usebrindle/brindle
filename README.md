@@ -30,9 +30,12 @@ Brindle gives every pull request a **risk score from 0 to 100**, then sorts it i
 - [Add coverage scoring (optional)](#add-coverage-scoring-optional)
 - [Add file-pattern scoring (optional)](#add-file-pattern-scoring-optional)
 - [Add author seniority scoring (optional)](#add-author-seniority-scoring-optional)
+- [Declarative rules (optional)](#declarative-rules-optional)
 - [What you get on every PR](#what-you-get-on-every-pr)
 - [Full input reference](#full-input-reference)
 - [Criteria reference](#criteria-reference)
+- [Mutators reference](#mutators-reference)
+- [Declarative rules reference](#declarative-rules-reference)
 - [Roadmap](#roadmap)
 - [Documentation](#documentation)
 - [Contributing](#contributing)
@@ -353,6 +356,30 @@ With **`enabled: false`**, **`options` is still required** when `critical_servic
 
 ---
 
+## Declarative rules (optional)
+
+**`declarative_rules`** is an optional top-level map. Each key is a **rule id** (your choice, stable string). Each entry has the same shape as a built-in criterion: **`weight`**, optional **`enabled`**, and **`options`**. Declarative rules share the same weight pool as **`criteria`** and appear in the breakdown with display names of the form **`Declarative rule: your_rule_id`** (using your YAML key).
+
+MVP interpreter: **`labels_any`** (list of non-empty strings) and **`score`** (0–100). If **any** label on the change request matches one of the strings (**case-insensitive**, after trimming), the rule’s raw score is **`score`**; otherwise the raw score is 0. Config is read from the **base branch** only ([ADR 0001](docs/adrs/0001-no-pr-head-execution.md)).
+
+```yaml
+criteria:
+  diff_size:
+    weight: 90
+    options:
+      max_lines_for_cap: 400
+declarative_rules:
+  hot_labels:
+    weight: 10
+    options:
+      labels_any:
+        - database
+        - security
+      score: 70
+```
+
+---
+
 ## What you get on every PR
 
 A check run and a comment. The comment leads with the verdict ... tier, score, and one plain sentence on what to do ... followed by a collapsible breakdown of every criterion's contribution, so anyone can see exactly why a change scored the way it did. The check conclusion follows the tier, so a HIGH PR can block merge under branch protection when you want it to.
@@ -386,6 +413,13 @@ Because the scoring is deterministic, the same change always gets the same score
 | `junior_author` | `logins` (non-empty list of non-empty strings), `multiplier` (number &gt; 1) | Multiplies the running score when `PRContext.author` matches any listed login (case-insensitive). |
 | `critical_service` | `service_ids` (non-empty list of non-empty strings), `multiplier` (number &gt; 1) | Multiplies when any changed path matches root **`services`** globs for a listed service id. |
 
+## Declarative rules reference
+
+| Field | Options | What it does |
+|---|---|---|
+| Each key under **`declarative_rules`** | `weight`, optional `enabled`, optional `options` | Extra weighted signals interpreted by the engine (same pool as **`criteria`**). |
+| (MVP) `options` | `labels_any` (list of non-empty strings), `score` (0–100) | Raw score is **`score`** when any PR label matches any entry in **`labels_any`** (case-insensitive); otherwise 0. |
+
 More criteria (service criticality, branch age) and additional mutators are documented in the [LLD](docs/designs/).
 
 ## Roadmap
@@ -399,6 +433,7 @@ More criteria (service criticality, branch age) and additional mutators are docu
 - [ ] More criteria ... service criticality, branch age
 - [x] Junior author mutator (`junior_author`) — schema-validated
 - [x] Critical service mutator (`critical_service`) — schema-validated; dogfood in-repo under **`mutators.critical_service`**
+- [x] Declarative rules (`declarative_rules`) — labels_any MVP; schema-validated in **`merge-risk-config.schema.json`**
 - [ ] Coverage formats ... lcov and Cobertura
 - [ ] GitLab CI component
 - [ ] Bitbucket Pipe

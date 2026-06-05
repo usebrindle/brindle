@@ -129,6 +129,26 @@
           "exclusiveMinimum": 1
         }
       }
+    },
+    "declarativeRulesEntry": {
+      "type": "object",
+      "required": ["weight"],
+      "additionalProperties": false,
+      "properties": {
+        "weight": { "type": "number" },
+        "enabled": { "type": "boolean" },
+        "options": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "labels_any": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "score": { "type": "number", "minimum": 0, "maximum": 100 }
+          }
+        }
+      }
     }
   },
   "type": "object",
@@ -181,6 +201,12 @@
       "type": "object",
       "additionalProperties": {
         "$ref": "#/definitions/serviceCatalogEntry"
+      }
+    },
+    "declarative_rules": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/declarativeRulesEntry"
       }
     }
   },
