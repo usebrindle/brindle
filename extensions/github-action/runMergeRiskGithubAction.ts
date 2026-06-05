@@ -17,8 +17,11 @@ import {
   MergeRiskConfigError,
   score,
 } from "../../core/index.js";
+import { loadTrustedPlugins } from "../../core/plugins/loadTrustedPlugins.js";
+import type { TrustedPluginsScoringArtifacts } from "../../core/plugins/loadTrustedPlugins.js";
+import { validateTrustedPluginsPathsStayUnderDirectory } from "../../core/plugins/trustedPluginPaths.js";
 import type { BuildRiskReportOptions } from "../../core/report.types.js";
-import type { MergeRiskAutoMergeConfig } from "../../core/types.js";
+import type { MergeRiskAutoMergeConfig, TrustedPluginsConfiguration } from "../../core/types.js";
 
 const buildMergeRiskReportOptionsFromGithubActionInputs = (
   autoMerge: MergeRiskAutoMergeConfig | undefined,
@@ -134,6 +137,110 @@ const fetchMergeRiskYamlTextFromGithubBaseRef = async (options: {
   }
 };
 
+const requireValidatedTrustedPluginNormalizedPaths = (
+  trustedPlugins: TrustedPluginsConfiguration,
+): string[] => {
+  const pathValidation = validateTrustedPluginsPathsStayUnderDirectory(trustedPlugins);
+  if (!pathValidation.ok) {
+    throw new Error(`Invalid trusted_plugins: ${pathValidation.message}`);
+  }
+  return pathValidation.normalizedPluginPaths;
+};
+
+/**
+ * Fetches one repository-relative text file at the base ref via Contents API + decode (ADR 0001).
+ */
+const fetchDecodedTextFileFromGithubRepositoryAtRef = async (options: {
+  octokit: Octokit;
+  repositoryOwner: string;
+  repositoryName: string;
+  baseRefName: string;
+  repositoryRelativePath: string;
+}): Promise<string> => {
+  const { octokit, repositoryOwner, repositoryName, baseRefName, repositoryRelativePath } = options;
+  try {
+    const { data } = await octokit.rest.repos.getContent({
+      owner: repositoryOwner,
+      repo: repositoryName,
+      path: repositoryRelativePath,
+      ref: baseRefName,
+    });
+    return decodeGithubRepositoryContentFile(data, repositoryRelativePath);
+  } catch (cause: unknown) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    throw new Error(
+      `Could not load trusted plugin file ${JSON.stringify(repositoryRelativePath)} from base ref "${baseRefName}" (${message}). ` +
+        "Ensure the file exists on the base branch (see ADR 0001).",
+      { cause },
+    );
+  }
+};
+
+const buildTrustedPluginYamlTextByNormalizedPathMap = async (options: {
+  octokit: Octokit;
+  repositoryOwner: string;
+  repositoryName: string;
+  baseRefName: string;
+  normalizedPluginPaths: readonly string[];
+}): Promise<Map<string, string>> => {
+  const { octokit, repositoryOwner, repositoryName, baseRefName, normalizedPluginPaths } = options;
+  const entries = await Promise.all(
+    normalizedPluginPaths.map(async (normalizedPluginPath) => {
+      const yamlText = await fetchDecodedTextFileFromGithubRepositoryAtRef({
+        octokit,
+        repositoryOwner,
+        repositoryName,
+        baseRefName,
+        repositoryRelativePath: normalizedPluginPath,
+      });
+      return [normalizedPluginPath, yamlText] as const;
+    }),
+  );
+  return new Map(entries);
+};
+
+const trustedPluginsScoringArtifactsFromFetchedYamlBodies = (options: {
+  trustedPlugins: TrustedPluginsConfiguration;
+  pluginFileContentsByNormalizedPath: ReadonlyMap<string, string>;
+}): TrustedPluginsScoringArtifacts => {
+  const loadOutcome = loadTrustedPlugins(options);
+  if (!loadOutcome.ok) {
+    throw new Error(`Trusted plugin load failed: ${loadOutcome.message}`);
+  }
+  return {
+    criteria: loadOutcome.criteria,
+    criterionConfigurations: loadOutcome.criterionConfigurations,
+  };
+};
+
+/**
+ * Loads trusted plugin YAML from the PR base ref (Contents API) and resolves {@link TrustedPluginsScoringArtifacts}
+ * for {@link score}. Throws when path validation fails, a file is missing on the base ref, or plugin YAML is invalid.
+ *
+ * @see docs/adrs/0001-no-pr-head-execution.md
+ */
+const loadTrustedPluginsScoringArtifactsFromGithubBaseRef = async (options: {
+  octokit: Octokit;
+  repositoryOwner: string;
+  repositoryName: string;
+  baseRefName: string;
+  trustedPlugins: TrustedPluginsConfiguration;
+}): Promise<TrustedPluginsScoringArtifacts> => {
+  const { octokit, repositoryOwner, repositoryName, baseRefName, trustedPlugins } = options;
+  const normalizedPluginPaths = requireValidatedTrustedPluginNormalizedPaths(trustedPlugins);
+  const pluginFileContentsByNormalizedPath = await buildTrustedPluginYamlTextByNormalizedPathMap({
+    octokit,
+    repositoryOwner,
+    repositoryName,
+    baseRefName,
+    normalizedPluginPaths,
+  });
+  return trustedPluginsScoringArtifactsFromFetchedYamlBodies({
+    trustedPlugins,
+    pluginFileContentsByNormalizedPath,
+  });
+};
+
 const resolveGithubAuthTokenFromActionInputs = (): string => {
   const fromInput = getInput("github_token");
   if (fromInput !== "") {
@@ -190,6 +297,17 @@ export const runMergeRiskGithubAction = async (): Promise<void> => {
 
   const { scoringConfig, autoMerge } = mergeRiskRepositoryYaml;
 
+  const trustedPluginsArtifacts: TrustedPluginsScoringArtifacts | undefined =
+    scoringConfig.trusted_plugins === undefined
+      ? undefined
+      : await loadTrustedPluginsScoringArtifactsFromGithubBaseRef({
+          octokit,
+          repositoryOwner,
+          repositoryName,
+          baseRefName,
+          trustedPlugins: scoringConfig.trusted_plugins,
+        });
+
   const informationalCheckConclusion = getBooleanInput("informational_check_conclusion");
   const failOnHigh = getBooleanInput("fail_on_high");
 
@@ -213,7 +331,7 @@ export const runMergeRiskGithubAction = async (): Promise<void> => {
   });
 
   const pullRequestContext = await githubAdapter.buildContext();
-  const scoreResult = score(pullRequestContext, scoringConfig);
+  const scoreResult = score(pullRequestContext, scoringConfig, trustedPluginsArtifacts);
   const riskReport = buildRiskReport(
     scoreResult,
     buildMergeRiskReportOptionsFromGithubActionInputs(autoMerge, {
