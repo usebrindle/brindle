@@ -398,7 +398,7 @@ More criteria (service criticality, branch age) and additional mutators are docu
 - [x] Author seniority criterion (`author_seniority`)
 - [ ] More criteria ... service criticality, branch age
 - [x] Junior author mutator (`junior_author`) — schema-validated
-- [x] Critical service mutator (`critical_service`) — schema-validated; optional dogfood in a later slice
+- [x] Critical service mutator (`critical_service`) — schema-validated; dogfood in-repo under **`mutators.critical_service`**
 - [ ] Coverage formats ... lcov and Cobertura
 - [ ] GitLab CI component
 - [ ] Bitbucket Pipe
