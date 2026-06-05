@@ -35755,7 +35755,7 @@ module.exports = {
 __nccwpck_require__.a(module, async (__webpack_handle_async_dependencies__, __webpack_async_result__) => { try {
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0__ = __nccwpck_require__(7484);
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__nccwpck_require__.n(_actions_core__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(4518);
+/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(4205);
 /**
  * GitHub Actions entry: scores the pull request from base-branch config and publishes results.
  *
@@ -35776,7 +35776,7 @@ __webpack_async_result__();
 
 /***/ }),
 
-/***/ 4518:
+/***/ 4205:
 /***/ ((__unused_webpack_module, __webpack_exports__, __nccwpck_require__) => {
 
 
@@ -40657,18 +40657,38 @@ const filePatternsCriterion = {
     },
 };
 
-;// CONCATENATED MODULE: ./core/criteria/serviceCriticality.ts
+;// CONCATENATED MODULE: ./core/serviceCatalog/globMatchForServices.ts
 /**
- * Built-in `service_criticality` criterion (runtime only). Options types live in {@link ./serviceCriticality.types.js}.
+ * Pure helpers: which logical services (ADR 0009 catalog) match changed repository paths.
  *
- * Root `services` are merged onto evaluate options by {@link ../scorer.js} (ADR 0009); validated YAML never embeds
- * `services` under `criteria.service_criticality.options`.
+ * Shared by `service_criticality` and the `critical_service` mutator so glob rules stay consistent.
  *
  * @see docs/adrs/0009-service-criticality-criterion-config.md
- * @see docs/designs/lld-merge-risk-classifier.md
  */
 
-const serviceCriticality_micromatchOptions = { dot: true };
+const globMatchForServices_micromatchOptions = { dot: true };
+const pathMatchesGlob = (pathValue, globPattern) => micromatch_default().isMatch(pathValue, globPattern, globMatchForServices_micromatchOptions);
+const trimmedGlobPatternsFromEntry = (entry) => {
+    if (entry === undefined || !Array.isArray(entry.globs)) {
+        return [];
+    }
+    return entry.globs
+        .filter((globPattern) => typeof globPattern === "string" && globPattern.trim() !== "")
+        .map((globPattern) => globPattern.trim());
+};
+const anyChangedPathMatchesAnyGlob = (changedPaths, globPatterns) => changedPaths.some((pathValue) => globPatterns.some((globPattern) => pathMatchesGlob(pathValue, globPattern)));
+/**
+ * Service ids (sorted) whose configured globs match at least one changed path.
+ */
+const sortedServiceIdsTouchingChangedPaths = (changedPaths, catalog) => Object.keys(catalog)
+    .sort((leftId, rightId) => leftId.localeCompare(rightId))
+    .filter((serviceId) => {
+    const globPatterns = trimmedGlobPatternsFromEntry(catalog[serviceId]);
+    return globPatterns.length > 0 && anyChangedPathMatchesAnyGlob(changedPaths, globPatterns);
+});
+
+;// CONCATENATED MODULE: ./core/criteria/serviceCriticality.ts
+
 const clampScoreValue = (value) => Math.min(100, Math.max(0, value));
 const serviceCriticality_changedPathsFromContext = (context) => context.files.map((changedFile) => changedFile.path);
 const asPlainObject = (value) => {
@@ -40710,22 +40730,6 @@ const parseEvaluateInput = (options) => {
     }
     return input;
 };
-const pathMatchesGlob = (pathValue, globPattern) => micromatch_default().isMatch(pathValue, globPattern, serviceCriticality_micromatchOptions);
-const trimmedGlobPatternsFromEntry = (entry) => {
-    if (entry === undefined || !Array.isArray(entry.globs)) {
-        return [];
-    }
-    return entry.globs
-        .filter((globPattern) => typeof globPattern === "string" && globPattern.trim() !== "")
-        .map((globPattern) => globPattern.trim());
-};
-const anyChangedPathMatchesAnyGlob = (changedPaths, globPatterns) => changedPaths.some((pathValue) => globPatterns.some((globPattern) => pathMatchesGlob(pathValue, globPattern)));
-const sortedServiceIdsTouchingPaths = (changedPaths, catalog) => Object.keys(catalog)
-    .sort((leftId, rightId) => leftId.localeCompare(rightId))
-    .filter((serviceId) => {
-    const globPatterns = trimmedGlobPatternsFromEntry(catalog[serviceId]);
-    return globPatterns.length > 0 && anyChangedPathMatchesAnyGlob(changedPaths, globPatterns);
-});
 /** Human-oriented catalog line for Notes (ids + globs). */
 const formatConfiguredServicesForNotes = (catalog) => Object.keys(catalog)
     .sort((a, b) => a.localeCompare(b))
@@ -40815,7 +40819,7 @@ const evaluateServiceCriticality = (context, options) => {
     if (catalog === undefined || Object.keys(catalog).length === 0) {
         return criterionResultDefaultOnly(defaultRaw, "No services catalog configured; using default service criticality score.");
     }
-    const touchedServiceIds = sortedServiceIdsTouchingPaths(changedPaths, catalog);
+    const touchedServiceIds = sortedServiceIdsTouchingChangedPaths(changedPaths, catalog);
     if (touchedServiceIds.length === 0) {
         return criterionResultDefaultOnly(defaultRaw, `No changed paths matched any configured service. Services in config: ${catalogSummary}. Using default score (${defaultRaw}).`);
     }
@@ -40946,6 +40950,76 @@ const createConditionalMultiplierMutator = (spec) => ({
     },
 });
 
+;// CONCATENATED MODULE: ./core/mutators/criticalService.ts
+
+
+const criticalService_changedPathsFromContext = (context) => context.files.map((changedFile) => changedFile.path);
+const criticalService_asPlainObject = (value) => {
+    if (value === null || value === undefined || typeof value !== "object" || Array.isArray(value)) {
+        return undefined;
+    }
+    return value;
+};
+const servicesCatalogFromMergedOptions = (options) => {
+    const record = criticalService_asPlainObject(options);
+    if (record === undefined) {
+        return undefined;
+    }
+    const servicesRaw = record.services;
+    if (servicesRaw === undefined || typeof servicesRaw !== "object" || Array.isArray(servicesRaw)) {
+        return undefined;
+    }
+    return servicesRaw;
+};
+/**
+ * @param options - `mutators.critical_service.options` plus runtime `services` merge from the scorer.
+ */
+const criticalServiceIdsFromOptions = (options) => {
+    const record = criticalService_asPlainObject(options);
+    if (record === undefined) {
+        return [];
+    }
+    const raw = record.service_ids;
+    if (!Array.isArray(raw)) {
+        return [];
+    }
+    const out = [];
+    for (const item of raw) {
+        if (typeof item !== "string") {
+            continue;
+        }
+        const trimmed = item.trim();
+        if (trimmed === "") {
+            continue;
+        }
+        out.push(trimmed);
+    }
+    return out;
+};
+const criticalServiceApplies = (context, options) => {
+    const catalog = servicesCatalogFromMergedOptions(options);
+    if (catalog === undefined || Object.keys(catalog).length === 0) {
+        return false;
+    }
+    const changedPaths = criticalService_changedPathsFromContext(context);
+    if (changedPaths.length === 0) {
+        return false;
+    }
+    const configuredIds = criticalServiceIdsFromOptions(options);
+    if (configuredIds.length === 0) {
+        return false;
+    }
+    const touched = new Set(sortedServiceIdsTouchingChangedPaths(changedPaths, catalog));
+    return configuredIds.some((serviceId) => touched.has(serviceId));
+};
+/**
+ * Registered under YAML id `critical_service`. Multiplies when any **`service_ids`** entry matches a touched service.
+ */
+const criticalServiceMutator = createConditionalMultiplierMutator({
+    name: "Critical service",
+    applies: criticalServiceApplies,
+});
+
 ;// CONCATENATED MODULE: ./core/mutators/juniorAuthor.ts
 
 const juniorAuthor_normalizedLogin = (login) => login.trim().toLowerCase();
@@ -40998,10 +41072,12 @@ const juniorAuthorMutator = createConditionalMultiplierMutator({
 
 ;// CONCATENATED MODULE: ./core/mutators/builtins.ts
 
+
 /**
  * Map from YAML mutator id to implementation.
  */
 const builtInMutators = {
+    critical_service: criticalServiceMutator,
     junior_author: juniorAuthorMutator,
 };
 
@@ -41063,6 +41139,20 @@ const toActiveCriterion = (criterionId, criterionImplementation, criterionConfig
  */
 const mergeOptionsForCriterionEvaluation = (criterionId, config, options) => {
     if (criterionId !== "service_criticality")
+        return options;
+    if (config.services === undefined)
+        return options;
+    const baseRecord = options !== null && options !== undefined && typeof options === "object" && !Array.isArray(options)
+        ? { ...options }
+        : {};
+    return { ...baseRecord, services: config.services };
+};
+/**
+ * Merges root-level `services` into mutator apply options for `critical_service` (ADR 0009), mirroring
+ * {@link mergeOptionsForCriterionEvaluation} for `service_criticality`.
+ */
+const mergeOptionsForMutatorApplication = (mutatorId, config, options) => {
+    if (mutatorId !== "critical_service")
         return options;
     if (config.services === undefined)
         return options;
@@ -41158,28 +41248,30 @@ const assertValidMutatorFactor = (mutatorId, factor) => {
         return;
     throw new Error(`Mutator "${mutatorId}" returned invalid factor: ${String(factor)}`);
 };
-const applyOneMutatorEntry = (mutatorId, mutatorConfiguration, mutatorImplementation, context, runningScore) => {
+const applyOneMutatorEntry = (mutatorId, mutatorConfiguration, mutatorImplementation, context, runningScore, scoringConfig) => {
     if (mutatorConfiguration.enabled === false || mutatorImplementation === undefined) {
         return { nextScore: runningScore, didApply: false };
     }
-    const factor = mutatorImplementation.apply(context, mutatorConfiguration.options);
+    const mergedOptions = mergeOptionsForMutatorApplication(mutatorId, scoringConfig, mutatorConfiguration.options);
+    const factor = mutatorImplementation.apply(context, mergedOptions);
     if (factor === null)
         return { nextScore: runningScore, didApply: false };
     assertValidMutatorFactor(mutatorId, factor);
     return { nextScore: clampScore(runningScore * factor), didApply: true };
 };
-const foldOneMutatorEntry = (mutatorId, mutatorConfiguration, mutators, context, runningScore, appliedMutatorIds) => {
+const foldOneMutatorEntry = (mutatorId, mutatorConfiguration, mutators, context, runningScore, appliedMutatorIds, scoringConfig) => {
     const mutatorImplementation = mutators[mutatorId];
-    const { nextScore, didApply } = applyOneMutatorEntry(mutatorId, mutatorConfiguration, mutatorImplementation, context, runningScore);
+    const { nextScore, didApply } = applyOneMutatorEntry(mutatorId, mutatorConfiguration, mutatorImplementation, context, runningScore, scoringConfig);
     if (didApply)
         appliedMutatorIds.push(mutatorId);
     return nextScore;
 };
-const applyMutators = (context, baseScore, mutatorConfig, mutators) => {
+const applyMutators = (context, baseScore, scoringConfig, mutators) => {
     let runningScore = clampScore(baseScore);
     const mutatorsApplied = [];
+    const mutatorConfig = scoringConfig.mutators;
     for (const [mutatorId, mutatorConfiguration] of sortedMutatorEntries(mutatorConfig)) {
-        runningScore = foldOneMutatorEntry(mutatorId, mutatorConfiguration, mutators, context, runningScore, mutatorsApplied);
+        runningScore = foldOneMutatorEntry(mutatorId, mutatorConfiguration, mutators, context, runningScore, mutatorsApplied, scoringConfig);
     }
     mutatorsApplied.sort((leftMutatorId, rightMutatorId) => leftMutatorId.localeCompare(rightMutatorId));
     return { score: runningScore, mutatorsApplied };
@@ -41194,7 +41286,7 @@ const scoreActiveSubset = (context, actives, config, mutators) => {
     requirePositiveWeightSum(weightSum);
     actives.sort((leftActive, rightActive) => leftActive.id.localeCompare(rightActive.id));
     const { breakdown, baseScore } = computeBreakdown(actives, weightSum);
-    const mutatorPass = applyMutators(context, baseScore, config.mutators, mutators);
+    const mutatorPass = applyMutators(context, baseScore, config, mutators);
     return {
         breakdown,
         score: mutatorPass.score,
