@@ -44,6 +44,18 @@ inputs:
     required: false
     default: "false"
 
+outputs:
+  risk_tier:
+    description: Merge-risk tier after scoring (LOW, MEDIUM, or HIGH).
+  risk_score:
+    description: Numeric aggregate score from 0 through 100 after mutators.
+  criteria_breakdown:
+    description: JSON string of the per-criterion breakdown array (same shape as ScoreResult.breakdown).
+  auto_merge_outcome:
+    description: >
+      Auto-merge path outcome (skipped, not_eligible, eligible, enabled, unsupported, setting_off).
+      See docs/designs/lld-merge-risk-classifier.md and ADR 0002.
+
 runs:
   using: node20
   main: dist/index.js
