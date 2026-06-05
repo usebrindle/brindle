@@ -20,6 +20,12 @@ declarative_rules:
         - merge-risk-dogfood-declarative
       score: 18
 
+# Optional trusted plugin (ADR 0001): YAML on base branch only; add label merge-risk-dogfood-trusted-plugin on a test PR to verify.
+trusted_plugins:
+  directory: ".merge-risk-plugins"
+  paths:
+    - ".merge-risk-plugins/dogfood-labels.yaml"
+
 criteria:
   diff_size:
     weight: 54
