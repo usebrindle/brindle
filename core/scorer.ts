@@ -7,6 +7,10 @@
 import { builtInCriteria } from "./criteria/builtins.js";
 import { builtInMutators } from "./mutators/builtins.js";
 import {
+  TRUSTED_PLUGIN_CRITERION_ID_PREFIX,
+  type TrustedPluginsScoringArtifacts,
+} from "./plugins/loadTrustedPlugins.js";
+import {
   buildDeclarativeRuleCriteriaMap,
   DECLARATIVE_CRITERION_ID_PREFIX,
 } from "./rules/declarativeRule.js";
@@ -74,19 +78,39 @@ const sortedDeclarativeCriterionIds = (config: ScoringConfig): string[] => {
     .map((declarativeRuleId) => `${DECLARATIVE_CRITERION_ID_PREFIX}${declarativeRuleId}`);
 };
 
-/** Built-in `criteria` keys first (sorted), then declarative rules (sorted), each as `declarative:<ruleId>`. */
-const sortedAllCriterionIds = (config: ScoringConfig): string[] => [
+const sortedTrustedPluginCriterionIds = (
+  trustedPluginCriteria: Record<string, Criterion> | undefined,
+): string[] => {
+  if (trustedPluginCriteria === undefined) return [];
+  return Object.keys(trustedPluginCriteria).sort((leftCriterionId, rightCriterionId) =>
+    leftCriterionId.localeCompare(rightCriterionId),
+  );
+};
+
+/**
+ * Built-in `criteria` keys first (sorted), then declarative rules (sorted), then trusted plugins (sorted),
+ * each with their respective id prefixes.
+ */
+const sortedAllCriterionIds = (
+  config: ScoringConfig,
+  trustedPluginCriteria: Record<string, Criterion> | undefined,
+): string[] => [
   ...sortedCriterionIds(config.criteria),
   ...sortedDeclarativeCriterionIds(config),
+  ...sortedTrustedPluginCriterionIds(trustedPluginCriteria),
 ];
 
 const getCriterionConfiguration = (
   config: ScoringConfig,
   criterionId: string,
+  trustedPluginCriterionConfigurations: Record<string, CriterionConfiguration> | undefined,
 ): CriterionConfiguration | undefined => {
   if (criterionId.startsWith(DECLARATIVE_CRITERION_ID_PREFIX)) {
     const declarativeRuleId = criterionId.slice(DECLARATIVE_CRITERION_ID_PREFIX.length);
     return config.declarative_rules?.[declarativeRuleId];
+  }
+  if (criterionId.startsWith(TRUSTED_PLUGIN_CRITERION_ID_PREFIX)) {
+    return trustedPluginCriterionConfigurations?.[criterionId];
   }
   return config.criteria[criterionId];
 };
@@ -216,6 +240,7 @@ const accumulateForCriterionId = (
   context: PRContext,
   config: ScoringConfig,
   criteria: Record<string, Criterion>,
+  trustedPluginCriterionConfigurations: Record<string, CriterionConfiguration> | undefined,
   activeCriteria: ActiveCriterion[],
   disabledCriterionIds: string[],
 ): void => {
@@ -223,7 +248,7 @@ const accumulateForCriterionId = (
     criterionId,
     context,
     config,
-    getCriterionConfiguration(config, criterionId),
+    getCriterionConfiguration(config, criterionId, trustedPluginCriterionConfigurations),
     criteria[criterionId],
   );
   applyCriterionResolution(criterionResolution, activeCriteria, disabledCriterionIds);
@@ -233,11 +258,21 @@ const collectActiveCriteria = (
   context: PRContext,
   config: ScoringConfig,
   criteria: Record<string, Criterion>,
+  trustedPluginCriteria: Record<string, Criterion> | undefined,
+  trustedPluginCriterionConfigurations: Record<string, CriterionConfiguration> | undefined,
 ): { actives: ActiveCriterion[]; disabledCriteria: string[] } => {
   const disabledCriteria: string[] = [];
   const actives: ActiveCriterion[] = [];
-  for (const criterionId of sortedAllCriterionIds(config)) {
-    accumulateForCriterionId(criterionId, context, config, criteria, actives, disabledCriteria);
+  for (const criterionId of sortedAllCriterionIds(config, trustedPluginCriteria)) {
+    accumulateForCriterionId(
+      criterionId,
+      context,
+      config,
+      criteria,
+      trustedPluginCriterionConfigurations,
+      actives,
+      disabledCriteria,
+    );
   }
   return { actives, disabledCriteria };
 };
@@ -430,21 +465,27 @@ const finalizeScoreResult = (
  *
  * @param context - Platform-neutral change data produced by an adapter.
  * @param config - Weights, thresholds, and mutator ids (full schema validation comes in a later slice).
+ * @param trustedPluginsArtifacts - Optional trusted plugins produced by {@link import("./plugins/loadTrustedPlugins.js").loadTrustedPlugins} (base-branch file bodies); omitted when not used.
  * @returns Aggregated score, tier, per-criterion breakdown, and mutator ids that ran.
  */
-export const score = (context: PRContext, config: ScoringConfig): ScoreResult =>
-  scoreWithRegistries(context, config, builtInCriteria, builtInMutators);
+export const score = (
+  context: PRContext,
+  config: ScoringConfig,
+  trustedPluginsArtifacts?: TrustedPluginsScoringArtifacts,
+): ScoreResult => scoreWithRegistries(context, config, builtInCriteria, builtInMutators, trustedPluginsArtifacts);
 
 /**
- * Score with explicit registries (used by tests and future trusted-plugin wiring).
+ * Score with explicit registries (used by tests and adapter wiring).
  *
  * Declarative rules from `config.declarative_rules` are always merged into the criterion registry
- * (keys `declarative:<ruleId>`) in addition to the `criteria` argument.
+ * (keys `declarative:<ruleId>`) in addition to the `criteria` argument. Trusted plugins from
+ * `trustedPluginsArtifacts` merge after declarative (keys `plugin:<normalizedPath>`).
  *
  * @param context - Platform-neutral change data.
  * @param config - Weights and thresholds.
  * @param criteria - Built-in (or test) implementations keyed like `config.criteria`.
  * @param mutators - Implementations keyed like `config.mutators`.
+ * @param trustedPluginsArtifacts - Optional criteria + configurations from {@link import("./plugins/loadTrustedPlugins.js").loadTrustedPlugins}.
  * @returns Same shape as {@link score}.
  */
 export const scoreWithRegistries = (
@@ -452,13 +493,21 @@ export const scoreWithRegistries = (
   config: ScoringConfig,
   criteria: Record<string, Criterion>,
   mutators: Record<string, Mutator>,
+  trustedPluginsArtifacts?: TrustedPluginsScoringArtifacts,
 ): ScoreResult => {
   assertValidThresholds(config.thresholds);
   const mergedCriteria: Record<string, Criterion> = {
     ...criteria,
     ...buildDeclarativeRuleCriteriaMap(config),
+    ...(trustedPluginsArtifacts?.criteria ?? {}),
   };
-  const { actives, disabledCriteria } = collectActiveCriteria(context, config, mergedCriteria);
+  const { actives, disabledCriteria } = collectActiveCriteria(
+    context,
+    config,
+    mergedCriteria,
+    trustedPluginsArtifacts?.criteria,
+    trustedPluginsArtifacts?.criterionConfigurations,
+  );
   if (actives.length === 0) return emptyScoreResult(config.thresholds, disabledCriteria);
   return finalizeScoreResult(
     scoreActiveSubset(context, actives, config, mutators),
