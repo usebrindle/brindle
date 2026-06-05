@@ -296,6 +296,33 @@ If **no** `rules` are configured, this criterion scores **0** (same as an empty 
 
 ---
 
+## Add junior author mutator (optional)
+
+The **`junior_author`** mutator **multiplies** the weighted score after all criteria run when the change-request **author login** matches one of the configured **`logins`**. It uses the same neutral [`PRContext.author`](core/types.ts) string as `author_seniority`, compared **case-insensitively** after trimming. Use it for a small multiplicative bump on top of weighted criteria (for example interns or bots), not as a substitute for seniority scoring.
+
+**1. Add `junior_author` under `mutators`** with a required **`options`** block:
+
+```yaml
+criteria:
+  diff_size:
+    weight: 100
+mutators:
+  junior_author:
+    options:
+      logins:
+        - "intern-bot"
+        - "dependabot"
+      multiplier: 1.15   # must be strictly greater than 1
+```
+
+**`logins`** ... non-empty array of non-empty strings.
+
+**`multiplier`** ... a finite number **strictly greater than 1**. Values at or below 1 are rejected by config validation.
+
+You may set **`enabled: false`** on the mutator entry to keep the block in config while turning it off; **`options` is still required** when `junior_author` is present so the shape stays explicit.
+
+---
+
 ## What you get on every PR
 
 A check run and a comment. The comment leads with the verdict ... tier, score, and one plain sentence on what to do ... followed by a collapsible breakdown of every criterion's contribution, so anyone can see exactly why a change scored the way it did. The check conclusion follows the tier, so a HIGH PR can block merge under branch protection when you want it to.
@@ -322,7 +349,13 @@ Because the scoring is deterministic, the same change always gets the same score
 | `author_seniority` | `rules` (list of `login` + `score`), optional `default_score`, optional `aggregation: max` | Maps the change-request author login to a raw score; unknown authors use `default_score` when rules exist. |
 | `test_coverage` | `minimum_percent` | Test coverage from an Istanbul report versus your minimum. Self-disables when no report is provided. |
 
-More criteria (service criticality, branch age) and mutators are coming. See the [LLD](docs/designs/).
+## Mutators reference
+
+| Mutator | Options | What it does |
+|---|---|---|
+| `junior_author` | `logins` (non-empty list of non-empty strings), `multiplier` (number &gt; 1) | Multiplies the running score when `PRContext.author` matches any listed login (case-insensitive). |
+
+More criteria (service criticality, branch age) and additional mutators are documented in the [LLD](docs/designs/).
 
 ## Roadmap
 
@@ -333,7 +366,7 @@ More criteria (service criticality, branch age) and mutators are coming. See the
 - [x] File pattern criterion (`file_patterns`)
 - [x] Author seniority criterion (`author_seniority`)
 - [ ] More criteria ... service criticality, branch age
-- [ ] Mutators ... junior author and service criticality adjustments
+- [x] Junior author mutator (`junior_author`) — schema-validated; further mutators (e.g. `critical_service`) planned
 - [ ] Coverage formats ... lcov and Cobertura
 - [ ] GitLab CI component
 - [ ] Bitbucket Pipe
