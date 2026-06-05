@@ -45978,6 +45978,57 @@ const fetchMergeRiskYamlTextFromGithubBaseRef = async (options) => {
             "If this pull request only adds the file, set input skip_when_merge_risk_missing_on_base to true until the base branch has it, or merge the config in an earlier change.", { cause });
     }
 };
+const requireValidatedTrustedPluginNormalizedPaths = (trustedPlugins) => {
+    const pathValidation = validateTrustedPluginsPathsStayUnderDirectory(trustedPlugins);
+    if (!pathValidation.ok) {
+        throw new Error(`Invalid trusted_plugins: ${pathValidation.message}`);
+    }
+    return pathValidation.normalizedPluginPaths;
+};
+/**
+ * Fetches one repository-relative text file at the base ref via Contents API + decode (ADR 0001).
+ */
+const fetchDecodedTextFileFromGithubRepositoryAtRef = async (options) => {
+    const { octokit, repositoryOwner, repositoryName, baseRefName, repositoryRelativePath } = options;
+    try {
+        const { data } = await octokit.rest.repos.getContent({
+            owner: repositoryOwner,
+            repo: repositoryName,
+            path: repositoryRelativePath,
+            ref: baseRefName,
+        });
+        return decodeGithubRepositoryContentFile(data, repositoryRelativePath);
+    }
+    catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause);
+        throw new Error(`Could not load trusted plugin file ${JSON.stringify(repositoryRelativePath)} from base ref "${baseRefName}" (${message}). ` +
+            "Ensure the file exists on the base branch (see ADR 0001).", { cause });
+    }
+};
+const buildTrustedPluginYamlTextByNormalizedPathMap = async (options) => {
+    const { octokit, repositoryOwner, repositoryName, baseRefName, normalizedPluginPaths } = options;
+    const entries = await Promise.all(normalizedPluginPaths.map(async (normalizedPluginPath) => {
+        const yamlText = await fetchDecodedTextFileFromGithubRepositoryAtRef({
+            octokit,
+            repositoryOwner,
+            repositoryName,
+            baseRefName,
+            repositoryRelativePath: normalizedPluginPath,
+        });
+        return [normalizedPluginPath, yamlText];
+    }));
+    return new Map(entries);
+};
+const trustedPluginsScoringArtifactsFromFetchedYamlBodies = (options) => {
+    const loadOutcome = loadTrustedPlugins(options);
+    if (!loadOutcome.ok) {
+        throw new Error(`Trusted plugin load failed: ${loadOutcome.message}`);
+    }
+    return {
+        criteria: loadOutcome.criteria,
+        criterionConfigurations: loadOutcome.criterionConfigurations,
+    };
+};
 /**
  * Loads trusted plugin YAML from the PR base ref (Contents API) and resolves {@link TrustedPluginsScoringArtifacts}
  * for {@link score}. Throws when path validation fails, a file is missing on the base ref, or plugin YAML is invalid.
@@ -45986,36 +46037,18 @@ const fetchMergeRiskYamlTextFromGithubBaseRef = async (options) => {
  */
 const loadTrustedPluginsScoringArtifactsFromGithubBaseRef = async (options) => {
     const { octokit, repositoryOwner, repositoryName, baseRefName, trustedPlugins } = options;
-    const pathValidation = validateTrustedPluginsPathsStayUnderDirectory(trustedPlugins);
-    if (!pathValidation.ok) {
-        throw new Error(`Invalid trusted_plugins: ${pathValidation.message}`);
-    }
-    const pluginFileContentsByNormalizedPath = new Map();
-    for (const normalizedPluginPath of pathValidation.normalizedPluginPaths) {
-        try {
-            const { data } = await octokit.rest.repos.getContent({
-                owner: repositoryOwner,
-                repo: repositoryName,
-                path: normalizedPluginPath,
-                ref: baseRefName,
-            });
-            const yamlText = decodeGithubRepositoryContentFile(data, normalizedPluginPath);
-            pluginFileContentsByNormalizedPath.set(normalizedPluginPath, yamlText);
-        }
-        catch (cause) {
-            const message = cause instanceof Error ? cause.message : String(cause);
-            throw new Error(`Could not load trusted plugin file ${JSON.stringify(normalizedPluginPath)} from base ref "${baseRefName}" (${message}). ` +
-                "Ensure the file exists on the base branch (see ADR 0001).", { cause });
-        }
-    }
-    const loadOutcome = loadTrustedPlugins({ trustedPlugins, pluginFileContentsByNormalizedPath });
-    if (!loadOutcome.ok) {
-        throw new Error(`Trusted plugin load failed: ${loadOutcome.message}`);
-    }
-    return {
-        criteria: loadOutcome.criteria,
-        criterionConfigurations: loadOutcome.criterionConfigurations,
-    };
+    const normalizedPluginPaths = requireValidatedTrustedPluginNormalizedPaths(trustedPlugins);
+    const pluginFileContentsByNormalizedPath = await buildTrustedPluginYamlTextByNormalizedPathMap({
+        octokit,
+        repositoryOwner,
+        repositoryName,
+        baseRefName,
+        normalizedPluginPaths,
+    });
+    return trustedPluginsScoringArtifactsFromFetchedYamlBodies({
+        trustedPlugins,
+        pluginFileContentsByNormalizedPath,
+    });
 };
 const resolveGithubAuthTokenFromActionInputs = () => {
     const fromInput = (0,core.getInput)("github_token");
