@@ -42,7 +42,7 @@ const criticalServiceIdsFromOptions = (options: unknown): string[] => {
   if (record === undefined) {
     return [];
   }
-  const raw = record.service_ids as unknown;
+  const raw = record.service_ids;
   if (!Array.isArray(raw)) {
     return [];
   }
