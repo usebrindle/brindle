@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { score } from "../core/index.js";
+import { loadTrustedPlugins } from "../core/plugins/loadTrustedPlugins.js";
+import { validateTrustedPluginsPathsStayUnderDirectory } from "../core/plugins/trustedPluginPaths.js";
 import { scoreWithRegistries } from "../core/scorer.js";
 import type {
   Criterion,
@@ -314,6 +316,89 @@ describe("missing criterion implementation", () => {
     expect(scoreResult.disabledCriteria).toContain("ghost");
     expect(scoreResult.score).toBe(0);
     expect(scoreResult.tier).toBe("LOW");
+  });
+});
+
+describe("score and scoreWithRegistries with trusted plugins", () => {
+  it("merges trusted plugin criteria into the weight pool when artifacts are passed", () => {
+    const pathValidation = validateTrustedPluginsPathsStayUnderDirectory({
+      directory: ".merge-risk-plugins",
+      paths: [".merge-risk-plugins/risk.yaml"],
+    });
+    if (!pathValidation.ok) throw new Error("unexpected");
+    const [normalizedPath] = pathValidation.normalizedPluginPaths;
+    const pluginYaml = `kind: labels_any
+weight: 100
+labels_any: [hotfix]
+score: 80
+`;
+    const loadOutcome = loadTrustedPlugins({
+      trustedPlugins: {
+        directory: ".merge-risk-plugins",
+        paths: [".merge-risk-plugins/risk.yaml"],
+      },
+      pluginFileContentsByNormalizedPath: new Map([[normalizedPath, pluginYaml]]),
+    });
+    if (!loadOutcome.ok) throw new Error(loadOutcome.message);
+    const artifacts = {
+      criteria: loadOutcome.criteria,
+      criterionConfigurations: loadOutcome.criterionConfigurations,
+    };
+    const config: ScoringConfig = {
+      thresholds,
+      criteria: {},
+    };
+    const scoreResult = scoreWithRegistries(
+      minimalContext({ labels: ["hotfix"] }),
+      config,
+      {},
+      {},
+      artifacts,
+    );
+    expect(scoreResult.breakdown).toHaveLength(1);
+    expect(scoreResult.breakdown[0]!.name).toContain("Trusted plugin");
+    expect(scoreResult.score).toBe(80);
+  });
+
+  it("orders trusted plugin ids after declarative ids when scoring", () => {
+    const pathValidation = validateTrustedPluginsPathsStayUnderDirectory({
+      directory: ".merge-risk-plugins",
+      paths: [".merge-risk-plugins/z.yaml", ".merge-risk-plugins/a.yaml"],
+    });
+    if (!pathValidation.ok) throw new Error("unexpected");
+    const fileMap = new Map<string, string>();
+    const body = `kind: labels_any
+weight: 10
+labels_any: [x]
+score: 10
+`;
+    for (const path of pathValidation.normalizedPluginPaths) {
+      fileMap.set(path, body);
+    }
+    const loadOutcome = loadTrustedPlugins({
+      trustedPlugins: {
+        directory: ".merge-risk-plugins",
+        paths: [".merge-risk-plugins/z.yaml", ".merge-risk-plugins/a.yaml"],
+      },
+      pluginFileContentsByNormalizedPath: fileMap,
+    });
+    if (!loadOutcome.ok) throw new Error(loadOutcome.message);
+    const artifacts = {
+      criteria: loadOutcome.criteria,
+      criterionConfigurations: loadOutcome.criterionConfigurations,
+    };
+    const config: ScoringConfig = {
+      thresholds,
+      criteria: {},
+      declarative_rules: {
+        mid: { weight: 10, options: { labels_any: ["never-match"], score: 99 } },
+      },
+    };
+    const scoreResult = scoreWithRegistries(minimalContext({ labels: [] }), config, {}, {}, artifacts);
+    const criterionIdsInBreakdownOrder = scoreResult.breakdown.map((row) => row.name);
+    expect(criterionIdsInBreakdownOrder[0]).toContain("Declarative rule: mid");
+    expect(criterionIdsInBreakdownOrder[1]).toContain(".merge-risk-plugins/a.yaml");
+    expect(criterionIdsInBreakdownOrder[2]).toContain(".merge-risk-plugins/z.yaml");
   });
 });
 

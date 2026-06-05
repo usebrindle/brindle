@@ -29,6 +29,12 @@ export type TrustedPluginsLoadOutcome =
     }
   | { ok: false; message: string };
 
+/** Successful {@link loadTrustedPlugins} payload merged into {@link import("../scorer.js").scoreWithRegistries}. */
+export type TrustedPluginsScoringArtifacts = {
+  criteria: Record<string, Criterion>;
+  criterionConfigurations: Record<string, CriterionConfiguration>;
+};
+
 type TrustedPluginYamlParseResult = { ok: true; value: unknown } | { ok: false; message: string };
 
 type WeightParseResult = { ok: true; weight: number } | { ok: false; message: string };
