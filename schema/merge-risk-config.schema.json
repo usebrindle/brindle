@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://brindle.dev/schema/merge-risk-config.schema.json",
   "title": "Merge risk scoring config (subset)",
-  "description": "YAML shape under .merge-risk.yml consumed by the scorer. Validates optional `declarative_rules`, `trusted_plugins`, and criterion/mutator options when those keys are present. Additional top-level keys are allowed for forward compatibility.",
+  "description": "YAML shape under .merge-risk.yml consumed by the scorer. Validates optional `declarative_rules`, `trusted_plugins`, and criterion/mutator options (including `diff_size` and `test_coverage` options) when those keys are present. Additional top-level keys are allowed for forward compatibility.",
   "definitions": {
     "filePatternsOptions": {
       "type": "object",
@@ -95,6 +95,27 @@
         "max_age_hours_for_cap": {
           "type": "number",
           "exclusiveMinimum": 0
+        }
+      }
+    },
+    "diffSizeOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_lines_for_cap": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "testCoverageOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "minimum_percent": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 100
         }
       }
     },
@@ -346,6 +367,70 @@
                   "enabled": { "type": "boolean" },
                   "options": {
                     "$ref": "#/definitions/branchAgeOptions"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "criteria": {
+            "type": "object",
+            "required": ["diff_size"]
+          }
+        },
+        "required": ["criteria"]
+      },
+      "then": {
+        "properties": {
+          "criteria": {
+            "type": "object",
+            "properties": {
+              "diff_size": {
+                "type": "object",
+                "required": ["weight"],
+                "additionalProperties": true,
+                "properties": {
+                  "weight": { "type": "number" },
+                  "enabled": { "type": "boolean" },
+                  "options": {
+                    "$ref": "#/definitions/diffSizeOptions"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "criteria": {
+            "type": "object",
+            "required": ["test_coverage"]
+          }
+        },
+        "required": ["criteria"]
+      },
+      "then": {
+        "properties": {
+          "criteria": {
+            "type": "object",
+            "properties": {
+              "test_coverage": {
+                "type": "object",
+                "required": ["weight"],
+                "additionalProperties": true,
+                "properties": {
+                  "weight": { "type": "number" },
+                  "enabled": { "type": "boolean" },
+                  "options": {
+                    "$ref": "#/definitions/testCoverageOptions"
                   }
                 }
               }
