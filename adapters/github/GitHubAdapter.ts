@@ -7,7 +7,8 @@
  */
 import { GraphqlResponseError } from "@octokit/graphql";
 
-import { IstanbulCoverageParseError, parseIstanbulCoverageJson } from "../../core/coverage/istanbul.js";
+import { parseCoverageArtifactText } from "../../core/coverage/adapter.js";
+import { IstanbulCoverageParseError } from "../../core/coverage/istanbul.js";
 import type { AutoMergeOutcome, MergeMethod, PRContext, RiskReport } from "../../core/types.js";
 import type { PlatformAdapter } from "../PlatformAdapter.js";
 
@@ -71,7 +72,10 @@ export class GitHubAdapter implements PlatformAdapter {
       });
       if (rawCoverageJson !== null && rawCoverageJson.trim() !== "") {
         try {
-          coverageReport = parseIstanbulCoverageJson(rawCoverageJson);
+          coverageReport = parseCoverageArtifactText({
+            format: "istanbul",
+            text: rawCoverageJson,
+          });
         } catch (cause: unknown) {
           if (!(cause instanceof IstanbulCoverageParseError)) {
             throw cause;
