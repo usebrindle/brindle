@@ -50,4 +50,4 @@ const result = score(
 
 ## Publishing
 
-Use `npm pack` after `npm run build` to validate the tarball. Automated publishes are added via the repository release workflow (see root README once merged).
+Publishing runs from GitHub when you push tag **`merge-risk-core-v*`** (see the [Brindle README](https://github.com/usebrindle/brindle/blob/main/README.md#npm-package-programmatic-use)). Locally, run `npm run build` then `npm pack` to validate the tarball before tagging.

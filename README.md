@@ -39,6 +39,7 @@ Brindle gives every pull request a **risk score from 0 to 100**, then sorts it i
 - [Declarative rules reference](#declarative-rules-reference)
 - [Trusted plugins reference](#trusted-plugins-reference)
 - [Roadmap](#roadmap)
+- [npm package (programmatic use)](#npm-package-programmatic-use)
 - [Documentation](#documentation)
 - [Contributing](#contributing)
 - [License](#license)
@@ -484,6 +485,17 @@ More criteria (service criticality, branch age) and additional mutators are docu
 - [ ] Coverage formats ... lcov and Cobertura
 - [ ] GitLab CI component
 - [ ] Bitbucket Pipe
+
+## npm package (programmatic use)
+
+The platform-agnostic scoring engine is published as **`@usebrindle/merge-risk-core`** on npm. It exposes `score`, config loading, `buildRiskReport`, and related types from `core/` ... without GitHub adapters or the Action. Install details and a minimal example live in [packages/merge-risk-core/README.md](packages/merge-risk-core/README.md).
+
+**Releasing a version**
+
+1. On `main`, bump **`version`** in [packages/merge-risk-core/package.json](packages/merge-risk-core/package.json) (via PR).
+2. Create and push an annotated tag **`merge-risk-core-v{version}`** (must match the `package.json` version, e.g. `merge-risk-core-v0.1.0`). That pushes the [Publish merge-risk-core](.github/workflows/publish-merge-risk-core.yml) workflow, which runs `npm publish -w @usebrindle/merge-risk-core`.
+
+The repository needs an **`NPM_TOKEN`** secret (automation token with publish rights for the scope).
 
 ## Documentation
 
