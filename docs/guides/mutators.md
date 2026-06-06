@@ -2,7 +2,7 @@
 
 Mutators run **after** all weighted criteria have been blended into a base score. Each mutator can **multiply** that running score when its condition matches. Weights and thresholds are unchanged; see [Scoring pipeline](../concepts/scoring.md#mutators-multiply-after-the-blend). Mutators are applied in **sorted mutator id** order ([`sortedMutatorEntries`](../../core/scorer.ts)). Unknown mutator keys in config have no implementation and do not apply.
 
-## Add junior author mutator (optional)
+## Junior author
 
 The **`junior_author`** mutator **multiplies** the weighted score after all criteria run when the change-request **author login** matches one of the configured **`logins`**. It uses the same neutral [`PRContext.author`](../../core/types.ts) string as `author_seniority`, compared **case-insensitively** after trimming. Use it for a small multiplicative bump on top of weighted criteria (for example interns or bots), not as a substitute for seniority scoring.
 
@@ -27,7 +27,7 @@ mutators:
 
 You may set **`enabled: false`** on the mutator entry to keep the block in config while turning it off; **`options` is still required** when `junior_author` is present so the shape stays explicit.
 
-## `critical_service`
+## Critical service
 
 The **`critical_service`** mutator **multiplies** the weighted score after criteria when the change touches at least one logical service listed under **`service_ids`**, using the same **root `services`** catalog and micromatch rules as **`service_criticality`** ([ADR 0009](../adrs/0009-service-criticality-criterion-config.md)). The scorer merges **`services`** into mutator options at apply time (you do not embed the catalog under `mutators.critical_service.options`).
 
