@@ -79,6 +79,10 @@ Static analysis runs in [`.github/workflows/sonar.yml`](.github/workflows/sonar.
 2. In GitHub: **Settings → Secrets and variables → Actions**, add **`SONAR_TOKEN`** from SonarCloud ([token docs](https://docs.sonarsource.com/sonarqube-cloud/managing-your-account/managing-tokens/)). Prefer an **organization-level** secret if your org policy allows it.
 3. The workflow runs **`npm ci`**, **`npm run test -- --coverage`** (for `coverage/lcov.info`), then **`SonarSource/sonarqube-scan-action`** at release **v8.1.0** (pinned by full commit SHA in [`.github/workflows/sonar.yml`](.github/workflows/sonar.yml)). The scan step passes **`GITHUB_TOKEN`** (with `pull-requests: read` on the job) so Sonar can tie the run to the PR for decoration, plus **`SONAR_TOKEN`**. **Fork pull requests are skipped** so the job does not fail when secrets are unavailable.
 
+## Dogfooding
+
+This repo exercises merge-risk on its own PRs via committed [`.merge-risk.yml`](.merge-risk.yml). **Canonical** description of what is enabled (criteria, mutators, declarative rules, trusted plugins, labels, and paths) is the **Dogfood** bullet under [Brindle repository snapshot (this spec vs shipped code)](docs/designs/lld-merge-risk-classifier.md#brindle-repository-snapshot-this-spec-vs-shipped-code) in the LLD. A short index with the same pointers lives in [docs/dogfood/README.md](docs/dogfood/README.md). Do not duplicate that narrative here.
+
 ## Pull requests
 
 Brindle's own history is a public trust artifact. Write PR descriptions that explain what the change does and why, and reference the relevant ADR where one applies. The care goes into the description, not just the diff.
