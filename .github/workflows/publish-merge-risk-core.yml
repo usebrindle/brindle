@@ -1,0 +1,38 @@
+# Publishes @usebrindle/merge-risk-core when a version tag is pushed.
+#
+# Convention: bump `version` in packages/merge-risk-core/package.json on main first,
+# then create and push tag `merge-risk-core-v{version}` (example: merge-risk-core-v0.1.0).
+# Requires repository secret NPM_TOKEN (automation token with publish scope for the package).
+
+name: Publish merge-risk-core
+
+on:
+  push:
+    tags:
+      - "merge-risk-core-v*"
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build workspace package
+        run: npm run build:merge-risk-core
+
+      - name: Publish to npm
+        run: npm publish -w @usebrindle/merge-risk-core --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
