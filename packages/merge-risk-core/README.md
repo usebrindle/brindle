@@ -1,8 +1,12 @@
 # @usebrindle/merge-risk-core
 
-Platform-agnostic merge-risk **scoring engine**: `score()`, YAML config loading, `buildRiskReport`, criteria/mutators/plugins as shipped in the [Brindle](https://github.com/usebrindle/brindle) monorepo under `core/`.
+This package is the platform-agnostic, deterministic merge-risk scoring engine behind Brindle. It is for teams and developers who want to embed pull-request risk scoring in their own Node.js tooling rather than using the GitHub Action.
 
-This package does **not** include GitHub/GitLab **implementations** (no Octokit). It **does** export the **`PlatformAdapter`** interface type so custom adapters share the same contract as [`adapters/PlatformAdapter.ts`](../../adapters/PlatformAdapter.ts) in the monorepo.
+**What is Brindle?** Brindle scores pull requests in CI so low-risk work can move while risky changes wait for a human; the product, documentation, and Action live in the [Brindle](https://github.com/usebrindle/brindle) repository.
+
+```bash
+npm install @usebrindle/merge-risk-core
+```
 
 For adapter responsibilities, base-ref security, and semver notes, see [docs/programmatic-use.md](../../docs/programmatic-use.md).
 
@@ -13,13 +17,6 @@ Install alongside this package (versions should satisfy the ranges below):
 - `ajv`
 - `js-yaml`
 - `micromatch`
-
-## Build (from monorepo root)
-
-```bash
-npm ci
-npm run build -w @usebrindle/merge-risk-core
-```
 
 ## Minimal usage
 
@@ -50,6 +47,8 @@ const result = score(
 );
 ```
 
+This package exposes the merge-risk **scoring engine**: `score()`, YAML config loading, `buildRiskReport`, and the criteria, mutators, and plugins shipped with Brindle under `core/`. It does **not** include GitHub or GitLab **implementations** (no Octokit). It **does** export the **`PlatformAdapter`** interface type so custom adapters share the same contract as [`adapters/PlatformAdapter.ts`](../../adapters/PlatformAdapter.ts) in the monorepo.
+
 ## `PlatformAdapter` (type-only)
 
 Implement this interface in your platform layer; import the type from the same package entry:
@@ -57,7 +56,3 @@ Implement this interface in your platform layer; import the type from the same p
 ```ts
 import type { PlatformAdapter } from "@usebrindle/merge-risk-core";
 ```
-
-## Publishing (maintainers)
-
-Publishing to npm is documented for maintainers in [CONTRIBUTING.md](../../CONTRIBUTING.md#publishing-merge-risk-core-to-npm). Locally, run `npm run build -w @usebrindle/merge-risk-core` then `npm pack -w @usebrindle/merge-risk-core` to validate the tarball before a release tag.
