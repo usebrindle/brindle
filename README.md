@@ -13,7 +13,7 @@
 
 </div>
 
-Brindle gives every pull request a **risk score from 0 to 100**, then sorts it into a tier ... LOW, MEDIUM, or HIGH. Low-risk changes can merge on their own. Risky ones get held for a human. You decide what counts as risky.
+Scoring is fully deterministic: configurable rules in your CI, with **no generative AI**, **no LLM calls**, and **no per-run token cost**.
 
 > **0.1.0 ... early but real.** The scoring engine, the GitHub Action, the PR check and comment, and native auto-merge all work today. **Six** built-in criteria ship in this release: `diff_size`, `file_patterns`, `author_seniority`, `test_coverage`, `branch_age`, and `service_criticality`. The config format may still change before `1.0`, so pin to a version. Brindle supports same-repo pull requests.
 
@@ -21,7 +21,7 @@ Brindle gives every pull request a **risk score from 0 to 100**, then sorts it i
 
 AI made writing code fast. It did not make reviewing it fast. Once a team adopts AI coding tools, the number of pull requests climbs, and human review turns into the bottleneck. Most of those changes are small and safe ... a copy tweak, a config bump, a well-tested refactor. A few are genuinely risky. Reviewing all of them with the same scrutiny wastes your reviewers on the safe ones and leaves less attention for the dangerous ones.
 
-The hard part is telling them apart, consistently, on every single PR, without a human having to eyeball each one to decide.
+The hard part is knowing which changes are which before they pile up in the review queue.
 
 ## What Brindle does
 
@@ -30,7 +30,7 @@ Brindle reads each pull request the moment it opens and gives it a single risk s
 - **LOW** changes are safe enough to merge on their own, so they can skip the review queue entirely.
 - **MEDIUM** and **HIGH** changes get held for a human, so your reviewers spend their attention where it actually matters.
 
-It runs as a GitHub Action inside your own CI, posts its verdict as a check and a comment on the PR, and can optionally enable GitHub's native auto-merge for the changes it considers safe. What makes it trustworthy is that the scoring is **deterministic** ... no AI, no guessing, no token cost. The same change always gets the same score, and you can read every rule that produced it.
+It runs as a GitHub Action inside your own CI, posts its verdict as a check and a comment on the PR, and can optionally enable GitHub's native auto-merge for the changes it considers safe. The same change always gets the same score, and you can read every rule that produced it.
 
 - **Deterministic.** No generative AI, no LLM calls, zero cost per run. Every rule is one you can audit.
 - **Runs in your own CI.** Brindle is a GitHub Action, not a hosted service. Your code never leaves your pipeline.
@@ -118,7 +118,7 @@ Open any PR against your default branch. Within a few seconds Brindle posts a ch
 
 A check run and a comment. The comment leads with the verdict ... tier, score, and one plain sentence on what to do ... followed by a collapsible breakdown of every criterion's contribution, so anyone can see exactly why a change scored the way it did. The check conclusion follows the tier, so a HIGH PR can block merge under branch protection when you want it to.
 
-Because the scoring is deterministic, the same change always gets the same score. No generative AI, no LLM calls, zero token cost, and every rule is one you can read.
+Because scoring is rule-based, the same change always gets the same score, and every rule is one you can read.
 
 ## Configuration
 
