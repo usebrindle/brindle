@@ -15,8 +15,6 @@
 
 Scoring is fully deterministic: configurable rules in your CI, with **no generative AI**, **no LLM calls**, and **no per-run token cost**.
 
-> **0.1.0 ... early but real.** The scoring engine, the GitHub Action, the PR check and comment, and native auto-merge all work today. **Six** built-in criteria ship in this release: `diff_size`, `file_patterns`, `author_seniority`, `test_coverage`, `branch_age`, and `service_criticality`. The config format may still change before `1.0`, so pin to a version. Brindle supports same-repo pull requests.
-
 ## The problem
 
 AI made writing code fast. It did not make reviewing it fast. Once a team adopts AI coding tools, the number of pull requests climbs, and human review turns into the bottleneck. Most of those changes are small and safe ... a copy tweak, a config bump, a well-tested refactor. A few are genuinely risky. Reviewing all of them with the same scrutiny wastes your reviewers on the safe ones and leaves less attention for the dangerous ones.
