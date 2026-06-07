@@ -2,7 +2,13 @@
 #
 # Convention: bump `version` in packages/merge-risk-core/package.json on main first,
 # then create and push tag `merge-risk-core-v{version}` (example: merge-risk-core-v0.1.0).
-# Requires repository secret NPM_TOKEN (automation token with publish scope for the package).
+#
+# Publishing uses npm Trusted Publishing (OIDC) from GitHub Actions — no long-lived
+# NPM_TOKEN. Requires npm CLI ≥ 11.5.1 and Node ≥ 22.14 (see npm docs).
+#
+# One-time (maintainers): on npmjs.com → @usebrindle/merge-risk-core → Settings →
+# Trusted publisher → GitHub Actions. Repository: usebrindle/brindle. Workflow filename
+# must match exactly: publish-merge-risk-core.yml
 
 name: Publish merge-risk-core
 
@@ -13,6 +19,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   publish:
@@ -22,9 +29,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           registry-url: https://registry.npmjs.org
-          cache: npm
+
+      - name: Use npm CLI with trusted publishing (OIDC)
+        run: npm install -g npm@^11.5.1
 
       - name: Install
         run: npm ci
@@ -34,5 +43,3 @@ jobs:
 
       - name: Publish to npm
         run: npm publish -w @usebrindle/merge-risk-core --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
