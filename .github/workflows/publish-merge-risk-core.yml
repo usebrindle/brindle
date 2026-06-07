@@ -1,7 +1,7 @@
 # Publishes @usebrindle/merge-risk-core when a version tag is pushed.
 #
 # Convention: bump `version` in packages/merge-risk-core/package.json on main first,
-# then create and push tag `merge-risk-core-v{version}` (example: merge-risk-core-v0.1.0).
+# then create and push tag `merge-risk-core-v{version}` (example: merge-risk-core-v0.2.0).
 # Requires repository secret NPM_TOKEN (automation token with publish scope for the package).
 
 name: Publish merge-risk-core
