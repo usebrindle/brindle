@@ -1,6 +1,6 @@
 # Programmatic use (`@usebrindle/merge-risk-core`)
 
-This page is for **embedding** Brindle’s deterministic merge-risk engine in your own Node.js tooling (custom runners, internal services, or a future GitLab/Bitbucket adapter you maintain). End users who only want GitHub should use the [GitHub Action](reference/action-inputs.md) instead.
+This page is for **embedding** Brindle’s deterministic merge-risk engine in your own Node.js tooling (for example custom runners, CLIs, in-repo automation, or a GitLab/Bitbucket adapter you maintain). End users who only want GitHub should use the [GitHub Action](reference/action-inputs.md) instead.
 
 ## Install
 
@@ -59,8 +59,7 @@ sequenceDiagram
 
 ## Non-goals (this package)
 
-- No **`GitHubAdapter`**, Octokit, `@actions/*`, or other CI SDKs.
-- No hosted analytics or SaaS; those are separate products ([ADR 0008](adrs/0008-packaging-and-open-core.md)).
+- No **`GitHubAdapter`**, Octokit, `@actions/*`, or other platform-specific CI SDKs in this install.
 
 ## Further reading
 
