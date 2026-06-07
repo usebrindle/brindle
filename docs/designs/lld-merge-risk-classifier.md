@@ -306,7 +306,7 @@ outputs:
     description: "skipped | not_eligible | enabled | unsupported | setting_off"
 
 runs:
-  using: "node20"
+  using: "node24"
   main: "dist/index.js"
 ```
 
@@ -355,7 +355,7 @@ Identical to v3 and platform-neutral already. Read from the base branch by the a
     "typescript": "^5.4.0",
     "@vercel/ncc": "^0.38.0",
     "vitest": "^1.0.0",
-    "@types/node": "^20.0.0",
+    "@types/node": "^24.0.0",
     "@types/js-yaml": "^4.0.0",
     "@types/micromatch": "^4.0.0"
   }
