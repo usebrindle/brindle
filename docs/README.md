@@ -24,6 +24,7 @@ Tables and schema-shaped docs for precise contracts.
 
 | Page | Description |
 | --- | --- |
+| [Programmatic use (npm)](programmatic-use.md) | `@usebrindle/merge-risk-core`, `PlatformAdapter`, and base-ref security for custom runners. |
 | [GitHub Action inputs](reference/action-inputs.md) | Inputs from `extensions/github-action/action.yml`. |
 | [Criteria (built-ins)](reference/criteria.md) | The six built-in `criteria` ids and what they measure. |
 | [Config JSON Schema](reference/config-schema.md) | Field reference mirroring `schema/merge-risk-config.schema.json`. |
