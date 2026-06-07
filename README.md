@@ -138,7 +138,7 @@ Brindle reads **`.merge-risk.yml`** from the pull request **base** branch. Optio
 
 ## npm package (programmatic use)
 
-The platform-agnostic scoring engine is published as **`@usebrindle/merge-risk-core`** on npm. It exposes `score`, config loading, `buildRiskReport`, and related types from `core/` ... without GitHub adapters or the Action. Install details and a minimal example live in [packages/merge-risk-core/README.md](packages/merge-risk-core/README.md).
+The platform-agnostic scoring engine is published as **`@usebrindle/merge-risk-core`** on npm. It exposes `score`, config loading, `buildRiskReport`, the **`PlatformAdapter`** type, and related types from `core/` ... without GitHub adapter implementations or the Action. Install details and a minimal example live in [packages/merge-risk-core/README.md](packages/merge-risk-core/README.md). Adapter contracts, base-ref security, and semver expectations are in [docs/programmatic-use.md](docs/programmatic-use.md).
 
 **Releasing a version**
 
