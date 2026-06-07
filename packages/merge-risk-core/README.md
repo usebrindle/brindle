@@ -1,8 +1,10 @@
 # @usebrindle/merge-risk-core
 
-This package is the platform-agnostic, deterministic merge-risk scoring engine behind Brindle. It is for teams and developers who want to embed pull-request risk scoring in their own Node.js tooling rather than using the GitHub Action.
+AI-assisted development tends to produce more pull requests than humans can review at the same pace. Most of those changes are small and safe; a few are genuinely risky. Reviewing every PR with the same level of scrutiny burns reviewer attention on the safe ones and leaves less for the changes that actually need it.
 
-**What is Brindle?** Brindle scores pull requests in CI so low-risk work can move while risky changes wait for a human; the product, documentation, and Action live in the [Brindle](https://github.com/usebrindle/brindle) repository.
+**Brindle** is a merge-risk system that reads each pull request and assigns a single score from **0 to 100**, then maps that score into **LOW**, **MEDIUM**, or **HIGH** tiers using rules you define in configuration. Low-risk tiers can move forward automatically where you allow it; riskier tiers wait for a human. The scoring is **deterministic**: no generative AI, no LLM calls, no per-run token cost, and every rule that influenced a score is one you can audit.
+
+**This package (`@usebrindle/merge-risk-core`)** is the platform-agnostic scoring engine only: the library you embed in your own **Node.js** tooling (custom CI, internal dashboards, or adapters you maintain yourself). If you just want merge-risk scoring on **GitHub** with minimal setup, use the **Brindle GitHub Action** instead; setup, workflow examples, and product docs live in the [Brindle](https://github.com/usebrindle/brindle) repository.
 
 ```bash
 npm install @usebrindle/merge-risk-core
