@@ -1,8 +1,14 @@
 # @usebrindle/merge-risk-core
 
-Platform-agnostic merge-risk **scoring engine**: `score()`, YAML config loading, `buildRiskReport`, criteria/mutators/plugins as shipped in the [Brindle](https://github.com/usebrindle/brindle) monorepo under `core/`.
+AI-assisted development tends to produce more pull requests than humans can review at the same pace. Most of those changes are small and safe; a few are genuinely risky. Reviewing every PR with the same level of scrutiny burns reviewer attention on the safe ones and leaves less for the changes that actually need it.
 
-This package does **not** include GitHub/GitLab **implementations** (no Octokit). It **does** export the **`PlatformAdapter`** interface type so custom adapters share the same contract as [`adapters/PlatformAdapter.ts`](../../adapters/PlatformAdapter.ts) in the monorepo.
+**Brindle** is a merge-risk system that reads each pull request and assigns a single score from **0 to 100**, then maps that score into **LOW**, **MEDIUM**, or **HIGH** tiers using rules you define in configuration. Low-risk tiers can move forward automatically where you allow it; riskier tiers wait for a human. The scoring is **deterministic**: no generative AI, no LLM calls, no per-run token cost, and every rule that influenced a score is one you can audit.
+
+**This package (`@usebrindle/merge-risk-core`)** is the platform-agnostic scoring engine only: the library you embed in your own **Node.js** tooling (custom CI, internal dashboards, or adapters you maintain yourself). If you just want merge-risk scoring on **GitHub** with minimal setup, use the **Brindle GitHub Action** instead; setup, workflow examples, and product docs live in the [Brindle](https://github.com/usebrindle/brindle) repository.
+
+```bash
+npm install @usebrindle/merge-risk-core
+```
 
 For adapter responsibilities, base-ref security, and semver notes, see [docs/programmatic-use.md](../../docs/programmatic-use.md).
 
@@ -13,13 +19,6 @@ Install alongside this package (versions should satisfy the ranges below):
 - `ajv`
 - `js-yaml`
 - `micromatch`
-
-## Build (from monorepo root)
-
-```bash
-npm ci
-npm run build -w @usebrindle/merge-risk-core
-```
 
 ## Minimal usage
 
@@ -50,6 +49,8 @@ const result = score(
 );
 ```
 
+This package exposes the merge-risk **scoring engine**: `score()`, YAML config loading, `buildRiskReport`, and the criteria, mutators, and plugins shipped with Brindle under `core/`. It does **not** include GitHub or GitLab **implementations** (no Octokit). It **does** export the **`PlatformAdapter`** interface type so custom adapters share the same contract as [`adapters/PlatformAdapter.ts`](../../adapters/PlatformAdapter.ts) in the monorepo.
+
 ## `PlatformAdapter` (type-only)
 
 Implement this interface in your platform layer; import the type from the same package entry:
@@ -57,7 +58,3 @@ Implement this interface in your platform layer; import the type from the same p
 ```ts
 import type { PlatformAdapter } from "@usebrindle/merge-risk-core";
 ```
-
-## Publishing (maintainers)
-
-Publishing to npm is documented for maintainers in [CONTRIBUTING.md](../../CONTRIBUTING.md#publishing-merge-risk-core-to-npm). Locally, run `npm run build -w @usebrindle/merge-risk-core` then `npm pack -w @usebrindle/merge-risk-core` to validate the tarball before a release tag.

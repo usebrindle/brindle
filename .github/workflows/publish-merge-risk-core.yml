@@ -1,7 +1,7 @@
 # Publishes @usebrindle/merge-risk-core when a version tag is pushed.
 #
 # Convention: bump `version` in packages/merge-risk-core/package.json on main first,
-# then create and push tag `merge-risk-core-v{version}` (example: merge-risk-core-v0.1.0).
+# then create and push tag `merge-risk-core-v{version}` (example: merge-risk-core-v0.2.0).
 #
 # Publishing uses npm Trusted Publishing (OIDC) from GitHub Actions — no long-lived
 # NPM_TOKEN. Requires npm CLI ≥ 11.5.1 and Node ≥ 22.14 (see npm docs).
