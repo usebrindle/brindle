@@ -89,11 +89,23 @@ This repo exercises merge-risk on its own PRs via committed [`.merge-risk.yml`](
 
 ## Publishing merge-risk-core to npm
 
-Maintainers only: these steps publish [`@usebrindle/merge-risk-core`](https://www.npmjs.com/package/@usebrindle/merge-risk-core) from this repo. Consumers only need `npm install`; they do not use tags or repository secrets.
+Maintainers only: these steps publish [`@usebrindle/merge-risk-core`](https://www.npmjs.com/package/@usebrindle/merge-risk-core) from this repo. Consumers only need `npm install`; they do not use tags.
+
+CI uses **[npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers/)** (OIDC from GitHub Actions), so you do **not** store a publish-capable **`NPM_TOKEN`** for this workflow.
+
+### One-time: trusted publisher on npm
+
+1. On [npmjs.com](https://www.npmjs.com/), open **`@usebrindle/merge-risk-core`** → **Settings** (or **Package access**) → **Trusted publisher** (wording may vary).
+2. Choose **GitHub Actions** and configure:
+   - **Repository:** `usebrindle/brindle` (must match the repo that runs the workflow).
+   - **Workflow filename:** `publish-merge-risk-core.yml` only (not a path). Extension and spelling must match [`.github/workflows/publish-merge-risk-core.yml`](.github/workflows/publish-merge-risk-core.yml) exactly — npm does not validate until publish time.
+
+See npm’s doc for [GitHub Actions configuration](https://docs.npmjs.com/trusted-publishers#github-actions-configuration) (`id-token: write`, supported runners, and `repository.url` alignment). After publishes succeed via OIDC, consider restricting token-based publishing on the package (npm: **Publishing access** → require 2FA and disallow tokens) and revoking old automation tokens.
+
+### Each release
 
 1. On **`main`**, bump **`version`** in [`packages/merge-risk-core/package.json`](packages/merge-risk-core/package.json) (via a normal PR).
 2. Create and push an annotated tag **`merge-risk-core-v{version}`** whose suffix matches `package.json` (example: `merge-risk-core-v0.1.0`). That triggers [`.github/workflows/publish-merge-risk-core.yml`](.github/workflows/publish-merge-risk-core.yml), which runs **`npm publish -w @usebrindle/merge-risk-core`**.
-3. The repository needs an **`NPM_TOKEN`** GitHub Actions secret: an npm automation token with publish rights for the **`@usebrindle`** scope.
 
 Before tagging, validate the tarball locally: **`npm run build -w @usebrindle/merge-risk-core`** then **`npm pack -w @usebrindle/merge-risk-core`**.
 
