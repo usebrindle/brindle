@@ -4,7 +4,7 @@ Brindle is MIT licensed and built in the open. Contributions are welcome.
 
 ## Development
 
-Requires **Node.js 20+** (see `engines` in [`package.json`](package.json), aligned with the GitHub Action runtime in the [LLD](docs/designs/lld-merge-risk-classifier.md)).
+Requires **Node.js 22+** (see `engines` in [`package.json`](package.json); supported LTS, not EOL). **CI** and the **published GitHub Action** run on **Node 24** (`node24`); use 24 locally if you want an exact match with CI (see the [LLD](docs/designs/lld-merge-risk-classifier.md)).
 
 ```bash
 npm ci

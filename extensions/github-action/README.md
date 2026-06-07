@@ -1,6 +1,6 @@
 # GitHub Action extension
 
-JavaScript Action (`node20`) that runs Brindle on `pull_request` events: loads **`.merge-risk.yml` from the pull request base ref** (ADR 0001), builds `PRContext` via `GitHubAdapter`, scores with `score()`, publishes with `writeResult()` (Check Run + optional comment).
+JavaScript Action (`node24`) that runs Brindle on `pull_request` events: loads **`.merge-risk.yml` from the pull request base ref** (ADR 0001), builds `PRContext` via `GitHubAdapter`, scores with `score()`, publishes with `writeResult()` (Check Run + optional comment).
 
 ## Layout
 

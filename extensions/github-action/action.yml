@@ -63,5 +63,5 @@ outputs:
       See docs/designs/lld-merge-risk-classifier.md and ADR 0002.
 
 runs:
-  using: node20
+  using: node24
   main: dist/index.js
