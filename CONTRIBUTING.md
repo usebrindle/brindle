@@ -92,7 +92,7 @@ This repo exercises merge-risk on its own PRs via committed [`.merge-risk.yml`](
 Maintainers only: these steps publish [`@usebrindle/merge-risk-core`](https://www.npmjs.com/package/@usebrindle/merge-risk-core) from this repo. Consumers only need `npm install`; they do not use tags or repository secrets.
 
 1. On **`main`**, bump **`version`** in [`packages/merge-risk-core/package.json`](packages/merge-risk-core/package.json) (via a normal PR).
-2. Create and push an annotated tag **`merge-risk-core-v{version}`** whose suffix matches `package.json` (example: `merge-risk-core-v0.1.0`). That triggers [`.github/workflows/publish-merge-risk-core.yml`](.github/workflows/publish-merge-risk-core.yml), which runs **`npm publish -w @usebrindle/merge-risk-core`**.
+2. Create and push an annotated tag **`merge-risk-core-v{version}`** whose suffix matches `package.json` (example: `merge-risk-core-v0.2.0`). That triggers [`.github/workflows/publish-merge-risk-core.yml`](.github/workflows/publish-merge-risk-core.yml), which runs **`npm publish -w @usebrindle/merge-risk-core`**.
 3. The repository needs an **`NPM_TOKEN`** GitHub Actions secret: an npm automation token with publish rights for the **`@usebrindle`** scope.
 
 Before tagging, validate the tarball locally: **`npm run build -w @usebrindle/merge-risk-core`** then **`npm pack -w @usebrindle/merge-risk-core`**.
