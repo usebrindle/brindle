@@ -58,6 +58,6 @@ Implement this interface in your platform layer; import the type from the same p
 import type { PlatformAdapter } from "@usebrindle/merge-risk-core";
 ```
 
-## Publishing
+## Publishing (maintainers)
 
-Publishing runs from GitHub when you push tag **`merge-risk-core-v*`** (see the [Brindle README](../../README.md#npm-package-programmatic-use)). Locally, run `npm run build -w @usebrindle/merge-risk-core` then `npm pack -w @usebrindle/merge-risk-core` to validate the tarball before tagging.
+Publishing to npm is documented for maintainers in [CONTRIBUTING.md](../../CONTRIBUTING.md#publishing-merge-risk-core-to-npm). Locally, run `npm run build -w @usebrindle/merge-risk-core` then `npm pack -w @usebrindle/merge-risk-core` to validate the tarball before a release tag.

@@ -65,4 +65,4 @@ sequenceDiagram
 
 - [Low-level design](designs/lld-merge-risk-classifier.md) — engine and adapter layering.
 - [Package README](../packages/merge-risk-core/README.md) — build from monorepo root, tagging for npm release.
-- [Root README npm section](../README.md#npm-package-programmatic-use) — release tagging convention.
+- [Root README npm embedders section](../README.md#npm-library-for-embedders) — product overview for library consumers.

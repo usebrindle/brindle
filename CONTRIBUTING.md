@@ -87,6 +87,14 @@ Static analysis runs in [`.github/workflows/sonar.yml`](.github/workflows/sonar.
 
 This repo exercises merge-risk on its own PRs via committed [`.merge-risk.yml`](.merge-risk.yml). **Canonical** description of what is enabled (criteria, mutators, declarative rules, trusted plugins, labels, and paths) is the **Dogfood** bullet under [Brindle repository snapshot (this spec vs shipped code)](docs/designs/lld-merge-risk-classifier.md#brindle-repository-snapshot-this-spec-vs-shipped-code) in the LLD. A short index with the same pointers lives in [docs/dogfood/README.md](docs/dogfood/README.md). Do not duplicate that narrative here.
 
-## Pull requests
+## Publishing merge-risk-core to npm
 
-Brindle's own history is a public trust artifact. Write PR descriptions that explain what the change does and why, and reference the relevant ADR where one applies. The care goes into the description, not just the diff.
+Maintainers only: these steps publish [`@usebrindle/merge-risk-core`](https://www.npmjs.com/package/@usebrindle/merge-risk-core) from this repo. Consumers only need `npm install`; they do not use tags or repository secrets.
+
+1. On **`main`**, bump **`version`** in [`packages/merge-risk-core/package.json`](packages/merge-risk-core/package.json) (via a normal PR).
+2. Create and push an annotated tag **`merge-risk-core-v{version}`** whose suffix matches `package.json` (example: `merge-risk-core-v0.1.0`). That triggers [`.github/workflows/publish-merge-risk-core.yml`](.github/workflows/publish-merge-risk-core.yml), which runs **`npm publish -w @usebrindle/merge-risk-core`**.
+3. The repository needs an **`NPM_TOKEN`** GitHub Actions secret: an npm automation token with publish rights for the **`@usebrindle`** scope.
+
+Before tagging, validate the tarball locally: **`npm run build -w @usebrindle/merge-risk-core`** then **`npm pack -w @usebrindle/merge-risk-core`**.
+
+## Pull requests

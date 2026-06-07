@@ -136,16 +136,12 @@ Brindle reads **`.merge-risk.yml`** from the pull request **base** branch. Optio
 | Declarative rules | Extra weighted rules in config (MVP: `labels_any`). | [docs/guides/declarative-rules.md](docs/guides/declarative-rules.md) |
 | Trusted plugins | Merge base-ref YAML plugin files into the same weight pool. | [docs/guides/trusted-plugins.md](docs/guides/trusted-plugins.md) |
 
-## npm package (programmatic use)
+## npm library for embedders
 
-The platform-agnostic scoring engine is published as **`@usebrindle/merge-risk-core`** on npm. It exposes `score`, config loading, `buildRiskReport`, the **`PlatformAdapter`** type, and related types from `core/` ... without GitHub adapter implementations or the Action. Install details and a minimal example live in [packages/merge-risk-core/README.md](packages/merge-risk-core/README.md). Adapter contracts, base-ref security, and semver expectations are in [docs/programmatic-use.md](docs/programmatic-use.md).
+The same **deterministic** scoring engine is published on npm for teams who want merge-risk **inside their own Node.js tooling** (for example custom CI glue or a platform adapter you maintain). The package exposes `score`, YAML config loading, `buildRiskReport`, the **`PlatformAdapter`** type, and related types from `core/` ... it does **not** ship the GitHub Action or Octokit.
 
-**Releasing a version**
-
-1. On `main`, bump **`version`** in [packages/merge-risk-core/package.json](packages/merge-risk-core/package.json) (via PR).
-2. Create and push an annotated tag **`merge-risk-core-v{version}`** (must match the `package.json` version, e.g. `merge-risk-core-v0.1.0`). That pushes the [Publish merge-risk-core](.github/workflows/publish-merge-risk-core.yml) workflow, which runs `npm publish -w @usebrindle/merge-risk-core`.
-
-The repository needs an **`NPM_TOKEN`** secret (automation token with publish rights for the scope).
+- **Install and quick example:** [packages/merge-risk-core/README.md](packages/merge-risk-core/README.md)
+- **Adapter contracts and security model:** [docs/programmatic-use.md](docs/programmatic-use.md)
 
 ## Roadmap
 
