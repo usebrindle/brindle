@@ -8,12 +8,15 @@ Requires **Node.js 22+** (see `engines` in [`package.json`](package.json); suppo
 
 ```bash
 npm ci
+npm run build:merge-risk-core   # required before npm test (public API contract test reads packages/merge-risk-core/dist)
 npm run typecheck
 npm run lint
 npm run test
 npm run test:coverage   # same as CI test step (lcov for Sonar)
 npm run build:github-action   # refresh extensions/github-action/dist after editing the Action
 ```
+
+The **`@usebrindle/merge-risk-core`** workspace package is built with **tsup**; CI builds it **before** Vitest. Contract tests in [`test/merge-risk-core-public-api.test.ts`](test/merge-risk-core-public-api.test.ts) import the built `dist/` entry. Programmatic usage and adapter contracts are documented in [docs/programmatic-use.md](docs/programmatic-use.md).
 
 ## Tests and coverage
 
@@ -33,6 +36,7 @@ Target layout (from the [LLD](docs/designs/lld-merge-risk-classifier.md)):
 - `core/` … the platform-agnostic scoring engine, criteria, mutators, coverage adapters, config, and reporting model. Depends on no platform SDK. This is what makes Brindle portable across GitHub, GitLab, and Bitbucket. See [ADR 0007](docs/adrs/0007-platform-adapter-boundary.md).
 - `adapters/` … one implementation of `PlatformAdapter` per platform. The only place that knows which platform it is talking to. GitHub lives under `adapters/github/` (REST client + `GitHubAdapter`).
 - `extensions/` … the native CI wrapper per platform (GitHub Action first). The shipping bundle lives under `extensions/github-action/dist/` and is produced with **`npm run build:github-action`** (`@vercel/ncc`). CI fails if `dist/` is out of date relative to the TypeScript sources.
+- `packages/merge-risk-core/` … npm workspace that bundles `core/` (plus the **`PlatformAdapter`** type) for **`@usebrindle/merge-risk-core`**. See [docs/programmatic-use.md](docs/programmatic-use.md).
 
 The LLD layout (`core/`, `adapters/`, `extensions/`) lives in-tree; new work should stay in the right layer so we do not paint ourselves into a GitHub-shaped corner.
 
