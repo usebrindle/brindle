@@ -25,11 +25,17 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Build merge-risk-core (required for public API + tarball smoke)
+        run: npm run build:merge-risk-core
+
       - name: Test
         run: npm run test -- --coverage
 
-      - name: Build and pack merge-risk-core workspace package
-        run: npm run build:merge-risk-core && npm pack -w @usebrindle/merge-risk-core --dry-run
+      - name: Verify merge-risk-core pack (dry-run)
+        run: npm pack -w @usebrindle/merge-risk-core --dry-run
+
+      - name: Smoke test merge-risk-core tarball install
+        run: node scripts/smoke-merge-risk-core-tarball.mjs
 
       - name: Verify GitHub Action bundle (ncc drift)
         run: npm run build:github-action && git diff --exit-code extensions/github-action/dist

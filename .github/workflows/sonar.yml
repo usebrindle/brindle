@@ -30,6 +30,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build merge-risk-core (required for public API contract tests)
+        run: npm run build:merge-risk-core
+
       - name: Test with coverage (lcov for Sonar)
         run: npm run test -- --coverage
 
