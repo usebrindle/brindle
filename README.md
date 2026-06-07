@@ -143,24 +143,6 @@ The same **deterministic** scoring engine is published on npm for teams who want
 - **Install and quick example:** [packages/merge-risk-core/README.md](packages/merge-risk-core/README.md)
 - **Adapter contracts and security model:** [docs/programmatic-use.md](docs/programmatic-use.md)
 
-## Roadmap
-
-- [x] Core scoring engine
-- [x] GitHub Action ... score, comment, check run
-- [x] Native auto-merge on low-risk changes
-- [x] Istanbul coverage scoring
-- [x] File pattern criterion (`file_patterns`)
-- [x] Author seniority criterion (`author_seniority`)
-- [x] Service criticality criterion (`service_criticality`)
-- [x] Branch age criterion (`branch_age`)
-- [x] Junior author mutator (`junior_author`) — schema-validated
-- [x] Critical service mutator (`critical_service`) — schema-validated
-- [x] Declarative rules (`declarative_rules`) — labels_any MVP; schema-validated
-- [x] Trusted plugins (`trusted_plugins`) — base-ref YAML files, `labels_any` MVP; schema-validated; wired in the GitHub Action
-- [ ] Coverage formats ... lcov and Cobertura
-- [ ] GitLab CI component
-- [ ] Bitbucket Pipe
-
 ## Documentation
 
 All guides, reference pages, and the full scoring write-up live in **[docs/README.md](docs/README.md)**.
