@@ -2,7 +2,9 @@
 
 Platform-agnostic merge-risk **scoring engine**: `score()`, YAML config loading, `buildRiskReport`, criteria/mutators/plugins as shipped in the [Brindle](https://github.com/usebrindle/brindle) monorepo under `core/`.
 
-This package does **not** include GitHub/GitLab adapters or the GitHub Action. Use those from the main repo or future platform packages.
+This package does **not** include GitHub/GitLab **implementations** (no Octokit). It **does** export the **`PlatformAdapter`** interface type so custom adapters share the same contract as [`adapters/PlatformAdapter.ts`](../../adapters/PlatformAdapter.ts) in the monorepo.
+
+For adapter responsibilities, base-ref security, and semver notes, see [docs/programmatic-use.md](../../docs/programmatic-use.md).
 
 ## Peer dependencies
 
@@ -48,6 +50,14 @@ const result = score(
 );
 ```
 
+## `PlatformAdapter` (type-only)
+
+Implement this interface in your platform layer; import the type from the same package entry:
+
+```ts
+import type { PlatformAdapter } from "@usebrindle/merge-risk-core";
+```
+
 ## Publishing
 
-Publishing runs from GitHub when you push tag **`merge-risk-core-v*`** (see the [Brindle README](https://github.com/usebrindle/brindle/blob/main/README.md#npm-package-programmatic-use)). Locally, run `npm run build` then `npm pack` to validate the tarball before tagging.
+Publishing runs from GitHub when you push tag **`merge-risk-core-v*`** (see the [Brindle README](../../README.md#npm-package-programmatic-use)). Locally, run `npm run build -w @usebrindle/merge-risk-core` then `npm pack -w @usebrindle/merge-risk-core` to validate the tarball before tagging.
