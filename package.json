@@ -15,6 +15,7 @@
     "build:github-action": "ncc build extensions/github-action/index.ts -o extensions/github-action/dist",
     "build:merge-risk-core": "npm run build -w @usebrindle/merge-risk-core",
     "smoke:merge-risk-core-tarball": "node scripts/smoke-merge-risk-core-tarball.mjs",
+    "tag:merge-risk-core": "node scripts/tag-merge-risk-core.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
