@@ -1,6 +1,6 @@
 # @usebrindle/merge-risk-core
 
-**Deterministic pull-request risk scoring you can embed anywhere.** This package is **@usebrindle/merge-risk-core** — the platform-agnostic Node.js library that turns neutral change data into a numeric risk score, a LOW / MEDIUM / HIGH tier, and an auditable per-criterion breakdown.
+You need a deterministic pull request risk score, LOW / MEDIUM / HIGH tier labels, and per-criterion justification you can call from your own Node services or runners without LLMs, tokens, or GitHub SDKs in the scoring path. This package is the scoring engine behind Brindle. Brindle is the open-source project that runs merge-risk on GitHub; see the [Brindle](https://github.com/usebrindle/brindle) repository for workflows, the Action, and setup.
 
 ## The problem
 
@@ -8,16 +8,16 @@ AI-assisted development and smaller batch sizes mean more pull requests land in 
 
 ## What it does
 
-[Brindle](https://github.com/usebrindle/brindle) scores each pull request from **0 to 100** and maps that value into **LOW**, **MEDIUM**, or **HIGH** using **thresholds and weights you declare** in configuration. Scoring is **deterministic**: no generative AI, no LLM calls, no token cost on each run, and every built-in rule you enable is inspectable in code and in the `breakdown` the scorer returns.
+[Brindle](https://github.com/usebrindle/brindle) scores each pull request from 0 to 100 and maps that value into LOW, MEDIUM, or HIGH using thresholds and weights you declare in configuration. Scoring is deterministic: no generative AI, no LLM calls, no token cost on each run, and every built-in rule you enable is inspectable in code and in the `breakdown` the scorer returns.
 
 ## Engine or GitHub Action?
 
 | You want… | Use |
 | --- | --- |
-| A **library** to call from your own Node services, custom CI, or internal dashboards | **This package** — import `score`, load config from YAML or a plain object, stay in-process. |
-| **Merge-risk on GitHub** with workflows, comments, and maintained wiring | The **Brindle GitHub Action** and repo docs — setup lives in the [Brindle](https://github.com/usebrindle/brindle) repository, not in this npm package. |
+| A library to call from your own Node services, custom CI, or internal dashboards | This package. Import `score`, load config from YAML or a plain object, stay in-process. |
+| Merge-risk on GitHub with workflows, comments, and maintained wiring | The Brindle GitHub Action and repo docs. Setup lives in the [Brindle](https://github.com/usebrindle/brindle) repository, not in this npm package. |
 
-This package is the **scoring engine** only. It does not ship Octokit, GitHub Actions, or other platform SDKs.
+This package is the scoring engine only. It does not ship Octokit, GitHub Actions, or other platform SDKs.
 
 ## Install
 
@@ -44,23 +44,22 @@ criteria:
   diff_size: { weight: 100 }
 `);
 
-const result = score(
-  {
-    repoSlug: "acme/demo",
-    changeNumber: 42,
-    headSha: "abc123",
-    baseRef: "main",
-    author: "alice",
-    title: "Fix typo",
-    body: "",
-    labels: [],
-    createdAt: "2026-01-01T00:00:00Z",
-    files: [],
-    totalAdditions: 50,
-    totalDeletions: 50,
-  },
-  scoringConfig,
-);
+const prContext = {
+  repoSlug: "acme/demo",
+  changeNumber: 42,
+  headSha: "abc123",
+  baseRef: "main",
+  author: "alice",
+  title: "Fix typo",
+  body: "",
+  labels: [],
+  createdAt: "2026-01-01T00:00:00Z",
+  files: [],
+  totalAdditions: 50,
+  totalDeletions: 50,
+};
+
+const result = score(prContext, scoringConfig);
 
 // `result` is a ScoreResult, for example:
 // {
@@ -69,7 +68,7 @@ const result = score(
 //   breakdown: [
 //     {
 //       name: "Diff size",
-//       score: 25,           // raw 0–100 for this criterion before tier mapping
+//       score: 25,           // raw 0 to 100 for this criterion before tier mapping
 //       weight: 100,         // normalized share of the blend (here 100% of active weight)
 //       weighted: 25,        // contribution to the final score
 //       justification: "100 total lines changed (additions + deletions)",
@@ -81,19 +80,30 @@ const result = score(
 // }
 ```
 
-`score` clamps the final value to **0–100**. `tier` is derived from `scoringConfig.thresholds` (`low` inclusive for LOW; above `low` through `medium` inclusive for MEDIUM; above `medium` for HIGH).
+`score` clamps the final value to 0 through 100. `tier` comes from `scoringConfig.thresholds`: at or below `low` is LOW, above `low` through `medium` inclusive is MEDIUM, above `medium` is HIGH.
 
 ## Examples
 
-All examples use **built-in criterion ids** shipped with this package: `diff_size`, `file_patterns`, `branch_age`, `author_seniority`, `test_coverage`, `service_criticality` (see `core/criteria/builtins.ts` in the repo).
-
-### 1. Scoring purely on diff size
-
-Map total added+deleted lines to a 0–100 raw score against a line cap (`max_lines_for_cap`; default **400** if omitted). Here **200** changed lines hit the cap → raw **100** → final score **100** → tier **HIGH** with default thresholds 30 / 60.
+All examples use built-in criterion ids shipped with this package: `diff_size`, `file_patterns`, `branch_age`, `author_seniority`, `test_coverage`, `service_criticality` (see `core/criteria/builtins.ts` in the repo).
 
 ```ts
 import { loadMergeRiskRepositoryYaml, score } from "@usebrindle/merge-risk-core";
 
+const basePullRequest = {
+  repoSlug: "acme/demo",
+  baseRef: "main",
+  author: "alice",
+  body: "",
+  labels: [],
+  createdAt: "2026-01-01T00:00:00Z",
+} as const;
+```
+
+### 1. Scoring purely on diff size
+
+Total added plus deleted lines map to a raw score from 0 to 100 against a line cap (`max_lines_for_cap`; the default is 400 if omitted). With `max_lines_for_cap: 200`, 200 changed lines hit the cap, so the raw diff score is 100, the final score is 100, and the tier is HIGH under default thresholds 30 and 60.
+
+```ts
 const { scoringConfig } = loadMergeRiskRepositoryYaml(`
 thresholds: { low: 30, medium: 60 }
 criteria:
@@ -105,15 +115,10 @@ criteria:
 
 const result = score(
   {
-    repoSlug: "acme/demo",
+    ...basePullRequest,
     changeNumber: 1,
     headSha: "abc",
-    baseRef: "main",
-    author: "alice",
     title: "Large refactor",
-    body: "",
-    labels: [],
-    createdAt: "2026-01-01T00:00:00Z",
     files: [],
     totalAdditions: 120,
     totalDeletions: 80,
@@ -126,11 +131,9 @@ const result = score(
 
 ### 2. Two criteria with weights (how the blend splits)
 
-Configured weights **60** (`diff_size`) and **40** (`file_patterns`) sum to **100**. The engine **renormalizes** so active criteria receive percentage shares of the final blend: here **60%** and **40%**. With **100** total lines and `max_lines_for_cap: 200`, diff raw is **50**. Changed paths include `src/app.ts`, which matches `**/*.ts` at configured rule score **80**. Weighted contributions: **30** + **32** → **`result.score === 62`**, **`tier === "HIGH"`**. Each `breakdown` row shows `score` (raw), `weight` (normalized percent), and `weighted` (contribution).
+Configured weights 60 for `diff_size` and 40 for `file_patterns` sum to 100. The engine renormalizes so active criteria receive percentage shares of the final blend, here 60% and 40%. With 100 total lines and `max_lines_for_cap: 200`, the diff raw score is 50. Changed paths include `src/app.ts`, which matches `**/*.ts` at configured rule score 80. Weighted contributions are 30 and 32, so `result.score` is 62 and `tier` is `"HIGH"`. Each `breakdown` row shows `score` (raw), `weight` (normalized percent), and `weighted` (contribution).
 
 ```ts
-import { loadMergeRiskRepositoryYaml, score } from "@usebrindle/merge-risk-core";
-
 const { scoringConfig } = loadMergeRiskRepositoryYaml(`
 thresholds: { low: 30, medium: 60 }
 criteria:
@@ -148,15 +151,10 @@ criteria:
 
 const result = score(
   {
-    repoSlug: "acme/demo",
+    ...basePullRequest,
     changeNumber: 2,
     headSha: "def",
-    baseRef: "main",
-    author: "bob",
     title: "Touch TS",
-    body: "",
-    labels: [],
-    createdAt: "2026-01-01T00:00:00Z",
     files: [{ path: "src/app.ts", status: "modified", additions: 50, deletions: 50 }],
     totalAdditions: 50,
     totalDeletions: 50,
@@ -167,80 +165,13 @@ const result = score(
 // File patterns row: score 80, weight 40, weighted 32
 ```
 
-### 3. Tightening or relaxing LOW vs HIGH (thresholds only)
+### 3. A criterion self-disables; remaining weights absorb the share
 
-The same underlying **score** can fall in different **tiers** depending on `thresholds` only. With **25** changed lines on `max_lines_for_cap: 100`, the diff raw score is **25**. **`low: 20, medium: 40`** → **MEDIUM** (25 is above `low`). **`low: 30, medium: 60`** → **LOW** (25 is at or below `low`).
+`branch_age` scores from `classifiedAtIso` and `headCommitCommittedAtIso` on the context (adapter-supplied clock; the criterion does not call `Date.now()`). When the head timestamp cannot be turned into a finite age, the criterion returns `selfDisable: true`: it is dropped from the blend and its configured weight is redistributed across remaining active criteria.
 
-```ts
-import { loadMergeRiskRepositoryYaml, score } from "@usebrindle/merge-risk-core";
-
-const context = {
-  repoSlug: "acme/demo",
-  changeNumber: 3,
-  headSha: "ghi",
-  baseRef: "main",
-  author: "carol",
-  title: "Small change",
-  body: "",
-  labels: [],
-  createdAt: "2026-01-01T00:00:00Z",
-  files: [],
-  totalAdditions: 15,
-  totalDeletions: 10,
-};
-
-const tight = loadMergeRiskRepositoryYaml(`
-thresholds: { low: 20, medium: 40 }
-criteria:
-  diff_size: { weight: 100, options: { max_lines_for_cap: 100 } }
-`).scoringConfig;
-
-const relaxed = loadMergeRiskRepositoryYaml(`
-thresholds: { low: 30, medium: 60 }
-criteria:
-  diff_size: { weight: 100, options: { max_lines_for_cap: 100 } }
-`).scoringConfig;
-
-score(context, tight); // tier "MEDIUM", score 25
-score(context, relaxed); // tier "LOW", score 25
-```
-
-### 4. YAML string vs validated object
-
-- **`loadMergeRiskRepositoryYaml(text)`** — parse a full `.merge-risk.yml` document; returns `{ scoringConfig, autoMerge? }`. Use **`scoringConfig`** with `score`.
-- **`loadScoringConfigFromMergeRiskYaml(text)`** — same parse/validate path, returns **`ScoringConfig`** directly.
-- **`assertValidScoringConfig(parsed)`** — validate an **already-parsed** root mapping (for example from `JSON` or from `parseMergeRiskYamlDocument`). On failure, throws **`MergeRiskConfigError`**.
+With equal weights 50 and 50, a valid one-hour-old head against `max_age_hours_for_cap: 1` yields raw 100 for age and 50 for diff (50 lines on cap 100), so the blend is 75. If age self-disables, only `diff_size` stays active with total configured weight 50, so it receives 100% of the normalized weight and the final score is 50 instead of 75. `disabledCriteria` contains `"branch_age"`.
 
 ```ts
-import {
-  assertValidScoringConfig,
-  loadScoringConfigFromMergeRiskYaml,
-  score,
-} from "@usebrindle/merge-risk-core";
-
-const fromYaml = loadScoringConfigFromMergeRiskYaml(`
-thresholds: { low: 30, medium: 60 }
-criteria:
-  diff_size: { weight: 100 }
-`);
-
-const fromObject = assertValidScoringConfig({
-  thresholds: { low: 30, medium: 60 },
-  criteria: { diff_size: { weight: 100 } },
-});
-
-// Both `fromYaml` and `fromObject` are valid ScoringConfig values for `score`.
-```
-
-### 5. A criterion self-disables; remaining weights absorb the share
-
-`branch_age` scores from **`classifiedAtIso`** and **`headCommitCommittedAtIso`** on the context (adapter-supplied clock; the criterion does not call `Date.now()`). When the head timestamp cannot be turned into a finite age, the criterion returns **`selfDisable: true`**: it is dropped from the blend and its configured weight is **redistributed** across remaining active criteria.
-
-With **equal weights 50 / 50**, a valid one-hour-old head against `max_age_hours_for_cap: 1` yields raw **100** for age and **50** for diff (50 lines on cap 100) → blended **75**. If age self-disables, only `diff_size` stays active with total configured weight **50** → it receives **100%** of the normalized weight → final **50** instead of **75**; **`disabledCriteria`** contains **`"branch_age"`**.
-
-```ts
-import { loadMergeRiskRepositoryYaml, score } from "@usebrindle/merge-risk-core";
-
 const { scoringConfig } = loadMergeRiskRepositoryYaml(`
 thresholds: { low: 30, medium: 60 }
 criteria:
@@ -254,16 +185,11 @@ criteria:
       max_age_hours_for_cap: 1
 `);
 
-const base = {
-  repoSlug: "acme/demo",
+const withBranchAge = {
+  ...basePullRequest,
   changeNumber: 4,
   headSha: "jkl",
-  baseRef: "main",
-  author: "dana",
   title: "Mixed signals",
-  body: "",
-  labels: [],
-  createdAt: "2026-01-01T00:00:00Z",
   files: [],
   totalAdditions: 50,
   totalDeletions: 0,
@@ -271,19 +197,13 @@ const base = {
 };
 
 const whenAgeWorks = score(
-  {
-    ...base,
-    headCommitCommittedAtIso: "2026-06-07T13:00:00.000Z",
-  },
+  { ...withBranchAge, headCommitCommittedAtIso: "2026-06-07T13:00:00.000Z" },
   scoringConfig,
 );
 // whenAgeWorks.score === 75, whenAgeWorks.tier === "HIGH", disabledCriteria: []
 
 const whenAgeDrops = score(
-  {
-    ...base,
-    headCommitCommittedAtIso: "not-a-parseable-date",
-  },
+  { ...withBranchAge, headCommitCommittedAtIso: "not-a-parseable-date" },
   scoringConfig,
 );
 // whenAgeDrops.score === 50, whenAgeDrops.tier === "MEDIUM", disabledCriteria: ["branch_age"]
@@ -291,7 +211,7 @@ const whenAgeDrops = score(
 
 ## What’s in scope
 
-This package exposes the merge-risk **scoring engine**: `score()`, YAML helpers (`loadMergeRiskRepositoryYaml`, `loadScoringConfigFromMergeRiskYaml`, `parseMergeRiskYamlDocument`, `assertValidScoringConfig`), `buildRiskReport`, and the criteria, mutators, and plugins shipped with Brindle under `core/` in the monorepo. It does **not** include GitHub or GitLab **implementations** (no Octokit). It **does** export the **`PlatformAdapter`** interface type so custom adapters share the same contract as [`adapters/PlatformAdapter.ts`](../../adapters/PlatformAdapter.ts) in the monorepo.
+This package exposes the merge-risk scoring engine: `score()`, YAML helpers (`loadMergeRiskRepositoryYaml`, `loadScoringConfigFromMergeRiskYaml`, `parseMergeRiskYamlDocument`, `assertValidScoringConfig`), `buildRiskReport`, and the criteria, mutators, and plugins shipped with Brindle under `core/` in the monorepo. It does not include GitHub or GitLab implementations (no Octokit). It does export the `PlatformAdapter` interface type so custom adapters share the same contract as [`adapters/PlatformAdapter.ts`](../../adapters/PlatformAdapter.ts) in the monorepo.
 
 ## `PlatformAdapter` (type-only)
 
