@@ -26,33 +26,29 @@ const SEMVER_LIKE_VERSION_PREFIX_PATTERN = /^\d+\.\d+\.\d+/;
  * @property {string} remoteName
  */
 
-function resolveMonorepoRootFromThisModule() {
+const resolveMonorepoRootFromThisModule = () => {
   const thisModuleDirectory = fileURLToPath(new URL(".", import.meta.url));
   return resolve(thisModuleDirectory, "..");
-}
+};
 
-function resolveMergeRiskCorePackageJsonPath(monorepoRoot) {
-  return join(monorepoRoot, ...MERGE_RISK_CORE_PACKAGE_DIRECTORY_SEGMENTS, PACKAGE_JSON_FILENAME);
-}
+const resolveMergeRiskCorePackageJsonPath = (monorepoRoot) =>
+  join(monorepoRoot, ...MERGE_RISK_CORE_PACKAGE_DIRECTORY_SEGMENTS, PACKAGE_JSON_FILENAME);
 
-function runGitWithInheritedStdio(monorepoRoot, gitArguments) {
+const runGitWithInheritedStdio = (monorepoRoot, gitArguments) => {
   execFileSync("git", gitArguments, { stdio: "inherit", cwd: monorepoRoot });
-}
+};
 
-function runGitAndCaptureTrimmedStdout(monorepoRoot, gitArguments) {
-  return execFileSync("git", gitArguments, { encoding: "utf8", cwd: monorepoRoot }).trimEnd();
-}
+const runGitAndCaptureTrimmedStdout = (monorepoRoot, gitArguments) =>
+  execFileSync("git", gitArguments, { encoding: "utf8", cwd: monorepoRoot }).trimEnd();
 
-function formatGitInvocationForOperatorLog(gitArguments) {
-  return ["git", ...gitArguments].join(" ");
-}
+const formatGitInvocationForOperatorLog = (gitArguments) => ["git", ...gitArguments].join(" ");
 
-function exitProcessWithErrorMessages(errorMessages) {
+const exitProcessWithErrorMessages = (errorMessages) => {
   errorMessages.forEach((errorMessage) => {
     console.error(errorMessage);
   });
   process.exit(1);
-}
+};
 
 /**
  * Runs `tryOperation`; on failure, prints `buildErrorMessageLines()` via {@link exitProcessWithErrorMessages} and exits.
@@ -61,15 +57,15 @@ function exitProcessWithErrorMessages(errorMessages) {
  * @param {() => string[]} buildErrorMessageLines
  * @returns {T}
  */
-function tryOperationOrExitWithErrorMessages(tryOperation, buildErrorMessageLines) {
+const tryOperationOrExitWithErrorMessages = (tryOperation, buildErrorMessageLines) => {
   try {
     return tryOperation();
   } catch {
     exitProcessWithErrorMessages(buildErrorMessageLines());
   }
-}
+};
 
-function printUsageAndExitSuccessfully() {
+const printUsageAndExitSuccessfully = () => {
   console.log(`Usage: node scripts/tag-merge-risk-core.mjs [options]
 
 Reads version from packages/merge-risk-core/package.json and uses tag
@@ -81,21 +77,18 @@ Options:
   --remote NAME Remote name for push (default: ${DEFAULT_GIT_REMOTE_NAME})
 `);
   process.exit(0);
-}
+};
 
-function exitProcessDueToUnknownCliArgument(unknownArgument) {
+const exitProcessDueToUnknownCliArgument = (unknownArgument) =>
   exitProcessWithErrorMessages(["Unknown argument: " + unknownArgument, "Try --help"]);
-}
 
-function exitProcessDueToMissingRemoteValue() {
-  exitProcessWithErrorMessages(["Missing value for --remote"]);
-}
+const exitProcessDueToMissingRemoteValue = () => exitProcessWithErrorMessages(["Missing value for --remote"]);
 
 /**
  * @param {string[]} rawArgv tokens after `node …/tag-merge-risk-core.mjs`
  * @returns {CliOptions}
  */
-function parseCliOptions(rawArgv) {
+const parseCliOptions = (rawArgv) => {
   let isDryRun = false;
   let shouldSkipPush = false;
   let remoteName = DEFAULT_GIT_REMOTE_NAME;
@@ -129,20 +122,19 @@ function parseCliOptions(rawArgv) {
   }
 
   return { isDryRun, shouldSkipPush, remoteName };
-}
+};
 
-function readJsonObjectFromFile(absolutePath) {
-  return tryOperationOrExitWithErrorMessages(
+const readJsonObjectFromFile = (absolutePath) =>
+  tryOperationOrExitWithErrorMessages(
     () => JSON.parse(readFileSync(absolutePath, "utf8")),
     () => ["Could not read or parse:", absolutePath],
   );
-}
 
 /**
  * @param {unknown} parsedJson
  * @returns {string} declaredVersion e.g. "0.4.0"
  */
-function readDeclaredVersionFromMergeRiskCorePackageJson(parsedJson) {
+const readDeclaredVersionFromMergeRiskCorePackageJson = (parsedJson) => {
   if (typeof parsedJson !== "object" || parsedJson === null || !("version" in parsedJson)) {
     exitProcessWithErrorMessages([
       "Expected packages/merge-risk-core/package.json to contain a top-level `version` field.",
@@ -156,18 +148,18 @@ function readDeclaredVersionFromMergeRiskCorePackageJson(parsedJson) {
     ]);
   }
   return declaredVersion;
-}
+};
 
-function assertCurrentDirectoryIsInsideGitWorkTree(monorepoRoot) {
+const assertCurrentDirectoryIsInsideGitWorkTree = (monorepoRoot) => {
   tryOperationOrExitWithErrorMessages(
     () => runGitAndCaptureTrimmedStdout(monorepoRoot, ["rev-parse", "--is-inside-work-tree"]),
     () => [
       "Not a git repository (expected to run this script from the monorepo root, inside a git work tree).",
     ],
   );
-}
+};
 
-function doesLocalGitTagExist(monorepoRoot, releaseTagName) {
+const doesLocalGitTagExist = (monorepoRoot, releaseTagName) => {
   const fullyQualifiedTagRef = "refs/tags/" + releaseTagName;
   try {
     runGitAndCaptureTrimmedStdout(monorepoRoot, ["rev-parse", "-q", "--verify", fullyQualifiedTagRef]);
@@ -175,29 +167,34 @@ function doesLocalGitTagExist(monorepoRoot, releaseTagName) {
   } catch {
     return false;
   }
-}
+};
 
-function buildMergeRiskCoreReleaseTagName(declaredVersion) {
-  return "merge-risk-core-v" + declaredVersion;
-}
+const buildMergeRiskCoreReleaseTagName = (declaredVersion) => "merge-risk-core-v" + declaredVersion;
 
-function buildAnnotatedReleaseTagMessage(declaredVersion) {
-  return "Release merge-risk-core v" + declaredVersion;
-}
+const buildAnnotatedReleaseTagMessage = (declaredVersion) => "Release merge-risk-core v" + declaredVersion;
 
-function buildGitAnnotatedTagArguments(releaseTagName, annotatedTagMessage) {
-  return ["tag", "-a", releaseTagName, "-m", annotatedTagMessage];
-}
+const buildGitAnnotatedTagArguments = (releaseTagName, annotatedTagMessage) => [
+  "tag",
+  "-a",
+  releaseTagName,
+  "-m",
+  annotatedTagMessage,
+];
 
-function buildGitPushTagArguments(remoteName, releaseTagName) {
-  return ["push", remoteName, releaseTagName];
-}
+const buildGitPushTagArguments = (remoteName, releaseTagName) => ["push", remoteName, releaseTagName];
 
-function logDryRunGitCommand(descriptionLabel, gitArguments) {
+const logDryRunGitCommand = (descriptionLabel, gitArguments) => {
   console.log("[dry-run] " + descriptionLabel + ":", formatGitInvocationForOperatorLog(gitArguments));
-}
+};
 
-function executeDryRunReport(cliOptions, declaredVersion, releaseTagName, tagAlreadyExistsLocally, gitTagArguments, gitPushArguments) {
+const executeDryRunReport = (
+  cliOptions,
+  declaredVersion,
+  releaseTagName,
+  tagAlreadyExistsLocally,
+  gitTagArguments,
+  gitPushArguments,
+) => {
   console.log("[dry-run] version from packages/merge-risk-core/package.json:", declaredVersion);
 
   if (tagAlreadyExistsLocally) {
@@ -211,23 +208,22 @@ function executeDryRunReport(cliOptions, declaredVersion, releaseTagName, tagAlr
   if (!cliOptions.shouldSkipPush) {
     logDryRunGitCommand("would run", gitPushArguments);
   }
-}
+};
 
-function exitProcessBecauseReleaseTagAlreadyExists(releaseTagName) {
+const exitProcessBecauseReleaseTagAlreadyExists = (releaseTagName) =>
   exitProcessWithErrorMessages([
     "Tag already exists locally: " + releaseTagName,
     "Delete it first if you need to retag, or bump `version` in packages/merge-risk-core/package.json.",
   ]);
-}
 
-function createAnnotatedReleaseTag(monorepoRoot, gitTagArguments, releaseTagName, declaredVersion) {
+const createAnnotatedReleaseTag = (monorepoRoot, gitTagArguments, releaseTagName, declaredVersion) => {
   console.log(
     "Creating annotated tag " + releaseTagName + " from packages/merge-risk-core/package.json (version " + declaredVersion + ")",
   );
   runGitWithInheritedStdio(monorepoRoot, gitTagArguments);
-}
+};
 
-function pushReleaseTagOrPrintManualInstructions(cliOptions, monorepoRoot, gitPushArguments, remoteName, releaseTagName) {
+const pushReleaseTagOrPrintManualInstructions = (cliOptions, monorepoRoot, gitPushArguments, remoteName, releaseTagName) => {
   if (cliOptions.shouldSkipPush) {
     console.log(
       "Skipped push (--no-push). When ready, run: " + formatGitInvocationForOperatorLog(["push", remoteName, releaseTagName]),
@@ -236,13 +232,13 @@ function pushReleaseTagOrPrintManualInstructions(cliOptions, monorepoRoot, gitPu
   }
   console.log("Pushing " + releaseTagName + " to remote `" + remoteName + "`…");
   runGitWithInheritedStdio(monorepoRoot, gitPushArguments);
-}
+};
 
 /**
  * @param {CliOptions} cliOptions
  * @param {string} monorepoRoot
  */
-function runMergeRiskCoreReleaseTagWorkflow(cliOptions, monorepoRoot) {
+const runMergeRiskCoreReleaseTagWorkflow = (cliOptions, monorepoRoot) => {
   const packageJsonAbsolutePath = resolveMergeRiskCorePackageJsonPath(monorepoRoot);
   const mergeRiskCorePackageJson = readJsonObjectFromFile(packageJsonAbsolutePath);
   const declaredVersion = readDeclaredVersionFromMergeRiskCorePackageJson(mergeRiskCorePackageJson);
@@ -272,12 +268,12 @@ function runMergeRiskCoreReleaseTagWorkflow(cliOptions, monorepoRoot) {
 
   createAnnotatedReleaseTag(monorepoRoot, gitTagArguments, releaseTagName, declaredVersion);
   pushReleaseTagOrPrintManualInstructions(cliOptions, monorepoRoot, gitPushArguments, cliOptions.remoteName, releaseTagName);
-}
+};
 
-function main() {
+const main = () => {
   const monorepoRoot = resolveMonorepoRootFromThisModule();
   const cliOptions = parseCliOptions(process.argv.slice(2));
   runMergeRiskCoreReleaseTagWorkflow(cliOptions, monorepoRoot);
-}
+};
 
 main();
