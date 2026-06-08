@@ -84,7 +84,7 @@ mutators:
       multiplier: 1.05
 
 # Optional native auto-merge (ADR 0002). Requires workflow `contents: write` and repo auto-merge enabled.
-# auto_merge:
-#   enabled: true
-#   tier: low
-#   method: squash
+auto_merge:
+  enabled: true
+  tier: low
+  method: squash
