@@ -10,37 +10,67 @@
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
-const pkgPath = resolve(root, "packages", "merge-risk-core", "package.json");
+const DEFAULT_GIT_REMOTE_NAME = "origin";
+const MERGE_RISK_CORE_PACKAGE_DIRECTORY_SEGMENTS = ["packages", "merge-risk-core"];
+const PACKAGE_JSON_FILENAME = "package.json";
+/** Loose check: major.minor.patch prefix (matches prior script behavior). */
+const SEMVER_LIKE_VERSION_PREFIX_PATTERN = /^\d+\.\d+\.\d+/;
 
-function git(args, opts = {}) {
-  execFileSync("git", args, { stdio: "inherit", cwd: root, ...opts });
+/**
+ * @typedef {object} CliOptions
+ * @property {boolean} isDryRun
+ * @property {boolean} shouldSkipPush
+ * @property {string} remoteName
+ */
+
+function resolveMonorepoRootFromThisModule() {
+  const thisModuleDirectory = fileURLToPath(new URL(".", import.meta.url));
+  return resolve(thisModuleDirectory, "..");
 }
 
-function gitCapture(args) {
-  return execFileSync("git", args, { encoding: "utf8", cwd: root }).trimEnd();
+function resolveMergeRiskCorePackageJsonPath(monorepoRoot) {
+  return join(monorepoRoot, ...MERGE_RISK_CORE_PACKAGE_DIRECTORY_SEGMENTS, PACKAGE_JSON_FILENAME);
 }
 
-function parseArgs(argv) {
-  let dryRun = false;
-  let noPush = false;
-  let remote = "origin";
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === "--dry-run") dryRun = true;
-    else if (a === "--no-push") noPush = true;
-    else if (a === "--remote") {
-      const v = argv[++i];
-      if (v === undefined) {
-        console.error("Missing value for --remote");
-        process.exit(1);
-      }
-      remote = v;
-    } else if (a === "-h" || a === "--help") {
-      console.log(`Usage: node scripts/tag-merge-risk-core.mjs [options]
+function runGitWithInheritedStdio(monorepoRoot, gitArguments) {
+  execFileSync("git", gitArguments, { stdio: "inherit", cwd: monorepoRoot });
+}
+
+function runGitAndCaptureTrimmedStdout(monorepoRoot, gitArguments) {
+  return execFileSync("git", gitArguments, { encoding: "utf8", cwd: monorepoRoot }).trimEnd();
+}
+
+function formatGitInvocationForOperatorLog(gitArguments) {
+  return ["git", ...gitArguments].join(" ");
+}
+
+function exitProcessWithErrorMessages(errorMessages) {
+  errorMessages.forEach((errorMessage) => {
+    console.error(errorMessage);
+  });
+  process.exit(1);
+}
+
+/**
+ * Runs `tryOperation`; on failure, prints `buildErrorMessageLines()` via {@link exitProcessWithErrorMessages} and exits.
+ * @template T
+ * @param {() => T} tryOperation
+ * @param {() => string[]} buildErrorMessageLines
+ * @returns {T}
+ */
+function tryOperationOrExitWithErrorMessages(tryOperation, buildErrorMessageLines) {
+  try {
+    return tryOperation();
+  } catch {
+    exitProcessWithErrorMessages(buildErrorMessageLines());
+  }
+}
+
+function printUsageAndExitSuccessfully() {
+  console.log(`Usage: node scripts/tag-merge-risk-core.mjs [options]
 
 Reads version from packages/merge-risk-core/package.json and uses tag
 merge-risk-core-v<version> (annotated), matching the publish workflow.
@@ -48,81 +78,206 @@ merge-risk-core-v<version> (annotated), matching the publish workflow.
 Options:
   --dry-run     Print actions only; do not run git
   --no-push     Create the tag locally but do not push
-  --remote NAME Remote name for push (default: origin)
+  --remote NAME Remote name for push (default: ${DEFAULT_GIT_REMOTE_NAME})
 `);
-      process.exit(0);
-    } else {
-      console.error("Unknown argument:", a);
-      console.error("Try --help");
-      process.exit(1);
-    }
-  }
-  return { dryRun, noPush, remote };
+  process.exit(0);
 }
 
-function main() {
-  const { dryRun, noPush, remote } = parseArgs(process.argv.slice(2));
+function exitProcessDueToUnknownCliArgument(unknownArgument) {
+  exitProcessWithErrorMessages(["Unknown argument: " + unknownArgument, "Try --help"]);
+}
 
-  let pkg;
-  try {
-    pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
-  } catch {
-    console.error("Could not read or parse:", pkgPath);
-    process.exit(1);
-  }
+function exitProcessDueToMissingRemoteValue() {
+  exitProcessWithErrorMessages(["Missing value for --remote"]);
+}
 
-  const version = pkg.version;
-  if (typeof version !== "string" || !/^\d+\.\d+\.\d+/.test(version)) {
-    console.error("Expected a semver-like version in package.json, got:", version);
-    process.exit(1);
-  }
+/**
+ * @param {string[]} rawArgv tokens after `node …/tag-merge-risk-core.mjs`
+ * @returns {CliOptions}
+ */
+function parseCliOptions(rawArgv) {
+  let isDryRun = false;
+  let shouldSkipPush = false;
+  let remoteName = DEFAULT_GIT_REMOTE_NAME;
 
-  const tag = `merge-risk-core-v${version}`;
-  const message = `Release merge-risk-core v${version}`;
+  for (let tokenIndex = 0; tokenIndex < rawArgv.length; tokenIndex++) {
+    const cliToken = rawArgv[tokenIndex];
 
-  try {
-    gitCapture(["rev-parse", "--is-inside-work-tree"]);
-  } catch {
-    console.error("Not a git repository (expected to run from repo root).");
-    process.exit(1);
-  }
-
-  let tagExists = false;
-  try {
-    gitCapture(["rev-parse", "-q", "--verify", `refs/tags/${tag}`]);
-    tagExists = true;
-  } catch {
-    tagExists = false;
-  }
-
-  const tagArgs = ["tag", "-a", tag, "-m", message];
-  const pushArgs = ["push", remote, tag];
-
-  if (dryRun) {
-    console.log("[dry-run] version from package.json:", version);
-    if (tagExists) {
-      console.log(`[dry-run] tag ${tag} already exists locally; would skip git tag`);
-    } else {
-      console.log("[dry-run] would run:", ["git", ...tagArgs].join(" "));
+    if (cliToken === "--dry-run") {
+      isDryRun = true;
+      continue;
     }
-    if (!noPush) console.log("[dry-run] would run:", ["git", ...pushArgs].join(" "));
+    if (cliToken === "--no-push") {
+      shouldSkipPush = true;
+      continue;
+    }
+    if (cliToken === "--remote") {
+      const nextTokenIndex = tokenIndex + 1;
+      const remoteValue = rawArgv[nextTokenIndex];
+      if (remoteValue === undefined) {
+        exitProcessDueToMissingRemoteValue();
+      }
+      remoteName = remoteValue;
+      tokenIndex = nextTokenIndex;
+      continue;
+    }
+    if (cliToken === "-h" || cliToken === "--help") {
+      printUsageAndExitSuccessfully();
+    }
+
+    exitProcessDueToUnknownCliArgument(cliToken);
+  }
+
+  return { isDryRun, shouldSkipPush, remoteName };
+}
+
+function readJsonObjectFromFile(absolutePath) {
+  return tryOperationOrExitWithErrorMessages(
+    () => JSON.parse(readFileSync(absolutePath, "utf8")),
+    () => ["Could not read or parse:", absolutePath],
+  );
+}
+
+/**
+ * @param {unknown} parsedJson
+ * @returns {string} declaredVersion e.g. "0.4.0"
+ */
+function readDeclaredVersionFromMergeRiskCorePackageJson(parsedJson) {
+  if (typeof parsedJson !== "object" || parsedJson === null || !("version" in parsedJson)) {
+    exitProcessWithErrorMessages([
+      "Expected packages/merge-risk-core/package.json to contain a top-level `version` field.",
+    ]);
+  }
+  const declaredVersion = parsedJson.version;
+  if (typeof declaredVersion !== "string" || !SEMVER_LIKE_VERSION_PREFIX_PATTERN.test(declaredVersion)) {
+    exitProcessWithErrorMessages([
+      "Expected a semver-like `version` string in packages/merge-risk-core/package.json, got:",
+      String(declaredVersion),
+    ]);
+  }
+  return declaredVersion;
+}
+
+function assertCurrentDirectoryIsInsideGitWorkTree(monorepoRoot) {
+  tryOperationOrExitWithErrorMessages(
+    () => runGitAndCaptureTrimmedStdout(monorepoRoot, ["rev-parse", "--is-inside-work-tree"]),
+    () => [
+      "Not a git repository (expected to run this script from the monorepo root, inside a git work tree).",
+    ],
+  );
+}
+
+function doesLocalGitTagExist(monorepoRoot, releaseTagName) {
+  const fullyQualifiedTagRef = "refs/tags/" + releaseTagName;
+  try {
+    runGitAndCaptureTrimmedStdout(monorepoRoot, ["rev-parse", "-q", "--verify", fullyQualifiedTagRef]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function buildMergeRiskCoreReleaseTagName(declaredVersion) {
+  return "merge-risk-core-v" + declaredVersion;
+}
+
+function buildAnnotatedReleaseTagMessage(declaredVersion) {
+  return "Release merge-risk-core v" + declaredVersion;
+}
+
+function buildGitAnnotatedTagArguments(releaseTagName, annotatedTagMessage) {
+  return ["tag", "-a", releaseTagName, "-m", annotatedTagMessage];
+}
+
+function buildGitPushTagArguments(remoteName, releaseTagName) {
+  return ["push", remoteName, releaseTagName];
+}
+
+function logDryRunGitCommand(descriptionLabel, gitArguments) {
+  console.log("[dry-run] " + descriptionLabel + ":", formatGitInvocationForOperatorLog(gitArguments));
+}
+
+function executeDryRunReport(cliOptions, declaredVersion, releaseTagName, tagAlreadyExistsLocally, gitTagArguments, gitPushArguments) {
+  console.log("[dry-run] version from packages/merge-risk-core/package.json:", declaredVersion);
+
+  if (tagAlreadyExistsLocally) {
+    console.log(
+      "[dry-run] tag " + releaseTagName + " already exists locally; would skip creating a new annotated tag",
+    );
+  } else {
+    logDryRunGitCommand("would run", gitTagArguments);
+  }
+
+  if (!cliOptions.shouldSkipPush) {
+    logDryRunGitCommand("would run", gitPushArguments);
+  }
+}
+
+function exitProcessBecauseReleaseTagAlreadyExists(releaseTagName) {
+  exitProcessWithErrorMessages([
+    "Tag already exists locally: " + releaseTagName,
+    "Delete it first if you need to retag, or bump `version` in packages/merge-risk-core/package.json.",
+  ]);
+}
+
+function createAnnotatedReleaseTag(monorepoRoot, gitTagArguments, releaseTagName, declaredVersion) {
+  console.log(
+    "Creating annotated tag " + releaseTagName + " from packages/merge-risk-core/package.json (version " + declaredVersion + ")",
+  );
+  runGitWithInheritedStdio(monorepoRoot, gitTagArguments);
+}
+
+function pushReleaseTagOrPrintManualInstructions(cliOptions, monorepoRoot, gitPushArguments, remoteName, releaseTagName) {
+  if (cliOptions.shouldSkipPush) {
+    console.log(
+      "Skipped push (--no-push). When ready, run: " + formatGitInvocationForOperatorLog(["push", remoteName, releaseTagName]),
+    );
+    return;
+  }
+  console.log("Pushing " + releaseTagName + " to remote `" + remoteName + "`…");
+  runGitWithInheritedStdio(monorepoRoot, gitPushArguments);
+}
+
+/**
+ * @param {CliOptions} cliOptions
+ * @param {string} monorepoRoot
+ */
+function runMergeRiskCoreReleaseTagWorkflow(cliOptions, monorepoRoot) {
+  const packageJsonAbsolutePath = resolveMergeRiskCorePackageJsonPath(monorepoRoot);
+  const mergeRiskCorePackageJson = readJsonObjectFromFile(packageJsonAbsolutePath);
+  const declaredVersion = readDeclaredVersionFromMergeRiskCorePackageJson(mergeRiskCorePackageJson);
+  const releaseTagName = buildMergeRiskCoreReleaseTagName(declaredVersion);
+  const annotatedTagMessage = buildAnnotatedReleaseTagMessage(declaredVersion);
+  const gitTagArguments = buildGitAnnotatedTagArguments(releaseTagName, annotatedTagMessage);
+  const gitPushArguments = buildGitPushTagArguments(cliOptions.remoteName, releaseTagName);
+
+  assertCurrentDirectoryIsInsideGitWorkTree(monorepoRoot);
+  const tagAlreadyExistsLocally = doesLocalGitTagExist(monorepoRoot, releaseTagName);
+
+  if (cliOptions.isDryRun) {
+    executeDryRunReport(
+      cliOptions,
+      declaredVersion,
+      releaseTagName,
+      tagAlreadyExistsLocally,
+      gitTagArguments,
+      gitPushArguments,
+    );
     return;
   }
 
-  if (tagExists) {
-    console.error(`Tag already exists locally: ${tag}`);
-    console.error("Delete it first if you need to retag, or bump package.json.");
-    process.exit(1);
+  if (tagAlreadyExistsLocally) {
+    exitProcessBecauseReleaseTagAlreadyExists(releaseTagName);
   }
 
-  console.log(`Tagging ${tag} from packages/merge-risk-core/package.json (${version})`);
-  git(tagArgs);
-  if (!noPush) {
-    console.log(`Pushing ${tag} to ${remote}…`);
-    git(pushArgs);
-  } else {
-    console.log("Skipped push (--no-push). When ready: git push", remote, tag);
-  }
+  createAnnotatedReleaseTag(monorepoRoot, gitTagArguments, releaseTagName, declaredVersion);
+  pushReleaseTagOrPrintManualInstructions(cliOptions, monorepoRoot, gitPushArguments, cliOptions.remoteName, releaseTagName);
+}
+
+function main() {
+  const monorepoRoot = resolveMonorepoRootFromThisModule();
+  const cliOptions = parseCliOptions(process.argv.slice(2));
+  runMergeRiskCoreReleaseTagWorkflow(cliOptions, monorepoRoot);
 }
 
 main();
