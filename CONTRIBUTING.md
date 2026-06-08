@@ -105,7 +105,7 @@ See npm’s doc for [GitHub Actions configuration](https://docs.npmjs.com/truste
 ### Each release
 
 1. On **`main`**, bump **`version`** in [`packages/merge-risk-core/package.json`](packages/merge-risk-core/package.json) (via a normal PR).
-2. Create and push an annotated tag **`merge-risk-core-v{version}`** whose suffix matches `package.json` (example: `merge-risk-core-v0.2.0`). That triggers [`.github/workflows/publish-merge-risk-core.yml`](.github/workflows/publish-merge-risk-core.yml), which runs **`npm publish -w @usebrindle/merge-risk-core`**.
+2. Create and push an annotated tag **`merge-risk-core-v{version}`** whose suffix matches `package.json` (example: `merge-risk-core-v0.2.0`). From repo root you can run **`npm run tag:merge-risk-core`** (see [`scripts/tag-merge-risk-core.mjs`](scripts/tag-merge-risk-core.mjs); use `--dry-run` to preview). That triggers [`.github/workflows/publish-merge-risk-core.yml`](.github/workflows/publish-merge-risk-core.yml), which runs **`npm publish -w @usebrindle/merge-risk-core`**.
 
 Before tagging, validate the tarball locally: **`npm run build -w @usebrindle/merge-risk-core`** then **`npm pack -w @usebrindle/merge-risk-core`**.
 
