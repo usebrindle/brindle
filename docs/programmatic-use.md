@@ -57,6 +57,75 @@ sequenceDiagram
   Adapter->>Platform: writeResult
 ```
 
+## Additional scoring examples
+
+The [package README](../packages/merge-risk-core/README.md) keeps three short examples. Two more patterns that often come up when embedding the library are below.
+
+### Thresholds only change the tier
+
+The same underlying numeric score can fall in different tiers depending on `thresholds` only. With 25 changed lines on `max_lines_for_cap: 100`, the diff raw score is 25. With `low: 20, medium: 40`, the tier is MEDIUM (25 is above `low`). With `low: 30, medium: 60`, the tier is LOW (25 is at or below `low`).
+
+```ts
+import { loadMergeRiskRepositoryYaml, score } from "@usebrindle/merge-risk-core";
+
+const context = {
+  repoSlug: "acme/demo",
+  changeNumber: 3,
+  headSha: "ghi",
+  baseRef: "main",
+  author: "carol",
+  title: "Small change",
+  body: "",
+  labels: [],
+  createdAt: "2026-01-01T00:00:00Z",
+  files: [],
+  totalAdditions: 15,
+  totalDeletions: 10,
+};
+
+const tight = loadMergeRiskRepositoryYaml(`
+thresholds: { low: 20, medium: 40 }
+criteria:
+  diff_size: { weight: 100, options: { max_lines_for_cap: 100 } }
+`).scoringConfig;
+
+const relaxed = loadMergeRiskRepositoryYaml(`
+thresholds: { low: 30, medium: 60 }
+criteria:
+  diff_size: { weight: 100, options: { max_lines_for_cap: 100 } }
+`).scoringConfig;
+
+score(context, tight); // tier "MEDIUM", score 25
+score(context, relaxed); // tier "LOW", score 25
+```
+
+### YAML string versus validated object
+
+- `loadMergeRiskRepositoryYaml(text)` parses a full `.merge-risk.yml` document and returns `{ scoringConfig, autoMerge? }`. Pass `scoringConfig` into `score`.
+- `loadScoringConfigFromMergeRiskYaml(text)` uses the same parse and validate path and returns `ScoringConfig` directly.
+- `assertValidScoringConfig(parsed)` validates an already parsed root mapping (for example from `JSON` or from `parseMergeRiskYamlDocument`). On failure it throws `MergeRiskConfigError`.
+
+```ts
+import {
+  assertValidScoringConfig,
+  loadScoringConfigFromMergeRiskYaml,
+  score,
+} from "@usebrindle/merge-risk-core";
+
+const fromYaml = loadScoringConfigFromMergeRiskYaml(`
+thresholds: { low: 30, medium: 60 }
+criteria:
+  diff_size: { weight: 100 }
+`);
+
+const fromObject = assertValidScoringConfig({
+  thresholds: { low: 30, medium: 60 },
+  criteria: { diff_size: { weight: 100 } },
+});
+
+// Both `fromYaml` and `fromObject` are valid ScoringConfig values for `score`.
+```
+
 ## Non-goals (this package)
 
 - No **`GitHubAdapter`**, Octokit, `@actions/*`, or other platform-specific CI SDKs in this install.
