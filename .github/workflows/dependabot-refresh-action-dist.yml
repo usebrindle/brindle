@@ -1,0 +1,54 @@
+# Dependabot updates npm lockfiles but does not run `ncc` or commit
+# `extensions/github-action/dist/`. CI enforces `git diff --exit-code` on that
+# directory after `npm run build:github-action` (see ci.yml). This workflow
+# rebuilds the bundle and pushes to the Dependabot branch so the next CI run
+# passes—without relaxing the drift check on `main`.
+#
+# Requires a fine-grained PAT with Contents: Read and write on this repo only,
+# stored as a Dependabot secret (not only an Actions secret). See CONTRIBUTING.md.
+name: Dependabot refresh Action dist
+
+on:
+  pull_request:
+    paths:
+      - package.json
+      - package-lock.json
+
+concurrency:
+  group: dependabot-action-dist-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  refresh-action-dist:
+    if: github.actor == 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Dependabot branch with push-capable token
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          token: ${{ secrets.ACTION_DIST_AUTOMATION_PAT }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install and rebuild Action bundle
+        run: |
+          npm ci
+          npm run build:github-action
+
+      - name: Commit and push dist if it changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add extensions/github-action/dist
+          if git diff --staged --quiet; then
+            echo "No changes under extensions/github-action/dist; nothing to push."
+            exit 0
+          fi
+          git commit -m "chore(github-action): refresh ncc bundle for dependency update"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
