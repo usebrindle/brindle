@@ -1,6 +1,6 @@
 # GitHub Action inputs
 
-Brindle’s composite action is defined in [`extensions/github-action/action.yml`](../../extensions/github-action/action.yml). Workflow jobs should reference that path in this repository (for example `uses: usebrindle/brindle/extensions/github-action@v0.1.0`), which resolves to the directory containing `action.yml` and `dist/index.js`.
+Brindle’s composite action is defined in [`extensions/github-action/action.yml`](../../extensions/github-action/action.yml). Workflow jobs should reference that path in this repository (for example `uses: usebrindle/brindle/extensions/github-action@action-v0.1.0`), which resolves to the directory containing `action.yml` and `dist/index.js`.
 
 The table below mirrors **`action.yml`** `inputs` blocks. **Defaults** are those declared in the YAML `default:` keys.
 

@@ -19,7 +19,7 @@ auto_merge:
 
 ```yaml
     permissions:
-      contents: write        # needed so Brindle can enable auto-merge on the PR
+      contents: write        # implies read; needed so Brindle can enable auto-merge on the PR
       checks: write
       pull-requests: write
 ```
