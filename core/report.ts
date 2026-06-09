@@ -14,6 +14,9 @@ import type {
 } from "./types.js";
 import type { BuildRiskReportOptions, CheckConclusionPolicy } from "./report.types.js";
 
+/** Hidden marker in PR comment markdown so the GitHub adapter can update the same comment across runs. */
+export const BRINDLE_MERGE_RISK_COMMENT_MARKER = "<!-- brindle-merge-risk -->";
+
 type RiskTier = ScoreResult["tier"];
 
 const numericRiskRankForTier = (riskTier: RiskTier): 0 | 1 | 2 => {
@@ -162,7 +165,7 @@ export const buildMergeRiskCommentMarkdown = (scoreResult: ScoreResult): string 
     "",
     "*🐾 Scored by Brindle*",
     "",
-    "<!-- brindle-merge-risk -->",
+    BRINDLE_MERGE_RISK_COMMENT_MARKER,
   ];
   return `${commentBodyParts.join("\n")}\n`;
 };

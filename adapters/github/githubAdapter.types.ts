@@ -82,6 +82,20 @@ export type CreatePullRequestCommentInput = {
   body: string;
 };
 
+/** One row from {@link GitHubApiClient.listPullRequestIssueComments} (REST issue comments on a PR). */
+export type PullRequestIssueCommentSnapshot = {
+  id: number;
+  body: string;
+};
+
+/** Input for {@link GitHubApiClient.updatePullRequestIssueComment} (`rest.issues.updateComment`). */
+export type UpdatePullRequestIssueCommentInput = {
+  repositoryOwner: string;
+  repositoryName: string;
+  commentId: number;
+  body: string;
+};
+
 /** Input for {@link GitHubApiClient.enableNativePullRequestAutoMerge} (GraphQL `enablePullRequestAutoMerge`). */
 export type EnableNativePullRequestAutoMergeInput = {
   repositoryOwner: string;
@@ -110,6 +124,11 @@ export type GitHubApiClient = {
   ): Promise<string | null>;
   createMergeRiskCheckRun(input: CreateMergeRiskCheckRunInput): Promise<void>;
   createPullRequestComment(input: CreatePullRequestCommentInput): Promise<void>;
+  /**
+   * Lists **issue** comments on the pull request (`rest.issues.listComments`); PR conversation comments use this API.
+   */
+  listPullRequestIssueComments(lookup: GitHubPullRequestLookup): Promise<PullRequestIssueCommentSnapshot[]>;
+  updatePullRequestIssueComment(input: UpdatePullRequestIssueCommentInput): Promise<void>;
   enableNativePullRequestAutoMerge(input: EnableNativePullRequestAutoMergeInput): Promise<void>;
 };
 
