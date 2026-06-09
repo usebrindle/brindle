@@ -141,18 +141,18 @@ export class GitHubAdapter implements PlatformAdapter {
       const lastBrindleComment = [...priorIssueComments]
         .reverse()
         .find((issueComment) => issueComment.body.includes(BRINDLE_MERGE_RISK_COMMENT_MARKER));
-      if (lastBrindleComment !== undefined) {
-        await githubApiClient.updatePullRequestIssueComment({
-          repositoryOwner,
-          repositoryName,
-          commentId: lastBrindleComment.id,
-          body: report.commentMarkdown,
-        });
-      } else {
+      if (lastBrindleComment === undefined) {
         await githubApiClient.createPullRequestComment({
           repositoryOwner,
           repositoryName,
           pullRequestNumber,
+          body: report.commentMarkdown,
+        });
+      } else {
+        await githubApiClient.updatePullRequestIssueComment({
+          repositoryOwner,
+          repositoryName,
+          commentId: lastBrindleComment.id,
           body: report.commentMarkdown,
         });
       }
