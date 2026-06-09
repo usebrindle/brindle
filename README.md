@@ -89,11 +89,12 @@ jobs:
   brindle:
     runs-on: ubuntu-latest
     permissions:
+      contents: read         # to read the merge-risk config from the base branch
       checks: write          # lets Brindle publish the risk Check Run
       pull-requests: write   # lets Brindle post the risk comment
     steps:
       - uses: actions/checkout@v4
-      - uses: usebrindle/brindle/extensions/github-action@v0.1.0
+      - uses: usebrindle/brindle/extensions/github-action@action-v0.1.0
         with:
           # IMPORTANT for your very first PR. Brindle reads .merge-risk.yml from the
           # BASE branch (the branch you are merging into), never from the PR itself.
@@ -104,7 +105,7 @@ jobs:
           skip_when_merge_risk_missing_on_base: "true"
 ```
 
-**Why `permissions` matters** ... GitHub Actions start with no permissions. Brindle needs `checks: write` to post the pass/fail check and `pull-requests: write` to leave the comment. Without these the Action runs but cannot show you anything.
+**Why `permissions` matters** ... When you set `permissions` on a job, anything you omit defaults to **no access**. Brindle needs **`contents: read`** so `GITHUB_TOKEN` can load **`.merge-risk.yml` from the pull request base ref** via the GitHub API. It needs **`checks: write`** to publish the Check Run and **`pull-requests: write`** to leave the comment. Without those scopes the Action can fail when reading config or run without being able to show you anything.
 
 ### Step 3 ... open a pull request
 
