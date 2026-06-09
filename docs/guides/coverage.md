@@ -23,7 +23,7 @@ With weights 60 and 40, diff size drives 60 percent of the score and coverage 40
 **2. Make sure your tests run with coverage before the Brindle step**, then point Brindle at the file:
 
 ```yaml
-      - uses: usebrindle/brindle/extensions/github-action@action-v0.1.0
+      - uses: usebrindle/brindle/extensions/github-action@action-v0.1.1
         with:
           coverage_report_path: coverage/coverage-final.json
 ```
