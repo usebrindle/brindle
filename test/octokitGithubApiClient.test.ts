@@ -26,7 +26,7 @@ describe("createOctokitGithubApiClient", () => {
       rest: {
         pulls: { get: pullsGet, listFiles: pullsListFiles },
         checks: { create: checksCreate },
-        issues: { createComment: issuesCreateComment },
+        issues: { createComment: issuesCreateComment, listComments: vi.fn(), updateComment: vi.fn() },
       },
       paginate: vi.fn().mockResolvedValue([
         { filename: "src/x.ts", status: "modified", additions: 2, deletions: 1 },
@@ -78,7 +78,7 @@ describe("createOctokitGithubApiClient", () => {
       rest: {
         pulls: { get: pullsGet, listFiles: pullsListFiles },
         checks: { create: checksCreate },
-        issues: { createComment: issuesCreateComment },
+        issues: { createComment: issuesCreateComment, listComments: vi.fn(), updateComment: vi.fn() },
       },
       paginate,
     } as unknown as Octokit;
@@ -107,7 +107,7 @@ describe("createOctokitGithubApiClient", () => {
       rest: {
         pulls: { get: vi.fn(), listFiles: vi.fn() },
         checks: { create: checksCreate },
-        issues: { createComment: vi.fn() },
+        issues: { createComment: vi.fn(), listComments: vi.fn(), updateComment: vi.fn() },
       },
       paginate: vi.fn(),
     } as unknown as Octokit;
@@ -142,7 +142,7 @@ describe("createOctokitGithubApiClient", () => {
       rest: {
         pulls: { get: vi.fn(), listFiles: vi.fn() },
         checks: { create: checksCreate },
-        issues: { createComment: vi.fn() },
+        issues: { createComment: vi.fn(), listComments: vi.fn(), updateComment: vi.fn() },
       },
       paginate: vi.fn(),
     } as unknown as Octokit;
@@ -169,7 +169,7 @@ describe("createOctokitGithubApiClient", () => {
       rest: {
         pulls: { get: vi.fn(), listFiles: vi.fn() },
         checks: { create: vi.fn() },
-        issues: { createComment: issuesCreateComment },
+        issues: { createComment: issuesCreateComment, listComments: vi.fn(), updateComment: vi.fn() },
       },
       paginate: vi.fn(),
     } as unknown as Octokit;
@@ -190,12 +190,73 @@ describe("createOctokitGithubApiClient", () => {
     });
   });
 
+  it("paginates listPullRequestIssueComments from rest.issues.listComments", async () => {
+    const issuesListComments = vi.fn();
+    const paginate = vi.fn().mockResolvedValue([
+      { id: 1, body: "noise" },
+      { id: 2, body: "with marker <!-- brindle-merge-risk -->" },
+    ]);
+    const octokit = {
+      rest: {
+        pulls: { get: vi.fn(), listFiles: vi.fn() },
+        checks: { create: vi.fn() },
+        issues: { createComment: vi.fn(), listComments: issuesListComments, updateComment: vi.fn() },
+      },
+      paginate,
+    } as unknown as Octokit;
+
+    const githubApiClient = createOctokitGithubApiClient(octokit);
+    const comments = await githubApiClient.listPullRequestIssueComments({
+      repositoryOwner: "org",
+      repositoryName: "repo",
+      pullRequestNumber: 12,
+    });
+
+    expect(paginate).toHaveBeenCalledWith(issuesListComments, {
+      owner: "org",
+      repo: "repo",
+      issue_number: 12,
+      per_page: 100,
+    });
+    expect(comments).toEqual([
+      { id: 1, body: "noise" },
+      { id: 2, body: "with marker <!-- brindle-merge-risk -->" },
+    ]);
+  });
+
+  it("maps updatePullRequestIssueComment to rest.issues.updateComment", async () => {
+    const issuesUpdateComment = vi.fn().mockResolvedValue({});
+    const octokit = {
+      rest: {
+        pulls: { get: vi.fn(), listFiles: vi.fn() },
+        checks: { create: vi.fn() },
+        issues: { createComment: vi.fn(), listComments: vi.fn(), updateComment: issuesUpdateComment },
+      },
+      paginate: vi.fn(),
+    } as unknown as Octokit;
+
+    const githubApiClient = createOctokitGithubApiClient(octokit);
+    await githubApiClient.updatePullRequestIssueComment({
+      repositoryOwner: "acme",
+      repositoryName: "widgets",
+      commentId: 999,
+      body: "revised body",
+    });
+
+    expect(issuesUpdateComment).toHaveBeenCalledWith({
+      owner: "acme",
+      repo: "widgets",
+      comment_id: 999,
+      body: "revised body",
+    });
+  });
+
   it("throws when enableNativePullRequestAutoMerge is called with an empty pullRequestNodeId", async () => {
     const octokit = {
       rest: {
         pulls: { get: vi.fn(), listFiles: vi.fn() },
         checks: { create: vi.fn() },
-        issues: { createComment: vi.fn() },
+        issues: { createComment: vi.fn(), listComments: vi.fn(), updateComment: vi.fn() },
       },
       paginate: vi.fn(),
       request: vi.fn(),
@@ -239,7 +300,7 @@ describe("createOctokitGithubApiClient", () => {
       rest: {
         pulls: { get: vi.fn(), listFiles: vi.fn() },
         checks: { create: vi.fn() },
-        issues: { createComment: vi.fn() },
+        issues: { createComment: vi.fn(), listComments: vi.fn(), updateComment: vi.fn() },
       },
       paginate: vi.fn(),
       request: boundRequest,
@@ -289,7 +350,7 @@ describe("createOctokitGithubApiClient", () => {
       rest: {
         pulls: { get: vi.fn(), listFiles: vi.fn() },
         checks: { create: vi.fn() },
-        issues: { createComment: vi.fn() },
+        issues: { createComment: vi.fn(), listComments: vi.fn(), updateComment: vi.fn() },
         repos: { getContent: reposGetContent },
       },
       paginate: vi.fn(),
@@ -319,7 +380,7 @@ describe("createOctokitGithubApiClient", () => {
       rest: {
         pulls: { get: vi.fn(), listFiles: vi.fn() },
         checks: { create: vi.fn() },
-        issues: { createComment: vi.fn() },
+        issues: { createComment: vi.fn(), listComments: vi.fn(), updateComment: vi.fn() },
         repos: { getContent: reposGetContent },
       },
       paginate: vi.fn(),
@@ -354,7 +415,7 @@ describe("createOctokitGithubApiClient", () => {
       rest: {
         pulls: { get: vi.fn(), listFiles: vi.fn() },
         checks: { create: vi.fn() },
-        issues: { createComment: vi.fn() },
+        issues: { createComment: vi.fn(), listComments: vi.fn(), updateComment: vi.fn() },
         repos: { getContent: vi.fn(), getCommit: reposGetCommit },
       },
       paginate: vi.fn(),
@@ -385,7 +446,7 @@ describe("createOctokitGithubApiClient", () => {
       rest: {
         pulls: { get: vi.fn(), listFiles: vi.fn() },
         checks: { create: vi.fn() },
-        issues: { createComment: vi.fn() },
+        issues: { createComment: vi.fn(), listComments: vi.fn(), updateComment: vi.fn() },
         repos: { getCommit: reposGetCommit },
       },
       paginate: vi.fn(),
@@ -409,7 +470,7 @@ describe("createOctokitGithubApiClient", () => {
       rest: {
         pulls: { get: vi.fn(), listFiles: vi.fn() },
         checks: { create: vi.fn() },
-        issues: { createComment: vi.fn() },
+        issues: { createComment: vi.fn(), listComments: vi.fn(), updateComment: vi.fn() },
         repos: { getCommit: reposGetCommit },
       },
       paginate: vi.fn(),
@@ -434,7 +495,7 @@ describe("createOctokitGithubApiClient", () => {
       rest: {
         pulls: { get: vi.fn(), listFiles: vi.fn() },
         checks: { create: vi.fn() },
-        issues: { createComment: vi.fn() },
+        issues: { createComment: vi.fn(), listComments: vi.fn(), updateComment: vi.fn() },
         repos: { getContent: reposGetContent },
       },
       paginate: vi.fn(),

@@ -29,6 +29,7 @@ Permissions depend on whether **native auto-merge** is enabled in `.merge-risk.y
 permissions:
   contents: write
   checks: write
+  issues: write          # list/update PR conversation comments (Issues comments API)
   pull-requests: write
 ```
 
@@ -38,6 +39,7 @@ Use **`contents: read`** only when auto-merge stays off (check + comment only).
 permissions:
   contents: read
   checks: write
+  issues: write          # list/update PR conversation comments (Issues comments API)
   pull-requests: write
 ```
 

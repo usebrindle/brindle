@@ -13,4 +13,6 @@ export type {
   GitHubPullRequestLookup,
   GitHubPullSnapshot,
   GitHubTemporalContextHydration,
+  PullRequestIssueCommentSnapshot,
+  UpdatePullRequestIssueCommentInput,
 } from "./github/githubAdapter.types.js";
