@@ -1,0 +1,7 @@
+# Sensitive paths — requires @usebrindle/maintainers to exist in the GitHub org
+# (invalid teams are ignored silently; see SECURITY.md / PR notes for setup).
+
+/.github/workflows/ @usebrindle/maintainers
+/extensions/github-action/ @usebrindle/maintainers
+/adapters/github/ @usebrindle/maintainers
+/schema/ @usebrindle/maintainers

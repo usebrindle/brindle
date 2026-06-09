@@ -9,6 +9,7 @@ import { GraphqlResponseError } from "@octokit/graphql";
 
 import { parseCoverageArtifactText } from "../../core/coverage/adapter.js";
 import { IstanbulCoverageParseError } from "../../core/coverage/istanbul.js";
+import { BRINDLE_MERGE_RISK_COMMENT_MARKER } from "../../core/report.js";
 import type { AutoMergeOutcome, MergeMethod, PRContext, RiskReport } from "../../core/types.js";
 import type { PlatformAdapter } from "../PlatformAdapter.js";
 
@@ -131,12 +132,30 @@ export class GitHubAdapter implements PlatformAdapter {
     const shouldPostComment = this.githubAdapterDependencies.postRiskSummaryComment !== false;
     const commentBody = report.commentMarkdown.trim();
     if (shouldPostComment && commentBody.length > 0) {
-      await githubApiClient.createPullRequestComment({
+      const pullRequestLookup = {
         repositoryOwner,
         repositoryName,
         pullRequestNumber,
-        body: report.commentMarkdown,
-      });
+      };
+      const priorIssueComments = await githubApiClient.listPullRequestIssueComments(pullRequestLookup);
+      const lastBrindleComment = [...priorIssueComments]
+        .reverse()
+        .find((issueComment) => issueComment.body.includes(BRINDLE_MERGE_RISK_COMMENT_MARKER));
+      if (lastBrindleComment === undefined) {
+        await githubApiClient.createPullRequestComment({
+          repositoryOwner,
+          repositoryName,
+          pullRequestNumber,
+          body: report.commentMarkdown,
+        });
+      } else {
+        await githubApiClient.updatePullRequestIssueComment({
+          repositoryOwner,
+          repositoryName,
+          commentId: lastBrindleComment.id,
+          body: report.commentMarkdown,
+        });
+      }
     }
   }
 

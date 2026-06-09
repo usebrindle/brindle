@@ -21,6 +21,7 @@ auto_merge:
     permissions:
       contents: write        # implies read; needed so Brindle can enable auto-merge on the PR
       checks: write
+      issues: write          # list/update PR conversation comments (Issues comments API)
       pull-requests: write
 ```
 

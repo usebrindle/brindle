@@ -9,6 +9,7 @@ jobs:
     permissions:
       contents: write
       checks: write
+      issues: write # list/update PR conversation comments (Issues comments API)
       pull-requests: write
     steps:
       - uses: actions/checkout@v4

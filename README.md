@@ -91,7 +91,8 @@ jobs:
     permissions:
       contents: read         # to read the merge-risk config from the base branch
       checks: write          # lets Brindle publish the risk Check Run
-      pull-requests: write   # lets Brindle post the risk comment
+      issues: write          # list/update PR conversation comments (GitHub Issues comments API)
+      pull-requests: write   # PR-scoped operations alongside the comment flow
     steps:
       - uses: actions/checkout@v4
       - uses: usebrindle/brindle/extensions/github-action@action-v0.1.0
@@ -105,7 +106,19 @@ jobs:
           skip_when_merge_risk_missing_on_base: "true"
 ```
 
-**Why `permissions` matters** ... When you set `permissions` on a job, anything you omit defaults to **no access**. Brindle needs **`contents: read`** so `GITHUB_TOKEN` can load **`.merge-risk.yml` from the pull request base ref** via the GitHub API. It needs **`checks: write`** to publish the Check Run and **`pull-requests: write`** to leave the comment. Without those scopes the Action can fail when reading config or run without being able to show you anything.
+#### Pinning the Action to a commit SHA (optional, recommended for production)
+
+The example above uses a **version tag** on the Action ref (`@action-v0.1.0`). Tags are convenient but **can move** if the upstream project retags or repoints a release.
+
+For **private repositories or stricter production** pipelines, pin the Action to an **immutable full commit SHA** instead:
+
+```yaml
+      - uses: usebrindle/brindle/extensions/github-action@abcdef0123456789abcdef0123456789abcdef01
+```
+
+Replace the hex string with a **40-character commit SHA** from this repository that contains the Action entrypoint you want. **Tradeoff:** a SHA is **fixed and auditable** (the same workflow always runs the same third-party code). A **tag** can be updated to point at a new commit, which is easier to adopt but means the job’s behavior (and the code that receives `GITHUB_TOKEN` permissions) can change without you editing your workflow.
+
+**Why `permissions` matters** ... When you set `permissions` on a job, anything you omit defaults to **no access**. Brindle needs **`contents: read`** so `GITHUB_TOKEN` can load **`.merge-risk.yml` from the pull request base ref** via the GitHub API. It needs **`checks: write`** to publish the Check Run. PR conversation comments are created and updated through the **Issues** REST API, so the example includes **`issues: write`** to list and update Brindle’s summary comment in place; **`pull-requests: write`** covers other PR-scoped operations. Without these scopes the Action can fail when reading config, posting results, or updating an existing comment.
 
 ### Step 3 ... open a pull request
 
