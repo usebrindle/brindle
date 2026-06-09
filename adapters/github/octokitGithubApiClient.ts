@@ -19,6 +19,8 @@ import type {
   GitHubPullFileSnapshot,
   GitHubPullRequestLookup,
   GitHubPullSnapshot,
+  PullRequestIssueCommentSnapshot,
+  UpdatePullRequestIssueCommentInput,
 } from "./githubAdapter.types.js";
 
 /** GitHub `checks` API `output.summary` maximum length (characters). */
@@ -162,6 +164,28 @@ export const createOctokitGithubApiClient = (octokit: Octokit): GitHubApiClient 
       owner: input.repositoryOwner,
       repo: input.repositoryName,
       issue_number: input.pullRequestNumber,
+      body: input.body,
+    });
+  },
+
+  async listPullRequestIssueComments(lookup: GitHubPullRequestLookup): Promise<PullRequestIssueCommentSnapshot[]> {
+    const rows = await octokit.paginate(octokit.rest.issues.listComments, {
+      owner: lookup.repositoryOwner,
+      repo: lookup.repositoryName,
+      issue_number: lookup.pullRequestNumber,
+      per_page: 100,
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      body: typeof row.body === "string" ? row.body : "",
+    }));
+  },
+
+  async updatePullRequestIssueComment(input: UpdatePullRequestIssueCommentInput): Promise<void> {
+    await octokit.rest.issues.updateComment({
+      owner: input.repositoryOwner,
+      repo: input.repositoryName,
+      comment_id: input.commentId,
       body: input.body,
     });
   },

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  BRINDLE_MERGE_RISK_COMMENT_MARKER,
   buildMergeRiskCommentMarkdown,
   buildRiskReport,
   checkConclusionForTier,
@@ -74,7 +75,7 @@ describe("buildRiskReport", () => {
     expect(report.commentMarkdown).toContain("## 🟡 Merge risk — MEDIUM (score 42)");
     expect(report.commentMarkdown).toContain("<details>");
     expect(report.commentMarkdown).toContain("<summary>Score breakdown</summary>");
-    expect(report.commentMarkdown).toContain("<!-- brindle-merge-risk -->");
+    expect(report.commentMarkdown).toContain(BRINDLE_MERGE_RISK_COMMENT_MARKER);
     expect(report.commentMarkdown).toContain("| Diff size |");
     expect(report.checkConclusion).toBe("neutral");
     expect(report.autoMergeOutcome).toBe("eligible");

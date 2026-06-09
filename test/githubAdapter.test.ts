@@ -9,6 +9,7 @@ import type {
   GitHubPullSnapshot,
 } from "../adapters/github/githubAdapter.types.js";
 import { mapGitHubPullAndFilesToPRContext } from "../adapters/github/mapGitHubPullToPrContext.js";
+import { BRINDLE_MERGE_RISK_COMMENT_MARKER } from "../core/report.js";
 import type { RiskReport } from "../core/types.js";
 
 const samplePullSnapshot = (): GitHubPullSnapshot => ({
@@ -49,6 +50,8 @@ const createMockGithubApiClient = (
   getRepositoryCommitCommittedAtIso: vi.fn().mockResolvedValue(null),
   createMergeRiskCheckRun: vi.fn().mockResolvedValue(undefined),
   createPullRequestComment: vi.fn().mockResolvedValue(undefined),
+  listPullRequestIssueComments: vi.fn().mockResolvedValue([]),
+  updatePullRequestIssueComment: vi.fn().mockResolvedValue(undefined),
   enableNativePullRequestAutoMerge: vi.fn().mockResolvedValue(undefined),
   ...overrides,
 });
@@ -282,6 +285,11 @@ describe("GitHubAdapter.writeResult", () => {
       pullRequestNumber: 99,
       body: "## Merge risk\nLow.",
     });
+    expect(mockGithubApiClient.listPullRequestIssueComments).toHaveBeenCalledWith({
+      repositoryOwner: "acme",
+      repositoryName: "demo",
+      pullRequestNumber: 99,
+    });
   });
 
   it("defaults the check run name to Merge risk", async () => {
@@ -302,10 +310,12 @@ describe("GitHubAdapter.writeResult", () => {
   it("skips the PR comment when postRiskSummaryComment is false", async () => {
     const createMergeRiskCheckRun = vi.fn().mockResolvedValue(undefined);
     const createPullRequestComment = vi.fn().mockResolvedValue(undefined);
+    const listPullRequestIssueComments = vi.fn().mockResolvedValue([]);
     const githubAdapter = new GitHubAdapter({
       githubApiClient: createMockGithubApiClient({
         createMergeRiskCheckRun,
         createPullRequestComment,
+        listPullRequestIssueComments,
       }),
       repositoryOwner: "o",
       repositoryName: "r",
@@ -316,12 +326,17 @@ describe("GitHubAdapter.writeResult", () => {
     await githubAdapter.writeResult(sampleRiskReport());
     expect(createMergeRiskCheckRun).toHaveBeenCalled();
     expect(createPullRequestComment).not.toHaveBeenCalled();
+    expect(listPullRequestIssueComments).not.toHaveBeenCalled();
   });
 
   it("skips the PR comment when comment markdown is empty or whitespace-only", async () => {
     const createPullRequestComment = vi.fn().mockResolvedValue(undefined);
+    const listPullRequestIssueComments = vi.fn().mockResolvedValue([]);
     const githubAdapter = new GitHubAdapter({
-      githubApiClient: createMockGithubApiClient({ createPullRequestComment }),
+      githubApiClient: createMockGithubApiClient({
+        createPullRequestComment,
+        listPullRequestIssueComments,
+      }),
       repositoryOwner: "o",
       repositoryName: "r",
       pullRequestNumber: 3,
@@ -330,6 +345,38 @@ describe("GitHubAdapter.writeResult", () => {
     await githubAdapter.writeResult({
       ...sampleRiskReport(),
       commentMarkdown: "   \n\t  ",
+    });
+    expect(createPullRequestComment).not.toHaveBeenCalled();
+    expect(listPullRequestIssueComments).not.toHaveBeenCalled();
+  });
+
+  it("updates an existing Brindle PR comment when a prior comment body includes the marker", async () => {
+    const createMergeRiskCheckRun = vi.fn().mockResolvedValue(undefined);
+    const createPullRequestComment = vi.fn().mockResolvedValue(undefined);
+    const updatePullRequestIssueComment = vi.fn().mockResolvedValue(undefined);
+    const listPullRequestIssueComments = vi.fn().mockResolvedValue([
+      { id: 1001, body: "Some other bot comment" },
+      { id: 1002, body: `Earlier Brindle\n\n${BRINDLE_MERGE_RISK_COMMENT_MARKER}` },
+    ]);
+    const mockGithubApiClient = createMockGithubApiClient({
+      createMergeRiskCheckRun,
+      createPullRequestComment,
+      listPullRequestIssueComments,
+      updatePullRequestIssueComment,
+    });
+    const githubAdapter = new GitHubAdapter({
+      githubApiClient: mockGithubApiClient,
+      repositoryOwner: "acme",
+      repositoryName: "demo",
+      pullRequestNumber: 7,
+    });
+    await githubAdapter.buildContext();
+    await githubAdapter.writeResult(sampleRiskReport());
+    expect(updatePullRequestIssueComment).toHaveBeenCalledWith({
+      repositoryOwner: "acme",
+      repositoryName: "demo",
+      commentId: 1002,
+      body: "## Merge risk\nLow.",
     });
     expect(createPullRequestComment).not.toHaveBeenCalled();
   });

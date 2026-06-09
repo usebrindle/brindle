@@ -1,6 +1,6 @@
 {
   "name": "@usebrindle/merge-risk-core",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Platform-agnostic merge-risk classifier core (scorer, config, report) plus the PlatformAdapter type. Platform implementations and CI extensions are not included.",
   "type": "module",
   "license": "MIT",
@@ -23,8 +23,8 @@
   },
   "peerDependencies": {
     "ajv": "^8.17.0",
-    "js-yaml": "^4.1.0",
-    "micromatch": "^4.0.5"
+    "js-yaml": "^4.2.0",
+    "micromatch": "^4.0.8"
   },
   "devDependencies": {
     "tsup": "^8.3.5"
