@@ -1,6 +1,6 @@
-# Validates npm publish metadata for @usebrindle/merge-risk-core when the package changes.
-# Full CI already builds, packs (dry-run), and tarball-smokes on every PR; this runs `npm publish --dry-run`
-# for parity with the registry publish step (files, ignore rules).
+# Extra check when merge-risk-core changes: pack the workspace package with `npm pack --dry-run`
+# (same as main CI). Intentionally not `npm publish --dry-run` — that contacts the registry and
+# fails whenever package.json version is already published, which is normal on main after a release.
 
 name: merge-risk-core publish dry-run
 
@@ -8,7 +8,6 @@ on:
   pull_request:
     paths:
       - "packages/merge-risk-core/**"
-      - ".github/workflows/merge-risk-core-publish-dry-run.yml"
 
 permissions:
   contents: read
@@ -17,12 +16,11 @@ jobs:
   npm-publish-dry-run:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
-          registry-url: https://registry.npmjs.org
           cache: npm
 
       - name: Install
@@ -31,5 +29,5 @@ jobs:
       - name: Build merge-risk-core
         run: npm run build:merge-risk-core
 
-      - name: npm publish dry-run (merge-risk-core)
-        run: npm publish -w @usebrindle/merge-risk-core --access public --dry-run
+      - name: Verify merge-risk-core pack (dry-run)
+        run: npm pack -w @usebrindle/merge-risk-core --dry-run
