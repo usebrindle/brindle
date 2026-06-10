@@ -36,6 +36,22 @@ Target layout (from the [LLD](docs/designs/lld-merge-risk-classifier.md)):
 - `core/` … the platform-agnostic scoring engine, criteria, mutators, coverage adapters, config, and reporting model. Depends on no platform SDK. This is what makes Brindle portable across GitHub, GitLab, and Bitbucket. See [ADR 0007](docs/adrs/0007-platform-adapter-boundary.md).
 - `adapters/` … one implementation of `PlatformAdapter` per platform. The only place that knows which platform it is talking to. GitHub lives under `adapters/github/` (REST client + `GitHubAdapter`).
 - `extensions/` … the native CI wrapper per platform (GitHub Action first). The shipping bundle lives under `extensions/github-action/dist/` and is produced with **`npm run build:github-action`** (`@vercel/ncc`). CI fails if `dist/` is out of date relative to the TypeScript sources.
+
+### Dependabot and the committed Action `dist/`
+
+**Why Dependabot PRs can fail CI:** [`dependabot.yml`](.github/dependabot.yml) bumps `package.json` / `package-lock.json`, but Dependabot does **not** run `ncc` or commit `extensions/github-action/dist/`. CI still runs **`npm run build:github-action && git diff --exit-code extensions/github-action/dist`** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)), so the PR branch is red until `dist/` matches the new lockfile.
+
+**We keep that drift check** so `main` never ships a stale bundle. The fix is to **refresh `dist/` on the same branch** Dependabot used, then let CI re-run.
+
+**Option A — automated (recommended for maintainers):**
+
+1. Add a **fine-grained PAT** limited to this repository with **Contents: Read and write** (no org-wide or unnecessary scopes).
+2. Store it as a **Dependabot secret** named **`ACTION_DIST_AUTOMATION_PAT`** (same name under **Settings → Secrets and variables → Dependabot**). Workflows triggered by Dependabot cannot use normal Actions secrets for write access; see GitHub’s [Dependabot secrets](https://docs.github.com/en/code-security/dependabot/working-with-dependabot/managing-encrypted-secrets-for-dependabot) and [Dependabot + Actions](https://docs.github.com/en/code-security/dependabot/working-with-dependabot/automating-dependabot-with-github-actions).
+3. Keep [`.github/workflows/dependabot-refresh-action-dist.yml`](.github/workflows/dependabot-refresh-action-dist.yml) on the default branch: on Dependabot PRs that touch the root manifest or lockfile, it runs `npm ci`, rebuilds the bundle, and **pushes** an extra commit when `dist/` changes. The following CI run should pass. If pushes are blocked, ensure branch protection allows the PAT’s user (or bypass rules for that actor).
+
+**Option B — manual:** Check out the Dependabot branch locally, run **`npm ci`** and **`npm run build:github-action`**, commit **`extensions/github-action/dist/`**, and push to that branch.
+
+**Option C — different tooling:** Some teams use **Renovate** with a post-update command to run `ncc` and commit; that is not configured in this repo today.
 - `packages/merge-risk-core/` … npm workspace that bundles `core/` (plus the **`PlatformAdapter`** type) for **`@usebrindle/merge-risk-core`**. See [docs/programmatic-use.md](docs/programmatic-use.md).
 
 The LLD layout (`core/`, `adapters/`, `extensions/`) lives in-tree; new work should stay in the right layer so we do not paint ourselves into a GitHub-shaped corner.
