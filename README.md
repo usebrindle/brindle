@@ -95,7 +95,7 @@ jobs:
       pull-requests: write   # PR-scoped operations alongside the comment flow
     steps:
       - uses: actions/checkout@v4
-      - uses: usebrindle/brindle/extensions/github-action@action-v0.1.1
+      - uses: usebrindle/brindle/extensions/github-action@action-v0.1.2
         with:
           # IMPORTANT for your very first PR. Brindle reads .merge-risk.yml from the
           # BASE branch (the branch you are merging into), never from the PR itself.
@@ -108,7 +108,7 @@ jobs:
 
 #### Pinning the Action to a commit SHA (optional, recommended for production)
 
-The example above uses a **version tag** on the Action ref (`@action-v0.1.1`). Tags are convenient but **can move** if the upstream project retags or repoints a release.
+The example above uses a **version tag** on the Action ref (`@action-v0.1.2`). Tags are convenient but **can move** if the upstream project retags or repoints a release.
 
 For **private repositories or stricter production** pipelines, pin the Action to an **immutable full commit SHA** instead:
 
