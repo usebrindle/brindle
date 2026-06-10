@@ -47,7 +47,7 @@
     ]
   },
   "dependencies": {
-    "@octokit/graphql": "^8.1.1",
+    "@octokit/graphql": "^9.0.3",
     "@octokit/rest": "^22.0.1",
     "ajv": "^8.20.0",
     "js-yaml": "^4.2.0",
