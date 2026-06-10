@@ -12,7 +12,7 @@ jobs:
       issues: write # list/update PR conversation comments (Issues comments API)
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Run Brindle merge risk
         uses: ./extensions/github-action
