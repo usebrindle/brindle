@@ -177,6 +177,15 @@ describe("jsTsImportScan", () => {
       { specifier: "./top.ts", kind: "static_import" },
     ]);
   });
+
+  it("returns no references when source text is not parseable", () => {
+    const references = extractStaticJsTsReferences(
+      "src/broken.ts",
+      `import { broken from './valid.ts';\n`,
+    );
+
+    expect(references).toEqual([]);
+  });
 });
 
 describe("jsTsPathResolution", () => {

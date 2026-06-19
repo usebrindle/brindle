@@ -49,7 +49,12 @@ const readRootCompilerConfig = (
       continue;
     }
 
-    const parsedConfig: unknown = JSON.parse(readFileSync(configPath, "utf8"));
+    let parsedConfig: unknown;
+    try {
+      parsedConfig = JSON.parse(readFileSync(configPath, "utf8"));
+    } catch {
+      continue;
+    }
     if (typeof parsedConfig !== "object" || parsedConfig === null) {
       continue;
     }

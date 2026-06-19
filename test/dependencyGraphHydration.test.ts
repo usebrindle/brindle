@@ -87,6 +87,52 @@ describe("hydrateResolutionConfig", () => {
     }
   });
 
+  it("skips alias resolution when root tsconfig.json is not strict JSON", () => {
+    const repositoryRoot = mkdtempSync(join(tmpdir(), "brindle-invalid-tsconfig-"));
+
+    try {
+      writeFileSync(
+        join(repositoryRoot, "tsconfig.json"),
+        [
+          "{",
+          '  // comments and trailing commas are common in hand-edited tsconfig files',
+          '  "compilerOptions": {',
+          '    "baseUrl": "src",',
+          "  },",
+          "}",
+        ].join("\n"),
+        "utf8",
+      );
+
+      expect(hydrateResolutionConfig(repositoryRoot)).toEqual({});
+    } finally {
+      rmSync(repositoryRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("falls back to jsconfig.json when tsconfig.json is not parseable", () => {
+    const repositoryRoot = mkdtempSync(join(tmpdir(), "brindle-jsconfig-fallback-"));
+
+    try {
+      writeFileSync(join(repositoryRoot, "tsconfig.json"), "{ invalid json", "utf8");
+      writeFileSync(
+        join(repositoryRoot, "jsconfig.json"),
+        JSON.stringify({
+          compilerOptions: {
+            baseUrl: "src",
+          },
+        }),
+        "utf8",
+      );
+
+      expect(hydrateResolutionConfig(repositoryRoot)).toEqual({
+        baseUrl: "src",
+      });
+    } finally {
+      rmSync(repositoryRoot, { recursive: true, force: true });
+    }
+  });
+
   it("reads module path from root go.mod", () => {
     const repositoryRoot = mkdtempSync(join(tmpdir(), "brindle-go-resolution-config-"));
 
@@ -227,6 +273,31 @@ describe("hydrateDependencyGraph", () => {
       expect(result.graph.get("src/App.module.css")).toEqual(["src/App.tsx"]);
       expect(result.graph.get("src/styles/_tokens.scss")).toEqual(["src/App.module.css"]);
       expect(result.graph.get("src/styles/_vars.scss")).toEqual(["src/styles/tokens.scss"]);
+    } finally {
+      rmSync(repositoryRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("continues hydration when a tracked JS file has unparseable syntax", () => {
+    const repositoryRoot = createFixtureRepository();
+
+    try {
+      writeTrackedFile(
+        repositoryRoot,
+        "src/broken.ts",
+        `import { broken from './App.tsx';\n`,
+      );
+      runGit(repositoryRoot, ["add", "src/broken.ts"]);
+      runGit(repositoryRoot, ["commit", "-m", "add broken file"]);
+
+      const result = hydrateDependencyGraph({
+        repoRoot: repositoryRoot,
+        enabledExtractorIds: ["js_ts", "stylesheet"],
+        registry: defaultExtractorRegistry,
+      });
+
+      expect(result.graph.get("src/App.module.css")).toEqual(["src/App.tsx"]);
+      expect(result.graph.get("src/App.tsx")).toBeUndefined();
     } finally {
       rmSync(repositoryRoot, { recursive: true, force: true });
     }
