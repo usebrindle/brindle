@@ -5,4 +5,27 @@
  *
  * @see docs/designs/lld-contextual-evidence-overview.md
  */
-export type { ContextualCharacterization, FileChangeKind } from "./contextual.types.js";
+export type {
+  BlastRadiusCharacterization,
+  BlastRadiusFinding,
+  ContextualCharacterization,
+  ContextualEvidenceSnapshot,
+  FamiliarityFinding,
+  FileChangeKind,
+  NotAnalyzedForBlastRadius,
+} from "./contextual.types.js";
+export {
+  isBlastRadiusFinding,
+  isContextualEvidenceSnapshot,
+  isFamiliarityFinding,
+} from "./guards.js";
+export {
+  deserializeContextualEvidenceSnapshot,
+  deserializeFamiliarityFinding,
+  serializeContextualEvidenceSnapshot,
+  serializeFamiliarityFinding,
+} from "./serialization.js";
+export type {
+  SerializedContextualEvidenceSnapshot,
+  SerializedFamiliarityFinding,
+} from "./serialization.js";
