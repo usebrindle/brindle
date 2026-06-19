@@ -5,6 +5,11 @@
  *
  * @see docs/designs/lld-dependency-graph-extractors.md
  */
+import {
+  readBalancedParenthesisContent,
+  splitLeadingRelativeDots,
+  textBeforeAsKeyword,
+} from "./safeStringScan.js";
 
 const PYTHON_STDLIB_TOP_LEVEL_MODULES = new Set([
   "__future__",
@@ -208,10 +213,6 @@ const PYTHON_STDLIB_TOP_LEVEL_MODULES = new Set([
   "zoneinfo",
 ]);
 
-const RELATIVE_MODULE_PATTERN = /^(\.+)(.*)$/;
-const FROM_IMPORT_PATTERN = /^from\s+(\.+[\w.]*|[\w.]+)\s+import\s+(.+)$/;
-const IMPORT_STATEMENT_PATTERN = /^import\s+(.+)$/;
-
 const stripPythonCommentsAndStrings = (source: string): string => {
   const withoutTripleQuoted = source.replace(/"""[\s\S]*?"""|'''[\s\S]*?'''/g, " ");
   const withoutSingleQuoted = withoutTripleQuoted.replace(
@@ -221,10 +222,30 @@ const stripPythonCommentsAndStrings = (source: string): string => {
   return withoutSingleQuoted.replace(/#[^\n]*/g, " ");
 };
 
-const collapseParenthesizedImportBlocks = (source: string): string =>
-  source.replace(/\(([\s\S]*?)\)/g, (_match, innerBlock: string) =>
-    innerBlock.replace(/\s+/g, " "),
-  );
+const collapseParenthesizedImportBlocks = (source: string): string => {
+  let result = "";
+  let scanIndex = 0;
+  while (scanIndex < source.length) {
+    const openIndex = source.indexOf("(", scanIndex);
+    if (openIndex === -1) {
+      result += source.slice(scanIndex);
+      break;
+    }
+
+    result += source.slice(scanIndex, openIndex);
+    const balancedSpan = readBalancedParenthesisContent(source, openIndex);
+    if (!balancedSpan) {
+      result += "(";
+      scanIndex = openIndex + 1;
+      continue;
+    }
+
+    const collapsedInner = balancedSpan.content.replace(/\s+/g, " ");
+    result += `(${collapsedInner})`;
+    scanIndex = balancedSpan.closeIndex + 1;
+  }
+  return result;
+};
 
 const isDynamicImportLine = (line: string): boolean =>
   /\b__import__\s*\(/.test(line) || /\bimportlib\.import_module\s*\(/.test(line);
@@ -232,15 +253,16 @@ const isDynamicImportLine = (line: string): boolean =>
 const parseRelativeModuleSpecifier = (
   specifier: string,
 ): { level: number; modulePath: string } | null => {
-  const relativeMatch = RELATIVE_MODULE_PATTERN.exec(specifier);
-  if (!relativeMatch) {
+  const relativePrefix = splitLeadingRelativeDots(specifier);
+  if (!relativePrefix) {
     return null;
   }
 
-  const dotPrefix = relativeMatch[1];
-  const moduleRemainder = relativeMatch[2].replace(/^\./, "");
+  const moduleRemainder = relativePrefix.remainder.startsWith(".")
+    ? relativePrefix.remainder.slice(1)
+    : relativePrefix.remainder;
   return {
-    level: dotPrefix.length,
+    level: relativePrefix.dotCount,
     modulePath: moduleRemainder,
   };
 };
@@ -273,7 +295,37 @@ const firstImportedSymbol = (importClause: string): string | undefined => {
   if (!firstSegment) {
     return undefined;
   }
-  return firstSegment.split(/\s+as\s+/)[0]?.trim();
+  return textBeforeAsKeyword(firstSegment);
+};
+
+const parseFromImportParts = (
+  statement: string,
+): { fromModule: string; importClause: string } | null => {
+  if (!statement.startsWith("from ")) {
+    return null;
+  }
+
+  const importKeywordIndex = statement.indexOf(" import ");
+  if (importKeywordIndex === -1) {
+    return null;
+  }
+
+  const fromModule = statement.slice(5, importKeywordIndex).trim();
+  const importClause = statement.slice(importKeywordIndex + 8).trim();
+  if (!fromModule || !importClause) {
+    return null;
+  }
+
+  return { fromModule, importClause };
+};
+
+const parseImportClause = (statement: string): string | null => {
+  if (!statement.startsWith("import ")) {
+    return null;
+  }
+
+  const importClause = statement.slice(7).trim();
+  return importClause || null;
 };
 
 const extractImportStatementSpecifiers = (statement: string): readonly string[] => {
@@ -284,11 +336,11 @@ const extractImportStatementSpecifiers = (statement: string): readonly string[] 
 
   const specifiers: string[] = [];
 
-  const fromImportMatch = FROM_IMPORT_PATTERN.exec(normalizedStatement);
-  if (fromImportMatch?.[1]) {
-    const fromModule = fromImportMatch[1];
+  const fromImportParts = parseFromImportParts(normalizedStatement);
+  if (fromImportParts) {
+    const { fromModule, importClause } = fromImportParts;
     if (/^\.+$/.test(fromModule)) {
-      const importedSymbol = firstImportedSymbol(fromImportMatch[2]);
+      const importedSymbol = firstImportedSymbol(importClause);
       if (importedSymbol && importedSymbol !== "*") {
         specifiers.push(`${fromModule}${importedSymbol}`);
       } else {
@@ -300,14 +352,13 @@ const extractImportStatementSpecifiers = (statement: string): readonly string[] 
     return specifiers;
   }
 
-  const importMatch = IMPORT_STATEMENT_PATTERN.exec(normalizedStatement);
-  if (!importMatch?.[1]) {
+  const importClause = parseImportClause(normalizedStatement);
+  if (!importClause) {
     return [];
   }
 
-  const importClause = importMatch[1];
   for (const importSegment of importClause.split(",")) {
-    const moduleName = importSegment.trim().split(/\s+as\s+/)[0]?.trim();
+    const moduleName = textBeforeAsKeyword(importSegment);
     if (moduleName) {
       specifiers.push(moduleName);
     }

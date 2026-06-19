@@ -3,6 +3,11 @@
  *
  * @see docs/designs/lld-dependency-graph-extractors.md
  */
+import {
+  readBalancedParenthesisContent,
+} from "./safeStringScan.js";
+
+const GO_IMPORT_BLOCK_OPEN_PATTERN = /\bimport\s*\(/g;
 
 const stripGoComments = (source: string): string => {
   const withoutLineComments = source.replace(/\/\/[^\n]*/g, "");
@@ -25,6 +30,39 @@ const extractGoStringLiterals = (segment: string): readonly string[] => {
   return literals;
 };
 
+const collectGoImportBlockContents = (source: string): readonly string[] => {
+  const blockContents: string[] = [];
+  let openMatch: RegExpExecArray | null = GO_IMPORT_BLOCK_OPEN_PATTERN.exec(source);
+  while (openMatch !== null) {
+    const openParenIndex = openMatch.index + openMatch[0].length - 1;
+    const balancedSpan = readBalancedParenthesisContent(source, openParenIndex);
+    if (balancedSpan) {
+      blockContents.push(balancedSpan.content);
+    }
+    openMatch = GO_IMPORT_BLOCK_OPEN_PATTERN.exec(source);
+  }
+  return blockContents;
+};
+
+const removeGoImportBlocks = (source: string): string => {
+  let result = "";
+  let lastCopiedIndex = 0;
+  GO_IMPORT_BLOCK_OPEN_PATTERN.lastIndex = 0;
+  let openMatch: RegExpExecArray | null = GO_IMPORT_BLOCK_OPEN_PATTERN.exec(source);
+  while (openMatch !== null) {
+    const openParenIndex = openMatch.index + openMatch[0].length - 1;
+    const balancedSpan = readBalancedParenthesisContent(source, openParenIndex);
+    if (balancedSpan) {
+      result += source.slice(lastCopiedIndex, openMatch.index);
+      result += " ";
+      lastCopiedIndex = balancedSpan.closeIndex + 1;
+    }
+    openMatch = GO_IMPORT_BLOCK_OPEN_PATTERN.exec(source);
+  }
+  result += source.slice(lastCopiedIndex);
+  return result;
+};
+
 /**
  * Extract import path string literals from Go source.
  *
@@ -38,16 +76,13 @@ export const extractGoImportSpecifiers = (source: string): readonly string[] => 
   const sourceWithoutComments = stripGoComments(source);
   const specifiers = new Set<string>();
 
-  const importBlockPattern = /\bimport\s*\(\s*([\s\S]*?)\s*\)/g;
-  let importBlockMatch: RegExpExecArray | null = importBlockPattern.exec(sourceWithoutComments);
-  while (importBlockMatch !== null) {
-    for (const specifier of extractGoStringLiterals(importBlockMatch[1])) {
+  for (const importBlockContent of collectGoImportBlockContents(sourceWithoutComments)) {
+    for (const specifier of extractGoStringLiterals(importBlockContent)) {
       specifiers.add(specifier);
     }
-    importBlockMatch = importBlockPattern.exec(sourceWithoutComments);
   }
 
-  const sourceWithoutImportBlocks = sourceWithoutComments.replace(importBlockPattern, " ");
+  const sourceWithoutImportBlocks = removeGoImportBlocks(sourceWithoutComments);
   const singleImportPattern = /\bimport\s+(?:[\w.]+\s+)?("(?:\\.|[^"\\])*")/g;
   let singleImportMatch: RegExpExecArray | null =
     singleImportPattern.exec(sourceWithoutImportBlocks);

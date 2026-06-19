@@ -5,6 +5,9 @@
  *
  * @see docs/designs/lld-dependency-graph-extractors.md
  */
+import {
+  textBeforeAsKeyword,
+} from "./safeStringScan.js";
 
 const RUST_STDLIB_CRATE_NAMES = new Set([
   "alloc",
@@ -16,7 +19,6 @@ const RUST_STDLIB_CRATE_NAMES = new Set([
 
 const MOD_DECLARATION_PATTERN = /^\s*mod\s+(\w+)\s*;/;
 const GROUPED_USE_PATTERN = /^(.*)::\{([^}]+)\}$/;
-const USE_STATEMENT_PATTERN = /^use\s+(.+?)\s*;$/;
 
 const stripRustCommentsAndStrings = (source: string): string => {
   const withoutRawStrings = source.replace(/r#+"[\s\S]*?"#+/g, " ");
@@ -47,7 +49,7 @@ const expandGroupedUsePaths = (useClause: string): readonly string[] => {
 
   const braceMatch = GROUPED_USE_PATTERN.exec(normalizedClause);
   if (!braceMatch) {
-    return [normalizedClause.split(/\s+as\s+/)[0]?.trim() ?? normalizedClause];
+    return [textBeforeAsKeyword(normalizedClause) || normalizedClause];
   }
 
   const prefix = braceMatch[1]?.trim();
@@ -58,7 +60,7 @@ const expandGroupedUsePaths = (useClause: string): readonly string[] => {
 
   const expandedPaths: string[] = [];
   for (const groupedItem of groupedItems) {
-    const itemPath = groupedItem.split(/\s+as\s+/)[0]?.trim();
+    const itemPath = textBeforeAsKeyword(groupedItem);
     if (!itemPath || itemPath === "self" || itemPath === "super") {
       if (prefix) {
         expandedPaths.push(`${prefix}::${itemPath}`);
@@ -71,14 +73,22 @@ const expandGroupedUsePaths = (useClause: string): readonly string[] => {
   return expandedPaths;
 };
 
-const parseUseStatementPaths = (statement: string): readonly string[] => {
+const parseUseStatementClause = (statement: string): string | null => {
   const normalizedStatement = statement.replace(/\s+/g, " ").trim();
-  const useMatch = USE_STATEMENT_PATTERN.exec(normalizedStatement);
-  if (!useMatch?.[1]) {
+  if (!normalizedStatement.startsWith("use ") || !normalizedStatement.endsWith(";")) {
+    return null;
+  }
+
+  const useClause = normalizedStatement.slice(4, -1).trim();
+  return useClause || null;
+};
+
+const parseUseStatementPaths = (statement: string): readonly string[] => {
+  const useClause = parseUseStatementClause(statement);
+  if (!useClause) {
     return [];
   }
 
-  const useClause = useMatch[1].replace(/\s+as\s+\w+/g, "").trim();
   return expandGroupedUsePaths(useClause);
 };
 
