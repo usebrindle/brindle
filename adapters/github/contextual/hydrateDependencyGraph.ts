@@ -82,7 +82,11 @@ const extractEdgesForTrackedFile = (
     return [];
   }
 
-  return extractor.extractEdges(normalizedPath, fileText, extractorContext);
+  try {
+    return extractor.extractEdges(normalizedPath, fileText, extractorContext);
+  } catch {
+    return [];
+  }
 };
 
 const collectNotAnalyzedChangedFiles = (
