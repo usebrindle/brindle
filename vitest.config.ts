@@ -28,6 +28,7 @@ export default defineConfig({
         "core/contextual/extractors/types.ts",
         "core/contextual/extractors/goExtractor.types.ts",
         "core/contextual/extractors/pythonExtractor.types.ts",
+        "core/contextual/extractors/rustExtractor.types.ts",
         "core/contextual/extractors/jsTsExtractor.types.ts",
         "core/contextual/extractors/stylesheetExtractor.types.ts",
         "core/contextual/report/contextualEvidenceReport.types.ts",

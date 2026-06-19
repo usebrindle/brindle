@@ -63,6 +63,7 @@ export {
   goExtractor,
   jsTsExtractor,
   pythonExtractor,
+  rustExtractor,
   stylesheetExtractor,
 } from "./extractors/index.js";
 export type {
