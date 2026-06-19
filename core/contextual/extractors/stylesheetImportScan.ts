@@ -44,8 +44,35 @@ const edgeKindForAtRule = (
   }
 };
 
-const stripAsAliasSuffix = (params: string): string =>
-  params.replace(/\s+as\s+[\w-]+(?:\s+with\s+.+)?$/i, "").trim();
+const AS_ALIAS_SUFFIX_PATTERN = /\s+as\s+/i;
+const ALIAS_NAME_PATTERN = /^[\w-]+/;
+const WITH_CLAUSE_PREFIX_PATTERN = /^\s+with\b/i;
+
+const stripAsAliasSuffix = (params: string): string => {
+  const trimmedParams = params.trim();
+  const asAliasMatch = AS_ALIAS_SUFFIX_PATTERN.exec(trimmedParams);
+  if (!asAliasMatch || asAliasMatch.index === undefined) {
+    return trimmedParams;
+  }
+
+  const suffixAfterAs = trimmedParams
+    .slice(asAliasMatch.index + asAliasMatch[0].length)
+    .replace(/;$/, "")
+    .trim();
+  const aliasNameMatch = ALIAS_NAME_PATTERN.exec(suffixAfterAs);
+  if (!aliasNameMatch) {
+    return trimmedParams;
+  }
+
+  const remainderAfterAlias = suffixAfterAs.slice(aliasNameMatch[0].length);
+  const hasValidAliasSuffix =
+    remainderAfterAlias.length === 0 || WITH_CLAUSE_PREFIX_PATTERN.test(remainderAfterAlias);
+  if (!hasValidAliasSuffix) {
+    return trimmedParams;
+  }
+
+  return trimmedParams.slice(0, asAliasMatch.index).trim();
+};
 
 const parseQuotedSpecifier = (params: string): string | null => {
   const trimmedParams = stripAsAliasSuffix(params.trim()).replace(/;$/, "");
@@ -127,8 +154,26 @@ const collectPostcssReferences = (
   return references;
 };
 
-const INDENTED_SASS_AT_RULE_LINE =
-  /^\s*@(import|use|forward)\s+(.+?)\s*;?\s*$/;
+const INDENTED_SASS_AT_RULE_PREFIX = /^\s*@(import|use|forward)\s+/;
+
+const parseIndentedSassAtRuleLine = (
+  line: string,
+): { atRuleName: string; params: string } | null => {
+  const prefixMatch = INDENTED_SASS_AT_RULE_PREFIX.exec(line);
+  if (!prefixMatch?.[1]) {
+    return null;
+  }
+
+  let params = line.slice(prefixMatch[0].length).trimEnd();
+  if (params.endsWith(";")) {
+    params = params.slice(0, -1).trimEnd();
+  }
+  if (params.length === 0) {
+    return null;
+  }
+
+  return { atRuleName: prefixMatch[1], params };
+};
 
 const collectIndentedSassLineReferences = (
   fileText: string,
@@ -136,12 +181,12 @@ const collectIndentedSassLineReferences = (
   const references: StylesheetReference[] = [];
 
   for (const line of fileText.split("\n")) {
-    const match = INDENTED_SASS_AT_RULE_LINE.exec(line);
-    if (!match?.[1] || !match[2]) {
+    const parsedLine = parseIndentedSassAtRuleLine(line);
+    if (!parsedLine) {
       continue;
     }
 
-    const reference = referenceFromAtRule(match[1], match[2]);
+    const reference = referenceFromAtRule(parsedLine.atRuleName, parsedLine.params);
     if (reference) {
       references.push(reference);
     }
