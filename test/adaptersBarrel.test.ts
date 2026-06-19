@@ -9,6 +9,7 @@ describe("adapters index barrel", () => {
     expect(adapters.mapGitHubPullAndFilesToPRContext).toBeDefined();
     expect(adapters.hydrateDependencyGraph).toBeDefined();
     expect(adapters.hydrateBlastRadiusContextualEvidence).toBeDefined();
+    expect(adapters.hydrateContextualEvidence).toBeDefined();
     expect(adapters.createGitHistorySource).toBeDefined();
     expect(adapters.createGitBlameSource).toBeDefined();
     expect(adapters.hydrateFamiliarityPrContext).toBeDefined();

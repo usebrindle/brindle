@@ -3,6 +3,7 @@ export { createGitBlameSource } from "./github/contextual/createGitBlameSource.j
 export { createGitHistorySource } from "./github/contextual/createGitHistorySource.js";
 export { hydrateDependencyGraph } from "./github/contextual/hydrateDependencyGraph.js";
 export { hydrateBlastRadiusContextualEvidence } from "./github/contextual/hydrateBlastRadiusContextualEvidence.js";
+export { hydrateContextualEvidence } from "./github/contextual/hydrateContextualEvidence.js";
 export { hydrateFamiliarityPrContext } from "./github/contextual/hydrateFamiliarityPrContext.js";
 export type {
   HydrateDependencyGraphDependencies,
@@ -13,6 +14,13 @@ export type {
   HydrateBlastRadiusContextualEvidenceInput,
   HydrateBlastRadiusContextualEvidenceResult,
 } from "./github/contextual/hydrateBlastRadiusContextualEvidence.types.js";
+export type {
+  HydrateContextualAuthorFamiliarityOptions,
+  HydrateContextualBlastRadiusOptions,
+  HydrateContextualEvidenceDependencies,
+  HydrateContextualEvidenceInput,
+  HydrateContextualEvidenceResult,
+} from "./github/contextual/hydrateContextualEvidence.types.js";
 export type {
   HydrateFamiliarityPrContextDependencies,
   HydrateFamiliarityPrContextInput,

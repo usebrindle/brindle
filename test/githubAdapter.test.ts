@@ -237,6 +237,138 @@ describe("GitHubAdapter.buildContext", () => {
     await githubAdapter.buildContext();
     expect(getRepositoryFileTextAtRef).not.toHaveBeenCalled();
   });
+
+  it("does not hydrate contextual evidence when contextualEvidenceHydration is absent", async () => {
+    const mockHydrateContextualEvidence = vi.fn();
+    const githubAdapter = new GitHubAdapter({
+      githubApiClient: createMockGithubApiClient({
+        listPullRequestFiles: async () => sampleFileSnapshots(),
+      }),
+      repositoryOwner: "acme",
+      repositoryName: "demo",
+      pullRequestNumber: 7,
+      hydrateContextualEvidence: mockHydrateContextualEvidence,
+    });
+    const pullContext = await githubAdapter.buildContext();
+    expect(mockHydrateContextualEvidence).not.toHaveBeenCalled();
+    expect(pullContext.contextualEvidence).toBeUndefined();
+  });
+
+  it("hydrates contextual evidence when contextual criteria are enabled", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-15T12:00:00.000Z"));
+    try {
+      const mockHydrateContextualEvidence = vi.fn().mockReturnValue({
+        contextualEvidence: {
+          familiarityFindings: [
+            {
+              touchedFile: "src/a.ts",
+              changeKind: "modified",
+              authorOwnedLineCount: 0,
+              totalBlameableLineCount: 10,
+              shareOfCurrentContent: 0,
+              authorChangedLineCount: 0,
+              totalChangedLineCount: 0,
+              shareOfWindowedLineChurn: 0,
+              authorCommitCount: 0,
+              totalFileCommitCount: 0,
+              lastTouchDate: null,
+              shareOfFileCommitChurn: 0,
+              characterization: "none",
+            },
+          ],
+          blastRadiusFindings: [],
+          notAnalyzedForBlastRadius: [],
+          limitations: [],
+          enabledExtractors: [],
+        },
+        baseRevision: "mergebaseabc",
+        authorEmails: ["alice@example.com"],
+      });
+      const githubAdapter = new GitHubAdapter({
+        githubApiClient: createMockGithubApiClient({
+          listPullRequestFiles: async () => sampleFileSnapshots(),
+        }),
+        repositoryOwner: "acme",
+        repositoryName: "demo",
+        pullRequestNumber: 7,
+        contextualEvidenceHydration: {
+          shouldHydrate: true,
+          repositoryRoot: "/tmp/repo",
+          hydrateAuthorFamiliarity: true,
+          hydrateBlastRadius: false,
+          authorFamiliarityOptions: { historyWindowDays: 90 },
+        },
+        hydrateContextualEvidence: mockHydrateContextualEvidence,
+      });
+      const pullContext = await githubAdapter.buildContext();
+      expect(mockHydrateContextualEvidence).toHaveBeenCalledWith({
+        repositoryRoot: "/tmp/repo",
+        baseRef: "main",
+        headRef: "headdeadbeef",
+        authorLogin: "alice",
+        changedPaths: ["src/a.ts", "src/b.ts"],
+        classifiedAt: new Date("2026-03-15T12:00:00.000Z"),
+        hydrateAuthorFamiliarity: true,
+        hydrateBlastRadius: false,
+        authorFamiliarityOptions: { historyWindowDays: 90 },
+        blastRadiusOptions: undefined,
+        dependencies: undefined,
+      });
+      expect(pullContext.baseRevision).toBe("mergebaseabc");
+      expect(pullContext.authorEmails).toEqual(["alice@example.com"]);
+      expect(pullContext.contextualEvidence?.familiarityFindings).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("passes blast-radius-only hydration flags when author familiarity is disabled", async () => {
+    const mockHydrateContextualEvidence = vi.fn().mockReturnValue({
+      contextualEvidence: {
+        familiarityFindings: [],
+        blastRadiusFindings: [
+          {
+            changedFile: "src/a.ts",
+            directDependentCount: 0,
+            directDependents: [],
+            transitiveReachCount: 0,
+            characterization: "isolated",
+          },
+        ],
+        notAnalyzedForBlastRadius: [],
+        limitations: ["js_ts: static imports only"],
+        enabledExtractors: ["js_ts"],
+      },
+    });
+    const githubAdapter = new GitHubAdapter({
+      githubApiClient: createMockGithubApiClient({
+        listPullRequestFiles: async () => sampleFileSnapshots(),
+      }),
+      repositoryOwner: "acme",
+      repositoryName: "demo",
+      pullRequestNumber: 7,
+      contextualEvidenceHydration: {
+        shouldHydrate: true,
+        repositoryRoot: "/tmp/repo",
+        hydrateAuthorFamiliarity: false,
+        hydrateBlastRadius: true,
+        blastRadiusOptions: { enabledExtractors: ["js_ts"] },
+      },
+      hydrateContextualEvidence: mockHydrateContextualEvidence,
+    });
+    const pullContext = await githubAdapter.buildContext();
+    expect(mockHydrateContextualEvidence).toHaveBeenCalledWith(
+      expect.objectContaining({
+        hydrateAuthorFamiliarity: false,
+        hydrateBlastRadius: true,
+        blastRadiusOptions: { enabledExtractors: ["js_ts"] },
+      }),
+    );
+    expect(pullContext.baseRevision).toBeUndefined();
+    expect(pullContext.authorEmails).toBeUndefined();
+    expect(pullContext.contextualEvidence?.blastRadiusFindings).toHaveLength(1);
+  });
 });
 
 describe("GitHubAdapter.writeResult", () => {
