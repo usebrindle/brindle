@@ -1,8 +1,7 @@
 /**
  * JavaScript/TypeScript static import and require extractor (v1).
  *
- * Parses ESM imports, export-from, and static-literal require() using the
- * TypeScript compiler API. Resolves relative specifiers and root tsconfig paths/baseUrl.
+ * Parses ESM imports, export-from, and static-literal require() using @babel/parser.
  *
  * @see docs/designs/lld-dependency-graph-extractors.md
  */
