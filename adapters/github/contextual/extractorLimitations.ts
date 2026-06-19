@@ -16,9 +16,17 @@ export const STYLESHEET_EXTRACTOR_LIMITATIONS = [
   "stylesheet: Sass partial/index resolution in-repo only; built-in sass:* modules produce no graph edge",
 ] as const;
 
+/** Limitation lines for the go extractor when enabled. */
+export const GO_EXTRACTOR_LIMITATIONS = [
+  "go: static import string literals only; cgo dynamic loading and embed excluded",
+  "go: module path from root go.mod only; stdlib and external module imports produce no graph edge",
+  "go: build tags, generated protobuf paths outside the module, and build-time-only imports excluded",
+] as const;
+
 const EXTRACTOR_LIMITATIONS_BY_ID: Readonly<Record<string, readonly string[]>> = {
   js_ts: JS_TS_EXTRACTOR_LIMITATIONS,
   stylesheet: STYLESHEET_EXTRACTOR_LIMITATIONS,
+  go: GO_EXTRACTOR_LIMITATIONS,
 };
 
 /**

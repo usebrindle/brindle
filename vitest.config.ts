@@ -26,6 +26,7 @@ export default defineConfig({
         "core/contextual/familiarity.types.ts",
         "core/contextual/blastRadius.types.ts",
         "core/contextual/extractors/types.ts",
+        "core/contextual/extractors/goExtractor.types.ts",
         "core/contextual/extractors/jsTsExtractor.types.ts",
         "core/contextual/extractors/stylesheetExtractor.types.ts",
         "core/contextual/report/contextualEvidenceReport.types.ts",
