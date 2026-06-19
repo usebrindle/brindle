@@ -69852,7 +69852,7 @@ module.exports = {
 
 __nccwpck_require__.a(module, async (__webpack_handle_async_dependencies__, __webpack_async_result__) => { try {
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0__ = __nccwpck_require__(5009);
-/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(7590);
+/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(9645);
 /**
  * GitHub Actions entry: scores the pull request from base-branch config and publishes results.
  *
@@ -69873,7 +69873,7 @@ __webpack_async_result__();
 
 /***/ }),
 
-/***/ 7590:
+/***/ 9645:
 /***/ ((__unused_webpack_module, __webpack_exports__, __nccwpck_require__) => {
 
 
@@ -74133,6 +74133,34 @@ const formatGitSinceDate = (since) => {
 
 ;// CONCATENATED MODULE: external "node:child_process"
 const external_node_child_process_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:child_process");
+;// CONCATENATED MODULE: external "node:fs"
+const external_node_fs_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:fs");
+;// CONCATENATED MODULE: ./adapters/github/contextual/resolveGitExecutable.ts
+/**
+ * Resolve `git` from fixed install locations (never via attacker-controlled PATH).
+ *
+ * @see docs/adrs/0010-contextual-analysis-at-head.md
+ */
+
+const TRUSTED_GIT_EXECUTABLE_PATHS = process.platform === "win32"
+    ? [
+        "C:\\Program Files\\Git\\cmd\\git.exe",
+        "C:\\Program Files\\Git\\bin\\git.exe",
+    ]
+    : ["/usr/bin/git", "/usr/local/bin/git", "/opt/homebrew/bin/git"];
+/**
+ * @returns Absolute path to a trusted `git` executable.
+ * @throws When `git` is not installed in any known system location.
+ */
+const resolveGitExecutable = () => {
+    for (const trustedGitExecutablePath of TRUSTED_GIT_EXECUTABLE_PATHS) {
+        if ((0,external_node_fs_namespaceObject.existsSync)(trustedGitExecutablePath)) {
+            return trustedGitExecutablePath;
+        }
+    }
+    throw new Error(`git executable not found in trusted locations: ${TRUSTED_GIT_EXECUTABLE_PATHS.join(", ")}`);
+};
+
 ;// CONCATENATED MODULE: ./adapters/github/contextual/gitCommand.ts
 /**
  * Shared git subprocess helper for contextual hydration.
@@ -74140,6 +74168,8 @@ const external_node_child_process_namespaceObject = __WEBPACK_EXTERNAL_createReq
  * @see docs/adrs/0010-contextual-analysis-at-head.md
  */
 
+
+const GIT_EXECUTABLE_PATH = resolveGitExecutable();
 /**
  * Runs a git command in the repository root and returns stdout.
  *
@@ -74148,7 +74178,7 @@ const external_node_child_process_namespaceObject = __WEBPACK_EXTERNAL_createReq
  * @returns Trimmed stdout (empty string when git prints nothing).
  */
 const runGitCommand = (repoRoot, gitArguments) => {
-    const output = (0,external_node_child_process_namespaceObject.execFileSync)("git", gitArguments, {
+    const output = (0,external_node_child_process_namespaceObject.execFileSync)(GIT_EXECUTABLE_PATH, gitArguments, {
         cwd: repoRoot,
         encoding: "utf8",
         maxBuffer: 64 * 1024 * 1024,
@@ -74376,8 +74406,6 @@ const createGitHistorySource = (repoRoot) => ({
     query: (query) => queryGitHistoryStats(repoRoot, query),
 });
 
-;// CONCATENATED MODULE: external "node:fs"
-const external_node_fs_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:fs");
 ;// CONCATENATED MODULE: external "node:path"
 const external_node_path_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:path");
 ;// CONCATENATED MODULE: ./core/contextual/extractors/buildReverseDependencyGraph.ts
