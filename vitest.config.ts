@@ -27,6 +27,7 @@ export default defineConfig({
         "core/contextual/extractors/types.ts",
         "core/contextual/extractors/jsTsExtractor.types.ts",
         "core/contextual/extractors/stylesheetExtractor.types.ts",
+        "core/contextual/report/contextualEvidenceReport.types.ts",
         "**/*.config.ts",
       ],
       thresholds: {

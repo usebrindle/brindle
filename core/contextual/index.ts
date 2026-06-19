@@ -71,3 +71,20 @@ export type {
   ExtractorRegistry,
   ReverseDependencyGraph,
 } from "./extractors/index.js";
+export {
+  buildContextualEvidencePayload,
+  describeHistoryWindowBeforePr,
+  formatBlastRadiusDetail,
+  formatContextualEvidencePath,
+  formatFamiliarityDetail,
+  formatPercentForDisplay,
+  historyWindowLabelForReport,
+  renderContextualEvidenceMarkdown,
+  sortBlastRadiusFindingsForReport,
+  sortFamiliarityFindingsForReport,
+} from "./report/index.js";
+export type {
+  ContextualEvidencePayload,
+  FormatFamiliarityDetailOptions,
+  RenderContextualEvidenceMarkdownOptions,
+} from "./report/index.js";
