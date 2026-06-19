@@ -69852,7 +69852,7 @@ module.exports = {
 
 __nccwpck_require__.a(module, async (__webpack_handle_async_dependencies__, __webpack_async_result__) => { try {
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0__ = __nccwpck_require__(5009);
-/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(1215);
+/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(7590);
 /**
  * GitHub Actions entry: scores the pull request from base-branch config and publishes results.
  *
@@ -69873,7 +69873,7 @@ __webpack_async_result__();
 
 /***/ }),
 
-/***/ 1215:
+/***/ 7590:
 /***/ ((__unused_webpack_module, __webpack_exports__, __nccwpck_require__) => {
 
 
@@ -74623,7 +74623,13 @@ const readRootCompilerConfig = (repoRoot) => {
         if (!(0,external_node_fs_namespaceObject.existsSync)(configPath)) {
             continue;
         }
-        const parsedConfig = JSON.parse((0,external_node_fs_namespaceObject.readFileSync)(configPath, "utf8"));
+        let parsedConfig;
+        try {
+            parsedConfig = JSON.parse((0,external_node_fs_namespaceObject.readFileSync)(configPath, "utf8"));
+        }
+        catch {
+            continue;
+        }
         if (typeof parsedConfig !== "object" || parsedConfig === null) {
             continue;
         }
@@ -74846,7 +74852,12 @@ const extractEdgesForTrackedFile = (trackedFilePath, repoRoot, extractorContext,
     if (fileText === null) {
         return [];
     }
-    return extractor.extractEdges(normalizedPath, fileText, extractorContext);
+    try {
+        return extractor.extractEdges(normalizedPath, fileText, extractorContext);
+    }
+    catch {
+        return [];
+    }
 };
 const collectNotAnalyzedChangedFiles = (changedFiles, enabledExtractorIds, registry) => {
     if (!changedFiles || changedFiles.length === 0) {
@@ -75231,12 +75242,72 @@ const createExtractorRegistry = (extractors) => {
     };
 };
 
+;// CONCATENATED MODULE: ./core/contextual/extractors/safeStringScan.ts
+/**
+ * Linear-time string scanning helpers for import extractors.
+ *
+ * Avoids regex patterns that SonarQube flags for ReDoS (nested/lazy quantifiers).
+ */
+/** Case-insensitive index of ` as ` word delimiter, or -1 when absent. */
+const indexOfAsKeyword = (text) => {
+    const lowerText = text.toLowerCase();
+    return lowerText.indexOf(" as ");
+};
+/** Text before the first ` as ` keyword, trimmed. */
+const textBeforeAsKeyword = (text) => {
+    const asIndex = indexOfAsKeyword(text);
+    if (asIndex === -1) {
+        return text.trim();
+    }
+    return text.slice(0, asIndex).trim();
+};
+/** Reads parenthesis-delimited content; returns null when unbalanced. */
+const readBalancedParenthesisContent = (source, openParenIndex) => {
+    if (source[openParenIndex] !== "(") {
+        return null;
+    }
+    let depth = 1;
+    let scanIndex = openParenIndex + 1;
+    while (scanIndex < source.length && depth > 0) {
+        const character = source[scanIndex];
+        if (character === "(") {
+            depth += 1;
+        }
+        else if (character === ")") {
+            depth -= 1;
+        }
+        scanIndex += 1;
+    }
+    if (depth !== 0) {
+        return null;
+    }
+    const closeIndex = scanIndex - 1;
+    return {
+        content: source.slice(openParenIndex + 1, closeIndex),
+        openIndex: openParenIndex,
+        closeIndex,
+    };
+};
+/** Leading run of `.` characters; returns count and remainder after dots. */
+const splitLeadingRelativeDots = (specifier) => {
+    let dotCount = 0;
+    while (dotCount < specifier.length && specifier[dotCount] === ".") {
+        dotCount += 1;
+    }
+    if (dotCount === 0) {
+        return null;
+    }
+    return { dotCount, remainder: specifier.slice(dotCount) };
+};
+
 ;// CONCATENATED MODULE: ./core/contextual/extractors/goImportScan.ts
 /**
  * Pure Go import string-literal extraction from source text.
  *
  * @see docs/designs/lld-dependency-graph-extractors.md
  */
+
+const GO_IMPORT_BLOCK_OPEN_PATTERN = /\bimport\s*\(/g;
 const stripGoComments = (source) => {
     const withoutLineComments = source.replace(/\/\/[^\n]*/g, "");
     return withoutLineComments.replace(/\/\*[\s\S]*?\*\//g, "");
@@ -75255,6 +75326,37 @@ const extractGoStringLiterals = (segment) => {
     }
     return literals;
 };
+const collectGoImportBlockContents = (source) => {
+    const blockContents = [];
+    let openMatch = GO_IMPORT_BLOCK_OPEN_PATTERN.exec(source);
+    while (openMatch !== null) {
+        const openParenIndex = openMatch.index + openMatch[0].length - 1;
+        const balancedSpan = readBalancedParenthesisContent(source, openParenIndex);
+        if (balancedSpan) {
+            blockContents.push(balancedSpan.content);
+        }
+        openMatch = GO_IMPORT_BLOCK_OPEN_PATTERN.exec(source);
+    }
+    return blockContents;
+};
+const removeGoImportBlocks = (source) => {
+    let result = "";
+    let lastCopiedIndex = 0;
+    GO_IMPORT_BLOCK_OPEN_PATTERN.lastIndex = 0;
+    let openMatch = GO_IMPORT_BLOCK_OPEN_PATTERN.exec(source);
+    while (openMatch !== null) {
+        const openParenIndex = openMatch.index + openMatch[0].length - 1;
+        const balancedSpan = readBalancedParenthesisContent(source, openParenIndex);
+        if (balancedSpan) {
+            result += source.slice(lastCopiedIndex, openMatch.index);
+            result += " ";
+            lastCopiedIndex = balancedSpan.closeIndex + 1;
+        }
+        openMatch = GO_IMPORT_BLOCK_OPEN_PATTERN.exec(source);
+    }
+    result += source.slice(lastCopiedIndex);
+    return result;
+};
 /**
  * Extract import path string literals from Go source.
  *
@@ -75267,15 +75369,12 @@ const extractGoStringLiterals = (segment) => {
 const extractGoImportSpecifiers = (source) => {
     const sourceWithoutComments = stripGoComments(source);
     const specifiers = new Set();
-    const importBlockPattern = /\bimport\s*\(\s*([\s\S]*?)\s*\)/g;
-    let importBlockMatch = importBlockPattern.exec(sourceWithoutComments);
-    while (importBlockMatch !== null) {
-        for (const specifier of extractGoStringLiterals(importBlockMatch[1])) {
+    for (const importBlockContent of collectGoImportBlockContents(sourceWithoutComments)) {
+        for (const specifier of extractGoStringLiterals(importBlockContent)) {
             specifiers.add(specifier);
         }
-        importBlockMatch = importBlockPattern.exec(sourceWithoutComments);
     }
-    const sourceWithoutImportBlocks = sourceWithoutComments.replace(importBlockPattern, " ");
+    const sourceWithoutImportBlocks = removeGoImportBlocks(sourceWithoutComments);
     const singleImportPattern = /\bimport\s+(?:[\w.]+\s+)?("(?:\\.|[^"\\])*")/g;
     let singleImportMatch = singleImportPattern.exec(sourceWithoutImportBlocks);
     while (singleImportMatch !== null) {
@@ -75521,12 +75620,21 @@ const collectStaticReferencesFromNode = (node, references) => {
  * Excludes dynamic require/import forms (non-literal arguments).
  */
 const extractStaticJsTsReferences = (filePath, fileText) => {
-    const sourceFile = (0,lib/* parse */.qg)(fileText, {
-        sourceFilename: filePath,
-        sourceType: "module",
-        allowImportExportEverywhere: true,
-        plugins: babelPluginsForJsTsFile(filePath),
-    });
+    let sourceFile;
+    try {
+        sourceFile = asAstNode((0,lib/* parse */.qg)(fileText, {
+            sourceFilename: filePath,
+            sourceType: "module",
+            allowImportExportEverywhere: true,
+            plugins: babelPluginsForJsTsFile(filePath),
+        }));
+    }
+    catch {
+        return [];
+    }
+    if (!sourceFile) {
+        return [];
+    }
     const references = [];
     collectStaticReferencesFromNode(sourceFile, references);
     return references;
@@ -75686,6 +75794,7 @@ const jsTsExtractor = {
  *
  * @see docs/designs/lld-dependency-graph-extractors.md
  */
+
 const PYTHON_STDLIB_TOP_LEVEL_MODULES = new Set([
     "__future__",
     "_thread",
@@ -75887,25 +75996,44 @@ const PYTHON_STDLIB_TOP_LEVEL_MODULES = new Set([
     "zlib",
     "zoneinfo",
 ]);
-const RELATIVE_MODULE_PATTERN = /^(\.+)(.*)$/;
-const FROM_IMPORT_PATTERN = /^from\s+(\.+[\w.]*|[\w.]+)\s+import\s+(.+)$/;
-const IMPORT_STATEMENT_PATTERN = /^import\s+(.+)$/;
 const stripPythonCommentsAndStrings = (source) => {
     const withoutTripleQuoted = source.replace(/"""[\s\S]*?"""|'''[\s\S]*?'''/g, " ");
     const withoutSingleQuoted = withoutTripleQuoted.replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, " ");
     return withoutSingleQuoted.replace(/#[^\n]*/g, " ");
 };
-const collapseParenthesizedImportBlocks = (source) => source.replace(/\(([\s\S]*?)\)/g, (_match, innerBlock) => innerBlock.replace(/\s+/g, " "));
+const collapseParenthesizedImportBlocks = (source) => {
+    let result = "";
+    let scanIndex = 0;
+    while (scanIndex < source.length) {
+        const openIndex = source.indexOf("(", scanIndex);
+        if (openIndex === -1) {
+            result += source.slice(scanIndex);
+            break;
+        }
+        result += source.slice(scanIndex, openIndex);
+        const balancedSpan = readBalancedParenthesisContent(source, openIndex);
+        if (!balancedSpan) {
+            result += "(";
+            scanIndex = openIndex + 1;
+            continue;
+        }
+        const collapsedInner = balancedSpan.content.replace(/\s+/g, " ");
+        result += `(${collapsedInner})`;
+        scanIndex = balancedSpan.closeIndex + 1;
+    }
+    return result;
+};
 const isDynamicImportLine = (line) => /\b__import__\s*\(/.test(line) || /\bimportlib\.import_module\s*\(/.test(line);
 const parseRelativeModuleSpecifier = (specifier) => {
-    const relativeMatch = RELATIVE_MODULE_PATTERN.exec(specifier);
-    if (!relativeMatch) {
+    const relativePrefix = splitLeadingRelativeDots(specifier);
+    if (!relativePrefix) {
         return null;
     }
-    const dotPrefix = relativeMatch[1];
-    const moduleRemainder = relativeMatch[2].replace(/^\./, "");
+    const moduleRemainder = relativePrefix.remainder.startsWith(".")
+        ? relativePrefix.remainder.slice(1)
+        : relativePrefix.remainder;
     return {
-        level: dotPrefix.length,
+        level: relativePrefix.dotCount,
         modulePath: moduleRemainder,
     };
 };
@@ -75932,7 +76060,29 @@ const firstImportedSymbol = (importClause) => {
     if (!firstSegment) {
         return undefined;
     }
-    return firstSegment.split(/\s+as\s+/)[0]?.trim();
+    return textBeforeAsKeyword(firstSegment);
+};
+const parseFromImportParts = (statement) => {
+    if (!statement.startsWith("from ")) {
+        return null;
+    }
+    const importKeywordIndex = statement.indexOf(" import ");
+    if (importKeywordIndex === -1) {
+        return null;
+    }
+    const fromModule = statement.slice(5, importKeywordIndex).trim();
+    const importClause = statement.slice(importKeywordIndex + 8).trim();
+    if (!fromModule || !importClause) {
+        return null;
+    }
+    return { fromModule, importClause };
+};
+const parseImportClause = (statement) => {
+    if (!statement.startsWith("import ")) {
+        return null;
+    }
+    const importClause = statement.slice(7).trim();
+    return importClause || null;
 };
 const extractImportStatementSpecifiers = (statement) => {
     const normalizedStatement = statement.replace(/\s+/g, " ").trim();
@@ -75940,11 +76090,11 @@ const extractImportStatementSpecifiers = (statement) => {
         return [];
     }
     const specifiers = [];
-    const fromImportMatch = FROM_IMPORT_PATTERN.exec(normalizedStatement);
-    if (fromImportMatch?.[1]) {
-        const fromModule = fromImportMatch[1];
+    const fromImportParts = parseFromImportParts(normalizedStatement);
+    if (fromImportParts) {
+        const { fromModule, importClause } = fromImportParts;
         if (/^\.+$/.test(fromModule)) {
-            const importedSymbol = firstImportedSymbol(fromImportMatch[2]);
+            const importedSymbol = firstImportedSymbol(importClause);
             if (importedSymbol && importedSymbol !== "*") {
                 specifiers.push(`${fromModule}${importedSymbol}`);
             }
@@ -75957,13 +76107,12 @@ const extractImportStatementSpecifiers = (statement) => {
         }
         return specifiers;
     }
-    const importMatch = IMPORT_STATEMENT_PATTERN.exec(normalizedStatement);
-    if (!importMatch?.[1]) {
+    const importClause = parseImportClause(normalizedStatement);
+    if (!importClause) {
         return [];
     }
-    const importClause = importMatch[1];
     for (const importSegment of importClause.split(",")) {
-        const moduleName = importSegment.trim().split(/\s+as\s+/)[0]?.trim();
+        const moduleName = textBeforeAsKeyword(importSegment);
         if (moduleName) {
             specifiers.push(moduleName);
         }
@@ -76144,6 +76293,7 @@ const pythonExtractor = {
  *
  * @see docs/designs/lld-dependency-graph-extractors.md
  */
+
 const RUST_STDLIB_CRATE_NAMES = new Set([
     "alloc",
     "core",
@@ -76153,7 +76303,6 @@ const RUST_STDLIB_CRATE_NAMES = new Set([
 ]);
 const MOD_DECLARATION_PATTERN = /^\s*mod\s+(\w+)\s*;/;
 const GROUPED_USE_PATTERN = /^(.*)::\{([^}]+)\}$/;
-const USE_STATEMENT_PATTERN = /^use\s+(.+?)\s*;$/;
 const stripRustCommentsAndStrings = (source) => {
     const withoutRawStrings = source.replace(/r#+"[\s\S]*?"#+/g, " ");
     const withoutDoubleQuoted = withoutRawStrings.replace(/"(?:\\.|[^"\\])*"/g, " ");
@@ -76176,7 +76325,7 @@ const expandGroupedUsePaths = (useClause) => {
     }
     const braceMatch = GROUPED_USE_PATTERN.exec(normalizedClause);
     if (!braceMatch) {
-        return [normalizedClause.split(/\s+as\s+/)[0]?.trim() ?? normalizedClause];
+        return [textBeforeAsKeyword(normalizedClause) || normalizedClause];
     }
     const prefix = braceMatch[1]?.trim();
     const groupedItems = braceMatch[2]
@@ -76185,7 +76334,7 @@ const expandGroupedUsePaths = (useClause) => {
         .filter((item) => item.length > 0);
     const expandedPaths = [];
     for (const groupedItem of groupedItems) {
-        const itemPath = groupedItem.split(/\s+as\s+/)[0]?.trim();
+        const itemPath = textBeforeAsKeyword(groupedItem);
         if (!itemPath || itemPath === "self" || itemPath === "super") {
             if (prefix) {
                 expandedPaths.push(`${prefix}::${itemPath}`);
@@ -76196,13 +76345,19 @@ const expandGroupedUsePaths = (useClause) => {
     }
     return expandedPaths;
 };
-const parseUseStatementPaths = (statement) => {
+const parseUseStatementClause = (statement) => {
     const normalizedStatement = statement.replace(/\s+/g, " ").trim();
-    const useMatch = USE_STATEMENT_PATTERN.exec(normalizedStatement);
-    if (!useMatch?.[1]) {
+    if (!normalizedStatement.startsWith("use ") || !normalizedStatement.endsWith(";")) {
+        return null;
+    }
+    const useClause = normalizedStatement.slice(4, -1).trim();
+    return useClause || null;
+};
+const parseUseStatementPaths = (statement) => {
+    const useClause = parseUseStatementClause(statement);
+    if (!useClause) {
         return [];
     }
-    const useClause = useMatch[1].replace(/\s+as\s+\w+/g, "").trim();
     return expandGroupedUsePaths(useClause);
 };
 /**
@@ -76535,6 +76690,7 @@ const scss_syntax_parse = scss_syntax.parse
 
 
 
+
 const STYLESHEET_AT_RULE_NAMES = new Set(["import", "use", "forward"]);
 const QUOTED_SPECIFIER_PATTERN = /^['"]([^'"]+)['"]/;
 const URL_SPECIFIER_PATTERN = /^url\(\s*['"]?([^'")\s]+)['"]?\s*\)/i;
@@ -76563,17 +76719,16 @@ const edgeKindForAtRule = (atRuleName) => {
             return null;
     }
 };
-const AS_ALIAS_SUFFIX_PATTERN = /\s+as\s+/i;
 const ALIAS_NAME_PATTERN = /^[\w-]+/;
 const WITH_CLAUSE_PREFIX_PATTERN = /^\s+with\b/i;
 const stripAsAliasSuffix = (params) => {
     const trimmedParams = params.trim();
-    const asAliasMatch = AS_ALIAS_SUFFIX_PATTERN.exec(trimmedParams);
-    if (!asAliasMatch || asAliasMatch.index === undefined) {
+    const asAliasIndex = indexOfAsKeyword(trimmedParams);
+    if (asAliasIndex === -1) {
         return trimmedParams;
     }
     const suffixAfterAs = trimmedParams
-        .slice(asAliasMatch.index + asAliasMatch[0].length)
+        .slice(asAliasIndex + 4)
         .replace(/;$/, "")
         .trim();
     const aliasNameMatch = ALIAS_NAME_PATTERN.exec(suffixAfterAs);
@@ -76585,7 +76740,7 @@ const stripAsAliasSuffix = (params) => {
     if (!hasValidAliasSuffix) {
         return trimmedParams;
     }
-    return trimmedParams.slice(0, asAliasMatch.index).trim();
+    return trimmedParams.slice(0, asAliasIndex).trim();
 };
 const parseQuotedSpecifier = (params) => {
     const trimmedParams = stripAsAliasSuffix(params.trim()).replace(/;$/, "");
