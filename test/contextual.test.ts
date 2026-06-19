@@ -58,15 +58,17 @@ const sampleContextualEvidenceSnapshot = (): ContextualEvidenceSnapshot => ({
 
 describe("core/contextual types", () => {
   it("exports shared characterization and change-kind types from the contextual barrel", () => {
-    const characterization: ContextualCharacterization = "moderate";
-    const changeKind: FileChangeKind = "added";
-    expect(characterization).toBe("moderate");
-    expect(changeKind).toBe("added");
+    const characterization = "moderate" satisfies ContextualCharacterization;
+    const changeKind = "added" satisfies FileChangeKind;
+    const characterizations: readonly ContextualCharacterization[] = ["high", "moderate", "none"];
+    const changeKinds: readonly FileChangeKind[] = ["added", "modified"];
+    expect(characterizations).toContain(characterization);
+    expect(changeKinds).toContain(changeKind);
   });
 
   it("re-exports contextual types from core/index without breaking the public barrel", () => {
-    const fromCoreBarrel: ContextualCharacterization = "none";
-    const changeKindFromCore: CoreBarrelFileChangeKind = "modified";
+    const fromCoreBarrel = "none" satisfies ContextualCharacterization;
+    const changeKindFromCore = "modified" satisfies CoreBarrelFileChangeKind;
     const snapshotFromCore: CoreBarrelSnapshot = sampleContextualEvidenceSnapshot();
     const familiarityFromCore: CoreBarrelFamiliarityFinding = sampleFamiliarityFinding();
     expect(fromCoreBarrel).toBe("none");
@@ -76,8 +78,9 @@ describe("core/contextual types", () => {
   });
 
   it("accepts blast-radius characterization tiers", () => {
-    const characterization: BlastRadiusCharacterization = "isolated";
-    expect(characterization).toBe("isolated");
+    const characterization = "isolated" satisfies BlastRadiusCharacterization;
+    const characterizations: readonly BlastRadiusCharacterization[] = ["isolated", "moderate", "broad"];
+    expect(characterizations).toContain(characterization);
   });
 
   it("models not-analyzed blast-radius entries with path and reason", () => {

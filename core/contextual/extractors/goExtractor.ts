@@ -7,6 +7,7 @@
  * @see docs/designs/lld-dependency-graph-extractors.md
  */
 import { extractGoImportSpecifiers } from "./goImportScan.js";
+import { normalizeForwardSlashes } from "../pathNormalize.js";
 import {
   readGoResolutionConfig,
   resolveGoImportToRepoFile,
@@ -15,8 +16,6 @@ import {
 import type { DependencyEdge, DependencyExtractor, ExtractorContext } from "./types.js";
 
 const GO_EXTENSIONS = [".go"] as const;
-
-const normalizeForwardSlashes = (filePath: string): string => filePath.replace(/\\/g, "/");
 
 const extractGoEdges = (
   filePath: string,

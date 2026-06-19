@@ -208,6 +208,10 @@ const PYTHON_STDLIB_TOP_LEVEL_MODULES = new Set([
   "zoneinfo",
 ]);
 
+const RELATIVE_MODULE_PATTERN = /^(\.+)(.*)$/;
+const FROM_IMPORT_PATTERN = /^from\s+(\.+[\w.]*|[\w.]+)\s+import\s+(.+)$/;
+const IMPORT_STATEMENT_PATTERN = /^import\s+(.+)$/;
+
 const stripPythonCommentsAndStrings = (source: string): string => {
   const withoutTripleQuoted = source.replace(/"""[\s\S]*?"""|'''[\s\S]*?'''/g, " ");
   const withoutSingleQuoted = withoutTripleQuoted.replace(
@@ -228,7 +232,7 @@ const isDynamicImportLine = (line: string): boolean =>
 const parseRelativeModuleSpecifier = (
   specifier: string,
 ): { level: number; modulePath: string } | null => {
-  const relativeMatch = specifier.match(/^(\.+)(.*)$/);
+  const relativeMatch = RELATIVE_MODULE_PATTERN.exec(specifier);
   if (!relativeMatch) {
     return null;
   }
@@ -280,9 +284,7 @@ const extractImportStatementSpecifiers = (statement: string): readonly string[] 
 
   const specifiers: string[] = [];
 
-  const fromImportMatch = normalizedStatement.match(
-    /^from\s+(\.+[\w.]*|[\w.]+)\s+import\s+(.+)$/,
-  );
+  const fromImportMatch = FROM_IMPORT_PATTERN.exec(normalizedStatement);
   if (fromImportMatch?.[1]) {
     const fromModule = fromImportMatch[1];
     if (/^\.+$/.test(fromModule)) {
@@ -298,7 +300,7 @@ const extractImportStatementSpecifiers = (statement: string): readonly string[] 
     return specifiers;
   }
 
-  const importMatch = normalizedStatement.match(/^import\s+(.+)$/);
+  const importMatch = IMPORT_STATEMENT_PATTERN.exec(normalizedStatement);
   if (!importMatch?.[1]) {
     return [];
   }

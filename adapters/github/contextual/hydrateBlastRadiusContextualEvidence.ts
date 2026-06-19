@@ -6,14 +6,13 @@
  */
 import { analyzeBlastRadius } from "../../../core/contextual/blastRadius.js";
 import type { NotAnalyzedForBlastRadius } from "../../../core/contextual/contextual.types.js";
+import { normalizeForwardSlashes } from "../../../core/contextual/pathNormalize.js";
 
 import { hydrateDependencyGraph } from "./hydrateDependencyGraph.js";
 import type {
   HydrateBlastRadiusContextualEvidenceInput,
   HydrateBlastRadiusContextualEvidenceResult,
 } from "./hydrateBlastRadiusContextualEvidence.types.js";
-
-const normalizeForwardSlashes = (filePath: string): string => filePath.replace(/\\/g, "/");
 
 const resolveAnalyzableChangedFiles = (
   changedFiles: readonly string[],

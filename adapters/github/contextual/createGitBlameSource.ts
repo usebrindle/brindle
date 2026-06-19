@@ -11,6 +11,7 @@ import type {
 } from "../../../core/contextual/familiarity.types.js";
 import { formatGitSinceDate } from "./formatGitSinceDate.js";
 import { runGitCommand } from "./gitCommand.js";
+import { assertSafeRepositoryRelativePath } from "./assertSafeRepositoryRelativePath.js";
 import { aggregateGitBlameStats, parseGitBlameOutput } from "./parseGitBlameOutput.js";
 
 const EMPTY_BLAME_STATS: GitBlameStats = {
@@ -30,6 +31,7 @@ const runGitBlame = (
   if (since !== undefined) {
     gitArguments.splice(1, 0, `--since=${formatGitSinceDate(since)}`);
   }
+  assertSafeRepositoryRelativePath(path);
   gitArguments.push(path);
   return runGitCommand(repoRoot, gitArguments);
 };

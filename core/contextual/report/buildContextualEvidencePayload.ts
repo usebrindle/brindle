@@ -23,7 +23,9 @@ export const buildContextualEvidencePayload = (
   return {
     authorLogin: pullRequestContext.author,
     changeNumber: pullRequestContext.changeNumber,
-    changedFiles: pullRequestContext.files.map((changedFile) => changedFile.path).sort(),
+    changedFiles: pullRequestContext.files
+      .map((changedFile) => changedFile.path)
+      .sort((leftPath, rightPath) => leftPath.localeCompare(rightPath)),
     familiarity: snapshot.familiarityFindings,
     blastRadius: snapshot.blastRadiusFindings,
     notAnalyzedForBlastRadius: snapshot.notAnalyzedForBlastRadius,

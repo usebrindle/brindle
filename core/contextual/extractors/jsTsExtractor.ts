@@ -7,6 +7,7 @@
  */
 import type { DependencyEdge, DependencyExtractor, ExtractorContext } from "./types.js";
 import { extractStaticJsTsReferences } from "./jsTsImportScan.js";
+import { normalizeForwardSlashes } from "../pathNormalize.js";
 import { readJsTsResolutionConfig, resolveJsTsSpecifier } from "./jsTsPathResolution.js";
 
 const JS_TS_EXTENSIONS = [
@@ -19,8 +20,6 @@ const JS_TS_EXTENSIONS = [
   ".mts",
   ".cts",
 ] as const;
-
-const normalizeForwardSlashes = (filePath: string): string => filePath.replace(/\\/g, "/");
 
 const extractJsTsEdges = (
   filePath: string,

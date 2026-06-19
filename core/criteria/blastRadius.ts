@@ -5,6 +5,7 @@
  * @see docs/adrs/0004-pure-criteria-over-hydrated-context.md
  */
 import type { BlastRadiusCharacterization, BlastRadiusFinding } from "../contextual/contextual.types.js";
+import { normalizeForwardSlashes } from "../contextual/pathNormalize.js";
 import type { Criterion, CriterionResult, PRContext } from "../types.js";
 
 import type {
@@ -19,8 +20,6 @@ const DEFAULT_CHARACTERIZATION_SCORES: BlastRadiusCharacterizationScores = {
 };
 
 const CHARACTERIZATION_RISK_ORDER: readonly BlastRadiusCharacterization[] = ["broad", "moderate", "isolated"];
-
-const normalizeForwardSlashes = (filePath: string): string => filePath.replace(/\\/g, "/");
 
 /**
  * @param scoreValue - Raw score from config.

@@ -5,6 +5,7 @@
  */
 import { dirname, posix } from "node:path";
 
+import { normalizeRepoPath } from "../pathNormalize.js";
 import type { ExtractorContext } from "./types.js";
 import {
   JS_TS_MODULE_EXTENSIONS,
@@ -12,9 +13,6 @@ import {
   JS_TS_STYLE_EXTENSIONS,
   type JsTsResolutionConfig,
 } from "./jsTsExtractor.types.js";
-
-const normalizeRepoPath = (filePath: string): string =>
-  filePath.replace(/\\/g, "/").replace(/^\.\//, "");
 
 const hasKnownExtension = (filePath: string): boolean => {
   const lower = filePath.toLowerCase();
@@ -70,14 +68,17 @@ const applyTsconfigPathMapping = (
     }
 
     const matchedSegment = specifier.slice(prefix.length, specifier.length - suffix.length);
-    for (const replacement of replacements) {
-      const replacementWildcardIndex = replacement.indexOf("*");
-      if (replacementWildcardIndex === -1) {
-        return normalizeRepoPath(replacement);
-      }
-      const resolved = `${replacement.slice(0, replacementWildcardIndex)}${matchedSegment}${replacement.slice(replacementWildcardIndex + 1)}`;
-      return normalizeRepoPath(resolved);
+    const replacement = replacements[0];
+    if (!replacement) {
+      continue;
     }
+
+    const replacementWildcardIndex = replacement.indexOf("*");
+    if (replacementWildcardIndex === -1) {
+      return normalizeRepoPath(replacement);
+    }
+    const resolved = `${replacement.slice(0, replacementWildcardIndex)}${matchedSegment}${replacement.slice(replacementWildcardIndex + 1)}`;
+    return normalizeRepoPath(resolved);
   }
 
   return null;

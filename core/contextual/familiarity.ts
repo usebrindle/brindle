@@ -102,9 +102,9 @@ export const characterizeFamiliarity = (
   authorCommitCount: number,
   totalFileCommitCount: number,
   lastTouchDate: Date | null,
+  classifiedAt: Date,
   currentContentShare: number = 0,
   windowedLineChurnShare: number = 0,
-  classifiedAt: Date,
 ): Pick<FamiliarityFinding, "shareOfFileCommitChurn" | "characterization"> => {
   const commitChurnShare = shareOfFileCommitChurn(authorCommitCount, totalFileCommitCount);
 
@@ -244,9 +244,9 @@ const analyzeModifiedFile = (
     historyStats.authorCommitCount,
     historyStats.totalFileCommitCount,
     historyStats.lastTouchDate,
+    input.classifiedAt,
     currentContentShare,
     windowedLineChurnShare,
-    input.classifiedAt,
   );
 
   return {

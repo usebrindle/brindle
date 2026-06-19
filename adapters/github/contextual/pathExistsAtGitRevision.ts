@@ -1,11 +1,10 @@
 /**
  * Checks whether a path exists in a git tree at a given revision.
  */
+import { normalizeForwardSlashes } from "../../../core/contextual/pathNormalize.js";
+import { assertSafeRepositoryRelativePath } from "./assertSafeRepositoryRelativePath.js";
 import { runGitCommand } from "./gitCommand.js";
 import type { HydrateFamiliarityPrContextDependencies } from "./hydrateFamiliarityPrContext.types.js";
-
-const normalizeRepositoryRelativePath = (repositoryRelativePath: string): string =>
-  repositoryRelativePath.replace(/\\/g, "/");
 
 /**
  * @returns `true` when `git cat-file -e <revision>:<path>` succeeds.
@@ -17,7 +16,8 @@ export const pathExistsAtGitRevision = (
   dependencies?: HydrateFamiliarityPrContextDependencies,
 ): boolean => {
   const runGit = dependencies?.runGitCommand ?? runGitCommand;
-  const normalizedPath = normalizeRepositoryRelativePath(repositoryRelativePath);
+  assertSafeRepositoryRelativePath(repositoryRelativePath);
+  const normalizedPath = normalizeForwardSlashes(repositoryRelativePath);
 
   try {
     runGit(repositoryRoot, ["cat-file", "-e", `${revision}:${normalizedPath}`]);

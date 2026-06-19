@@ -64,9 +64,9 @@ describe("characterizeFamiliarity", () => {
       1,
       5,
       daysBeforeClassifiedAt(90),
-      0,
-      0,
       CLASSIFIED_AT,
+      0,
+      0,
     );
 
     expect(result.characterization).toBe("none");
@@ -77,9 +77,9 @@ describe("characterizeFamiliarity", () => {
       1,
       4,
       daysBeforeClassifiedAt(30),
+      CLASSIFIED_AT,
       0.5,
       0,
-      CLASSIFIED_AT,
     );
 
     expect(result.characterization).toBe("high");
