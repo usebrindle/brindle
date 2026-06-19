@@ -192,15 +192,21 @@ export const extractStaticJsTsReferences = (
   filePath: string,
   fileText: string,
 ): readonly JsTsStaticReference[] => {
-  let sourceFile: BabelAstNode;
+  let sourceFile: BabelAstNode | null;
   try {
-    sourceFile = parse(fileText, {
-      sourceFilename: filePath,
-      sourceType: "module",
-      allowImportExportEverywhere: true,
-      plugins: babelPluginsForJsTsFile(filePath),
-    }) as BabelAstNode;
+    sourceFile = asAstNode(
+      parse(fileText, {
+        sourceFilename: filePath,
+        sourceType: "module",
+        allowImportExportEverywhere: true,
+        plugins: babelPluginsForJsTsFile(filePath),
+      }),
+    );
   } catch {
+    return [];
+  }
+
+  if (!sourceFile) {
     return [];
   }
 
