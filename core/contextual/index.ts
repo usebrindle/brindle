@@ -24,6 +24,13 @@ export type {
   GitHistorySource,
   GitHistoryStats,
 } from "./familiarity.types.js";
+export type { BlastRadiusInput, BlastRadiusThresholds } from "./blastRadius.types.js";
+export {
+  analyzeBlastRadius,
+  characterizeBlastRadius,
+  countDirectImportersForFile,
+  countTransitiveReachForFile,
+} from "./blastRadius.js";
 export {
   analyzeFamiliarity,
   characterizeFamiliarity,
