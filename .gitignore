@@ -147,3 +147,10 @@ vite.config.ts.timestamp-*
 
 # Local multi-line commit message helper (never commit)
 commitmsg.txt
+
+# Ralph ephemeral state
+ralph/prd.json
+ralph/progress.txt
+ralph/.last-branch
+ralph/.last-iteration-output
+ralph/archive/

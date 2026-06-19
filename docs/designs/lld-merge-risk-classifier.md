@@ -11,6 +11,7 @@ This is the execution spec.
 1. **Platform adapter boundary introduced.** The core no longer assumes GitHub. All platform-specific behavior lives behind one `PlatformAdapter` interface. The scoring engine, criteria, mutators, config, and coverage adapters are platform-agnostic. See ADR 0007.
 2. **Vocabulary made neutral.** The code uses "change request" internally where GitHub says pull request and GitLab says merge request. Platform terms appear only inside adapters.
 3. **Packaging clarified.** One platform-agnostic core artifact, wrapped by a native CI extension per platform. GitHub first, GitLab second, Bitbucket third. See ADR 0008.
+4. **Contextual evidence (designed, not yet shipped).** Two new criteria — **`author_familiarity`** and **`blast_radius`** — plus a **Contextual evidence** block in PR comments. Validated in the v2 evidence demo; product specs in [designs/README.md](README.md). Hydration uses read-only git/source analysis at head per [ADR 0010](../adrs/0010-contextual-analysis-at-head.md).
 
 ---
 
@@ -35,6 +36,7 @@ The core is the judgment layer. The platform is the enforcement layer. The adapt
         │              PLATFORM-AGNOSTIC CORE        │
         │  context types | scorer | criteria |       │
         │  mutators | coverage adapters | config |   │
+        │  contextual/ (analyzers, extractors) |     │
         │  rules | trusted plugins | reporting model │
         └────────────────────────────────────────────┘
 ```
@@ -64,8 +66,24 @@ merge-risk-classifier/
 │   │   ├── authorSeniority.types.ts
 │   │   ├── branchAge.ts           # Brindle: shipped
 │   │   ├── branchAge.types.ts
-│   │   ├── serviceCriticality.types.ts   # Brindle: shipped (ADR 0009)
-│   │   └── serviceCriticality.ts         # Brindle: shipped
+│   │   ├── serviceCriticality.ts         # Brindle: shipped (ADR 0009)
+│   │   ├── serviceCriticality.types.ts
+│   │   ├── authorFamiliarity.ts          # Brindle: designed (contextual evidence)
+│   │   ├── authorFamiliarity.types.ts
+│   │   ├── blastRadius.ts                # Brindle: designed (contextual evidence)
+│   │   └── blastRadius.types.ts
+│   ├── contextual/                    # Brindle: designed — pure analyzers + extractor port
+│   │   ├── familiarity.ts
+│   │   ├── blastRadius.ts
+│   │   ├── extractors/
+│   │   │   ├── types.ts
+│   │   │   ├── registry.ts
+│   │   │   ├── buildReverseDependencyGraph.ts
+│   │   │   ├── jsTsExtractor.ts
+│   │   │   └── stylesheetExtractor.ts
+│   │   └── report/
+│   │       ├── formatFamiliarityDetail.ts
+│   │       └── renderContextualEvidenceMarkdown.ts
 │   ├── coverage/
 │   │   ├── istanbul.ts            # Brindle: shipped
 │   │   ├── adapter.ts             # Brindle: shipped (Istanbul-only MVP; lcov/Cobertura deferred)
@@ -94,7 +112,10 @@ merge-risk-classifier/
 │   ├── PlatformAdapter.ts         # the interface
 │   ├── github/
 │   │   ├── GitHubAdapter.ts
-│   │   └── client.ts
+│   │   ├── client.ts
+│   │   └── contextual/              # Brindle: designed — git + graph hydration
+│   │       ├── hydrateFamiliarity.ts
+│   │       └── hydrateDependencyGraph.ts
 │   ├── gitlab/                    # v2 of the project
 │   └── bitbucket/                 # v3 of the project
 ├── extensions/
@@ -125,6 +146,7 @@ The directory tree above is still the **v4 product target**, with Brindle-specif
 - **Declarative rules.** **`core/rules/declarativeRule.ts`** and **`declarativeRule.types.ts`** ship the MVP **`labels_any`** / **`score`** interpreter; **`ScoringConfig`** includes optional root **`declarative_rules`**; the scorer merges implementations under internal ids **`declarative:<ruleId>`** with built-in criteria in one weight pool. **`schema/merge-risk-config.schema.json`** validates **`declarative_rules`** when present.
 - **Trusted plugins.** **`core/plugins/loadTrustedPlugins.ts`** (with **`trustedPluginPaths.ts`**, **`trustedPlugins.types.ts`**, **`trustedPluginDocument.types.ts`**) resolves base-branch YAML plugin files into criteria under internal ids **`plugin:<normalizedPath>`**, merged after built-ins and declarative rules in one weight pool. The GitHub Action fetches listed paths at the PR base ref via the Contents API. **`schema/merge-risk-config.schema.json`** validates **`trusted_plugins`** (`directory`, **`paths`**) when present.
 - **Dogfood.** This repo's **`.merge-risk.yml`** enables **`file_patterns`**, **`author_seniority`**, **`diff_size`**, **`branch_age`**, **`service_criticality`** (with root **`services`**), **`mutators.junior_author`** (same automation logins as seniority rules, small multiplier), **`mutators.critical_service`** (small multiplier when changes touch **`merge_risk_schema`** or **`github_action_extension`** paths), **`declarative_rules.dogfood_declarative_label`** (label **`merge-risk-dogfood-declarative`**, low weight), and **`trusted_plugins`** pointing at **`.merge-risk-plugins/dogfood-labels.yaml`** (label **`merge-risk-dogfood-trusted-plugin`**, low weight) so merge-risk scoring on our own pull requests exercises path rules (notably the committed GitHub Action bundle under `extensions/github-action/dist/` and files under `schema/`), login-tier rules (including common automation accounts), head-commit age from adapter-hydrated timestamps, service-level globs, both mutators on PRs that touch catalog-backed paths (including typical bot PRs), declarative label rules when that label is applied for CI checks, and trusted-plugin fetch plus label rules when the trusted-plugin dogfood label is applied.
+- **Contextual evidence (designed).** Not yet in shipped code. Specs: [designs/README.md](README.md), [lld-contextual-evidence-overview.md](lld-contextual-evidence-overview.md). Adds **`author_familiarity`** and **`blast_radius`** criteria, **`core/contextual/`** pure modules, pluggable **`DependencyExtractor`** implementations ([lld-dependency-graph-extractors.md](lld-dependency-graph-extractors.md)), extended **`PRContext`** (`baseRevision`, `authorEmails`, `contextualEvidence`), and a **Contextual evidence** `<details>` block in [`core/report.ts`](../core/report.ts). GitHub workflows need read-only checkout at PR head when these criteria are enabled ([ADR 0010](../adrs/0010-contextual-analysis-at-head.md)). Product familiarity semantics **correct** the v2 demo (merge-base measurement, greenfield gate) — see [lld-author-familiarity-criterion.md](lld-author-familiarity-criterion.md).
 
 ---
 
@@ -205,6 +227,12 @@ export interface PRContext {
   classifiedAtIso?: string;
   /** ISO committer timestamp for `headSha` when the platform commit API succeeds. */
   headCommitCommittedAtIso?: string;
+  /** Merge-base SHA for familiarity (contextual evidence; ADR 0010). */
+  baseRevision?: string;
+  /** Git author email(s) for familiarity queries. */
+  authorEmails?: readonly string[];
+  /** Pre-computed findings when contextual criteria are enabled. */
+  contextualEvidence?: ContextualEvidenceSnapshot;
 }
 
 export interface ScoreResult {
@@ -251,6 +279,8 @@ Built-in criteria, the coverage adapter, mutators, declarative rules, and the co
 `core/report.ts` builds a platform-neutral `RiskReport` from a `ScoreResult`. It produces the comment markdown, selects the check conclusion from the tier, optional `fail-on-high`, and optional **informational** mode (always `success` on the check while tier stays in markdown), and records the auto-merge outcome. The adapter then renders this report using whatever the platform offers.
 
 On GitHub the adapter writes a Check Run and an optional PR comment. On GitLab the adapter writes a merge request note and a pipeline status or external status check. On Bitbucket the adapter writes a report through the Code Insights API and a PR comment. The neutral `RiskReport` is identical in all three cases. Only the rendering differs.
+
+When contextual criteria are enabled, `core/report.ts` appends a collapsible **Contextual evidence** block to comment markdown (familiarity + blast radius + limitations). See [lld-contextual-evidence-reporting.md](lld-contextual-evidence-reporting.md). The tier verdict remains the only merge recommendation.
 
 ---
 
@@ -410,6 +440,17 @@ The GitHub extension commits its `dist/`. A CI job rebuilds and fails if the com
 7. `adapters/PlatformAdapter.ts` interface, then `adapters/github/` implementation.
 8. `extensions/github-action/` wrapper. Wire adapter plus core.
 9. ncc build, commit `dist/`, dogfood on this repo's own change requests with `auto_merge.enabled: false`.
+
+### Contextual evidence (next build slice)
+
+See [lld-contextual-evidence-overview.md](lld-contextual-evidence-overview.md) for full order.
+
+1. ADR 0010 + `core/contextual/extractors/` port; v1 `js_ts` and `stylesheet` extractors (refactor from v2 demo).
+2. `analyzeFamiliarity` with merge-base + greenfield semantics; `author_familiarity` criterion.
+3. `analyzeBlastRadius` + graph hydration; `blast_radius` criterion.
+4. Contextual evidence reporting + JSON Schema options slice.
+5. GitHub workflow docs (checkout at head); dogfood both criteria on this repo.
+6. v2 extractors (`go`, `python`, `rust`) via registry, one at a time.
 
 ---
 
