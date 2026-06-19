@@ -69852,7 +69852,7 @@ module.exports = {
 
 __nccwpck_require__.a(module, async (__webpack_handle_async_dependencies__, __webpack_async_result__) => { try {
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0__ = __nccwpck_require__(5009);
-/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(9264);
+/* harmony import */ var _runMergeRiskGithubAction_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(1215);
 /**
  * GitHub Actions entry: scores the pull request from base-branch config and publishes results.
  *
@@ -69873,7 +69873,7 @@ __webpack_async_result__();
 
 /***/ }),
 
-/***/ 9264:
+/***/ 1215:
 /***/ ((__unused_webpack_module, __webpack_exports__, __nccwpck_require__) => {
 
 
@@ -74156,6 +74156,24 @@ const runGitCommand = (repoRoot, gitArguments) => {
     return output.trimEnd();
 };
 
+;// CONCATENATED MODULE: ./adapters/github/contextual/assertSafeRepositoryRelativePath.ts
+/**
+ * Reject paths that could escape the repository root when passed to git.
+ *
+ * @see docs/adrs/0010-contextual-analysis-at-head.md
+ */
+const UNSAFE_REPOSITORY_PATH = /(?:\0|\.\.(?:\/|$))/;
+/**
+ * @param repositoryRelativePath - Path from the GitHub API or git output.
+ * @throws When the path contains NUL bytes or `..` segments.
+ */
+const assertSafeRepositoryRelativePath = (repositoryRelativePath) => {
+    const normalizedPath = repositoryRelativePath.replaceAll("\\", "/");
+    if (UNSAFE_REPOSITORY_PATH.test(normalizedPath)) {
+        throw new Error(`Unsafe repository-relative path: ${repositoryRelativePath}`);
+    }
+};
+
 ;// CONCATENATED MODULE: ./adapters/github/contextual/parseGitBlameOutput.ts
 /**
  * Pure parser for `git blame -e` output used by familiarity hydration.
@@ -74232,6 +74250,7 @@ const aggregateGitBlameStats = (parsedLines, authorEmail, includeWindowedChurn) 
 
 
 
+
 const EMPTY_BLAME_STATS = {
     authorOwnedLineCount: 0,
     totalBlameableLineCount: 0,
@@ -74243,6 +74262,7 @@ const runGitBlame = (repoRoot, revision, path, since) => {
     if (since !== undefined) {
         gitArguments.splice(1, 0, `--since=${formatGitSinceDate(since)}`);
     }
+    assertSafeRepositoryRelativePath(path);
     gitArguments.push(path);
     return runGitCommand(repoRoot, gitArguments);
 };
@@ -74274,6 +74294,7 @@ const createGitBlameSource = (repoRoot) => ({
 });
 
 ;// CONCATENATED MODULE: ./adapters/github/contextual/createGitHistorySource.ts
+
 
 
 const EMPTY_HISTORY_STATS = {
@@ -74331,6 +74352,7 @@ const queryGitHistoryStats = (repoRoot, query) => {
     const sinceDate = formatGitSinceDate(query.since);
     let logOutput;
     try {
+        assertSafeRepositoryRelativePath(query.path);
         logOutput = runGitCommand(repoRoot, [
             "log",
             `--since=${sinceDate}`,
@@ -74383,8 +74405,14 @@ const buildReverseDependencyGraph = (edges) => {
     return reverseGraph;
 };
 
+;// CONCATENATED MODULE: ./core/contextual/pathNormalize.ts
+/** Normalize Windows separators to forward slashes for repo-relative paths. */
+const normalizeForwardSlashes = (filePath) => filePath.replaceAll("\\", "/");
+/** Normalize a repo-relative path (forward slashes, no leading `./`). */
+const normalizeRepoPath = (filePath) => normalizeForwardSlashes(filePath).replace(/^\.\//, "");
+
 ;// CONCATENATED MODULE: ./adapters/github/contextual/classifyNotAnalyzedChangedFile.ts
-const normalizeForwardSlashes = (filePath) => filePath.replace(/\\/g, "/");
+
 const fileExtensionFromPath = (filePath) => {
     const lastDotIndex = filePath.lastIndexOf(".");
     if (lastDotIndex <= 0 || lastDotIndex === filePath.length - 1) {
@@ -74483,24 +74511,20 @@ const limitationsForEnabledExtractors = (enabledExtractorIds) => {
  * @see docs/adrs/0010-contextual-analysis-at-head.md
  */
 
-const gitTrackedFiles_normalizeForwardSlashes = (filePath) => filePath.replace(/\\/g, "/");
+
 /**
  * @param repoRoot - Absolute path to the git repository root.
  * @returns Repo-relative tracked paths from `git ls-files` (forward slashes).
  */
 const listGitTrackedFiles = (repoRoot) => {
-    const output = (0,external_node_child_process_namespaceObject.execFileSync)("git", ["ls-files", "-z"], {
-        cwd: repoRoot,
-        encoding: "utf8",
-        maxBuffer: 64 * 1024 * 1024,
-    });
+    const output = runGitCommand(repoRoot, ["ls-files", "-z"]);
     if (output.length === 0) {
         return [];
     }
     return output
         .split("\0")
         .filter((entry) => entry.length > 0)
-        .map(gitTrackedFiles_normalizeForwardSlashes);
+        .map(normalizeForwardSlashes);
 };
 
 ;// CONCATENATED MODULE: ./core/contextual/extractors/goExtractor.types.ts
@@ -74573,11 +74597,19 @@ const RUST_RESOLUTION_CONFIG_KEYS = {
 
 
 
+
 const CONFIG_CANDIDATE_FILENAMES = ["tsconfig.json", "jsconfig.json"];
 const GO_MOD_FILENAME = "go.mod";
 const PYPROJECT_FILENAME = "pyproject.toml";
 const CARGO_MANIFEST_FILENAME = "Cargo.toml";
-const normalizeRepoPath = (filePath) => filePath.replace(/\\/g, "/").replace(/^\.\//, "");
+const CARGO_PACKAGE_SECTION_HEADER = "[package]";
+const CARGO_WORKSPACE_SECTION_HEADER = "[workspace]";
+const PYPROJECT_WHERE_LINE_PATTERN = /^where\s*=\s*\[\s*"([^"]+)"\s*\]/;
+const GO_MODULE_DIRECTIVE_LINE_PATTERN = /^module\s+(\S+)/;
+const CARGO_PACKAGE_NAME_LINE_PATTERN = /^name\s*=\s*"([^"]+)"/;
+const CARGO_WORKSPACE_MEMBERS_LINE_PATTERN = /^members\s*=\s*\[(.*)\]\s*$/;
+const CARGO_WORKSPACE_MEMBERS_OPEN_LINE_PATTERN = /^members\s*=\s*\[/;
+const isTomlSectionHeaderLine = (line) => line.startsWith("[") && line.endsWith("]");
 const isStringArray = (value) => Array.isArray(value) && value.every((entry) => typeof entry === "string");
 const isPathsRecord = (value) => {
     if (typeof value !== "object" || value === null) {
@@ -74614,9 +74646,11 @@ const readPythonPackageRoots = (repoRoot) => {
         return undefined;
     }
     const pyprojectText = (0,external_node_fs_namespaceObject.readFileSync)(pyprojectPath, "utf8");
-    const whereMatch = pyprojectText.match(/where\s*=\s*\[\s*"([^"]+)"\s*\]/);
-    if (whereMatch?.[1]) {
-        return [normalizeRepoPath(whereMatch[1])];
+    for (const pyprojectLine of pyprojectText.split("\n")) {
+        const whereMatch = PYPROJECT_WHERE_LINE_PATTERN.exec(pyprojectLine.trim());
+        if (whereMatch?.[1]) {
+            return [normalizeRepoPath(whereMatch[1])];
+        }
     }
     return undefined;
 };
@@ -74626,11 +74660,13 @@ const readGoModulePath = (repoRoot) => {
         return undefined;
     }
     const goModText = (0,external_node_fs_namespaceObject.readFileSync)(goModPath, "utf8");
-    const moduleDirectiveMatch = goModText.match(/^module\s+(\S+)/m);
-    if (!moduleDirectiveMatch?.[1]) {
-        return undefined;
+    for (const goModLine of goModText.split("\n")) {
+        const moduleDirectiveMatch = GO_MODULE_DIRECTIVE_LINE_PATTERN.exec(goModLine.trim());
+        if (moduleDirectiveMatch?.[1]) {
+            return normalizeRepoPath(moduleDirectiveMatch[1]);
+        }
     }
-    return normalizeRepoPath(moduleDirectiveMatch[1]);
+    return undefined;
 };
 const readCargoManifestText = (manifestPath) => {
     if (!(0,external_node_fs_namespaceObject.existsSync)(manifestPath)) {
@@ -74638,17 +74674,57 @@ const readCargoManifestText = (manifestPath) => {
     }
     return (0,external_node_fs_namespaceObject.readFileSync)(manifestPath, "utf8");
 };
+const extractQuotedMemberPaths = (membersText) => {
+    const memberPaths = [...membersText.matchAll(/"([^"]+)"/g)].map((match) => normalizeRepoPath(match[1] ?? ""));
+    return memberPaths.length > 0 ? memberPaths : undefined;
+};
 const readCargoPackageName = (cargoManifestText) => {
-    const packageNameMatch = cargoManifestText.match(/^\s*\[package\][\s\S]*?^name\s*=\s*"([^"]+)"/m);
-    return packageNameMatch?.[1];
+    let inPackageSection = false;
+    for (const manifestLine of cargoManifestText.split("\n")) {
+        const trimmedLine = manifestLine.trim();
+        if (isTomlSectionHeaderLine(trimmedLine)) {
+            inPackageSection = trimmedLine === CARGO_PACKAGE_SECTION_HEADER;
+            continue;
+        }
+        if (!inPackageSection) {
+            continue;
+        }
+        const packageNameMatch = CARGO_PACKAGE_NAME_LINE_PATTERN.exec(trimmedLine);
+        if (packageNameMatch?.[1]) {
+            return packageNameMatch[1];
+        }
+    }
+    return undefined;
 };
 const readWorkspaceMemberPaths = (cargoManifestText) => {
-    const workspaceMembersMatch = cargoManifestText.match(/^\s*\[workspace\][\s\S]*?^members\s*=\s*\[([\s\S]*?)\]/m);
-    if (!workspaceMembersMatch?.[1]) {
-        return undefined;
+    let inWorkspaceSection = false;
+    let multilineMembersText;
+    for (const manifestLine of cargoManifestText.split("\n")) {
+        const trimmedLine = manifestLine.trim();
+        if (multilineMembersText !== undefined) {
+            multilineMembersText = `${multilineMembersText}\n${trimmedLine}`;
+            if (trimmedLine.includes("]")) {
+                return extractQuotedMemberPaths(multilineMembersText);
+            }
+            continue;
+        }
+        if (isTomlSectionHeaderLine(trimmedLine)) {
+            inWorkspaceSection = trimmedLine === CARGO_WORKSPACE_SECTION_HEADER;
+            continue;
+        }
+        if (!inWorkspaceSection) {
+            continue;
+        }
+        const singleLineMembersMatch = CARGO_WORKSPACE_MEMBERS_LINE_PATTERN.exec(trimmedLine);
+        if (singleLineMembersMatch?.[1] !== undefined) {
+            return extractQuotedMemberPaths(singleLineMembersMatch[1]);
+        }
+        if (CARGO_WORKSPACE_MEMBERS_OPEN_LINE_PATTERN.test(trimmedLine) &&
+            !trimmedLine.includes("]")) {
+            multilineMembersText = trimmedLine;
+        }
     }
-    const memberPaths = [...workspaceMembersMatch[1].matchAll(/"([^"]+)"/g)].map((match) => normalizeRepoPath(match[1] ?? ""));
-    return memberPaths.length > 0 ? memberPaths : undefined;
+    return undefined;
 };
 const readRustCrateRoot = (repoRoot, memberPath) => {
     const normalizedMemberPath = normalizeRepoPath(memberPath);
@@ -74732,7 +74808,7 @@ const hydrateResolutionConfig = (repoRoot) => {
 
 
 
-const hydrateDependencyGraph_normalizeForwardSlashes = (filePath) => filePath.replace(/\\/g, "/");
+
 const defaultReadFileText = (absolutePath) => {
     try {
         return (0,external_node_fs_namespaceObject.readFileSync)(absolutePath, "utf8");
@@ -74757,7 +74833,7 @@ const shouldDispatchExtractor = (filePath, enabledExtractorIds, registry) => {
     return extractor !== undefined && enabledExtractorIds.includes(extractor.id);
 };
 const extractEdgesForTrackedFile = (trackedFilePath, repoRoot, extractorContext, registry, enabledExtractorIds, readFileText) => {
-    const normalizedPath = hydrateDependencyGraph_normalizeForwardSlashes(trackedFilePath);
+    const normalizedPath = normalizeForwardSlashes(trackedFilePath);
     if (!shouldDispatchExtractor(normalizedPath, enabledExtractorIds, registry)) {
         return [];
     }
@@ -74825,7 +74901,7 @@ const resolveThresholds = (thresholds) => ({
  * @returns Direct dependent count and sorted importer paths.
  */
 const countDirectImportersForFile = (changedFile, graph) => {
-    const dependents = [...(graph.get(changedFile) ?? [])].sort();
+    const dependents = [...(graph.get(changedFile) ?? [])].sort((left, right) => left.localeCompare(right));
     return { dependentCount: dependents.length, dependents };
 };
 /**
@@ -74905,11 +74981,11 @@ const analyzeBlastRadius = (input) => {
  */
 
 
-const hydrateBlastRadiusContextualEvidence_normalizeForwardSlashes = (filePath) => filePath.replace(/\\/g, "/");
+
 const resolveAnalyzableChangedFiles = (changedFiles, notAnalyzedForBlastRadius) => {
-    const notAnalyzedPaths = new Set(notAnalyzedForBlastRadius.map((entry) => hydrateBlastRadiusContextualEvidence_normalizeForwardSlashes(entry.path)));
+    const notAnalyzedPaths = new Set(notAnalyzedForBlastRadius.map((entry) => normalizeForwardSlashes(entry.path)));
     return changedFiles
-        .map(hydrateBlastRadiusContextualEvidence_normalizeForwardSlashes)
+        .map(normalizeForwardSlashes)
         .filter((changedFilePath) => !notAnalyzedPaths.has(changedFilePath));
 };
 /**
@@ -75001,7 +75077,7 @@ const createGreenfieldFinding = (touchedFile, changeKind) => ({
  *
  * Greenfield (`added`) files bypass this — see {@link analyzeFamiliarity}.
  */
-const characterizeFamiliarity = (authorCommitCount, totalFileCommitCount, lastTouchDate, currentContentShare = 0, windowedLineChurnShare = 0, classifiedAt) => {
+const characterizeFamiliarity = (authorCommitCount, totalFileCommitCount, lastTouchDate, classifiedAt, currentContentShare = 0, windowedLineChurnShare = 0) => {
     const commitChurnShare = shareOfFileCommitChurn(authorCommitCount, totalFileCommitCount);
     if (authorCommitCount === 0 || lastTouchDate === null) {
         return { shareOfFileCommitChurn: commitChurnShare, characterization: "none" };
@@ -75078,7 +75154,7 @@ const analyzeModifiedFile = (input, changedFile, since) => {
     const blameStats = queryBlameForAuthorEmails(input.authorEmails, changedFile.path, since, input.baseRevision, input.blameSource);
     const currentContentShare = shareOfCurrentContent(blameStats.authorOwnedLineCount, blameStats.totalBlameableLineCount);
     const windowedLineChurnShare = shareOfWindowedLineChurn(blameStats.authorChangedLineCount, blameStats.totalChangedLineCount);
-    const { shareOfFileCommitChurn, characterization } = characterizeFamiliarity(historyStats.authorCommitCount, historyStats.totalFileCommitCount, historyStats.lastTouchDate, currentContentShare, windowedLineChurnShare, input.classifiedAt);
+    const { shareOfFileCommitChurn, characterization } = characterizeFamiliarity(historyStats.authorCommitCount, historyStats.totalFileCommitCount, historyStats.lastTouchDate, input.classifiedAt, currentContentShare, windowedLineChurnShare);
     return {
         touchedFile: changedFile.path,
         changeKind: changedFile.changeKind,
@@ -75210,13 +75286,18 @@ const extractGoImportSpecifiers = (source) => {
 };
 
 ;// CONCATENATED MODULE: ./core/contextual/extractors/goPathResolution.ts
+/**
+ * Pure path resolution for Go import specifiers using go.mod module path.
+ *
+ * @see docs/designs/lld-dependency-graph-extractors.md
+ */
 
-const goPathResolution_normalizeRepoPath = (filePath) => filePath.replace(/\\/g, "/").replace(/^\.\//, "");
+
 /** Read go resolution hints from the shared extractor context. */
 const readGoResolutionConfig = (context) => {
     const modulePathValue = context.resolutionConfig[GO_RESOLUTION_CONFIG_KEYS.modulePath];
     return {
-        modulePath: typeof modulePathValue === "string" ? goPathResolution_normalizeRepoPath(modulePathValue) : undefined,
+        modulePath: typeof modulePathValue === "string" ? normalizeRepoPath(modulePathValue) : undefined,
     };
 };
 const packageDirectoryFromModuleImport = (importPath, modulePath) => {
@@ -75232,7 +75313,7 @@ const packageDirectoryFromModuleImport = (importPath, modulePath) => {
     if (!packageRelativePath || packageRelativePath.includes("..")) {
         return null;
     }
-    return goPathResolution_normalizeRepoPath(packageRelativePath);
+    return normalizeRepoPath(packageRelativePath);
 };
 /**
  * Map an internal module import path to a canonical repo-relative `.go` file.
@@ -75249,7 +75330,10 @@ const resolveGoImportToRepoFile = (importPath, modulePath) => {
         return null;
     }
     const pathSegments = packageDirectory.split("/");
-    const packageName = pathSegments[pathSegments.length - 1];
+    const packageName = pathSegments.at(-1);
+    if (!packageName) {
+        return null;
+    }
     return `${packageDirectory}/${packageName}.go`;
 };
 /**
@@ -75274,10 +75358,10 @@ const resolveGoSpecifier = (_fromFile, specifier, context) => {
  */
 
 
+
 const GO_EXTENSIONS = [".go"];
-const goExtractor_normalizeForwardSlashes = (filePath) => filePath.replace(/\\/g, "/");
 const extractGoEdges = (filePath, fileText, context) => {
-    const normalizedFilePath = goExtractor_normalizeForwardSlashes(filePath);
+    const normalizedFilePath = normalizeForwardSlashes(filePath);
     const { modulePath } = readGoResolutionConfig(context);
     const importSpecifiers = extractGoImportSpecifiers(fileText);
     const edges = [];
@@ -75350,7 +75434,7 @@ const isRecord = (value) => typeof value === "object" && value !== null;
 const asAstNode = (value) => isRecord(value) && typeof value.type === "string" ? value : null;
 const readStringLiteralValue = (node) => {
     const astNode = asAstNode(node);
-    if (!astNode || astNode.type !== "StringLiteral") {
+    if (astNode?.type !== "StringLiteral") {
         return null;
     }
     const literalValue = astNode.value;
@@ -75374,41 +75458,44 @@ const isRequireCallee = (callee) => {
     }
     return false;
 };
-const collectStaticReferencesFromNode = (node, references) => {
-    const astNode = asAstNode(node);
-    if (!astNode) {
+const collectImportReferenceFromNode = (astNode, references) => {
+    if (astNode.type !== "ImportDeclaration" &&
+        astNode.type !== "ExportAllDeclaration" &&
+        astNode.type !== "ExportNamedDeclaration") {
         return;
     }
-    if (astNode.type === "ImportDeclaration" || astNode.type === "ExportAllDeclaration") {
-        const specifier = readStringLiteralValue(astNode.source);
-        if (specifier) {
-            references.push({ specifier, kind: "static_import" });
-        }
+    const specifier = readStringLiteralValue(astNode.source);
+    if (specifier) {
+        references.push({ specifier, kind: "static_import" });
     }
-    if (astNode.type === "ExportNamedDeclaration") {
-        const specifier = readStringLiteralValue(astNode.source);
-        if (specifier) {
-            references.push({ specifier, kind: "static_import" });
-        }
+};
+const collectRequireReferenceFromNode = (astNode, references) => {
+    if (astNode.type !== "CallExpression" || !isRequireCallee(astNode.callee)) {
+        return;
     }
-    if (astNode.type === "CallExpression" && isRequireCallee(astNode.callee)) {
-        const callArguments = astNode.arguments;
-        if (Array.isArray(callArguments) && callArguments.length > 0) {
-            const specifier = readStringLiteralValue(callArguments[0]);
-            if (specifier) {
-                references.push({ specifier, kind: "static_require" });
-            }
-        }
+    const callArguments = astNode.arguments;
+    if (!Array.isArray(callArguments) || callArguments.length === 0) {
+        return;
     }
-    if (astNode.type === "TSImportEqualsDeclaration") {
-        const moduleReference = asAstNode(astNode.moduleReference);
-        if (moduleReference?.type === "TSExternalModuleReference") {
-            const specifier = readStringLiteralValue(moduleReference.expression);
-            if (specifier) {
-                references.push({ specifier, kind: "static_import" });
-            }
-        }
+    const specifier = readStringLiteralValue(callArguments[0]);
+    if (specifier) {
+        references.push({ specifier, kind: "static_require" });
     }
+};
+const collectTsImportEqualsReferenceFromNode = (astNode, references) => {
+    if (astNode.type !== "TSImportEqualsDeclaration") {
+        return;
+    }
+    const moduleReference = asAstNode(astNode.moduleReference);
+    if (moduleReference?.type !== "TSExternalModuleReference") {
+        return;
+    }
+    const specifier = readStringLiteralValue(moduleReference.expression);
+    if (specifier) {
+        references.push({ specifier, kind: "static_import" });
+    }
+};
+const walkAstNodeChildren = (astNode, references) => {
     for (const childValue of Object.values(astNode)) {
         if (Array.isArray(childValue)) {
             for (const childNode of childValue) {
@@ -75418,6 +75505,16 @@ const collectStaticReferencesFromNode = (node, references) => {
         }
         collectStaticReferencesFromNode(childValue, references);
     }
+};
+const collectStaticReferencesFromNode = (node, references) => {
+    const astNode = asAstNode(node);
+    if (!astNode) {
+        return;
+    }
+    collectImportReferenceFromNode(astNode, references);
+    collectRequireReferenceFromNode(astNode, references);
+    collectTsImportEqualsReferenceFromNode(astNode, references);
+    walkAstNodeChildren(astNode, references);
 };
 /**
  * Extract static module references from JS/TS source text.
@@ -75443,7 +75540,7 @@ const extractStaticJsTsReferences = (filePath, fileText) => {
  */
 
 
-const jsTsPathResolution_normalizeRepoPath = (filePath) => filePath.replace(/\\/g, "/").replace(/^\.\//, "");
+
 const hasKnownExtension = (filePath) => {
     const lower = filePath.toLowerCase();
     return (JS_TS_MODULE_EXTENSIONS.some((extension) => lower.endsWith(extension)) ||
@@ -75462,7 +75559,7 @@ const readJsTsResolutionConfig = (context) => {
     const baseUrlValue = resolutionConfig[JS_TS_RESOLUTION_CONFIG_KEYS.baseUrl];
     const pathsValue = resolutionConfig[JS_TS_RESOLUTION_CONFIG_KEYS.tsconfigPaths];
     return {
-        baseUrl: typeof baseUrlValue === "string" ? jsTsPathResolution_normalizeRepoPath(baseUrlValue) : undefined,
+        baseUrl: typeof baseUrlValue === "string" ? normalizeRepoPath(baseUrlValue) : undefined,
         tsconfigPaths: jsTsPathResolution_isPathsRecord(pathsValue) ? pathsValue : undefined,
     };
 };
@@ -75471,7 +75568,7 @@ const applyTsconfigPathMapping = (specifier, tsconfigPaths) => {
         const wildcardIndex = pattern.indexOf("*");
         if (wildcardIndex === -1) {
             if (specifier === pattern && replacements[0]) {
-                return jsTsPathResolution_normalizeRepoPath(replacements[0]);
+                return normalizeRepoPath(replacements[0]);
             }
             continue;
         }
@@ -75481,34 +75578,36 @@ const applyTsconfigPathMapping = (specifier, tsconfigPaths) => {
             continue;
         }
         const matchedSegment = specifier.slice(prefix.length, specifier.length - suffix.length);
-        for (const replacement of replacements) {
-            const replacementWildcardIndex = replacement.indexOf("*");
-            if (replacementWildcardIndex === -1) {
-                return jsTsPathResolution_normalizeRepoPath(replacement);
-            }
-            const resolved = `${replacement.slice(0, replacementWildcardIndex)}${matchedSegment}${replacement.slice(replacementWildcardIndex + 1)}`;
-            return jsTsPathResolution_normalizeRepoPath(resolved);
+        const replacement = replacements[0];
+        if (!replacement) {
+            continue;
         }
+        const replacementWildcardIndex = replacement.indexOf("*");
+        if (replacementWildcardIndex === -1) {
+            return normalizeRepoPath(replacement);
+        }
+        const resolved = `${replacement.slice(0, replacementWildcardIndex)}${matchedSegment}${replacement.slice(replacementWildcardIndex + 1)}`;
+        return normalizeRepoPath(resolved);
     }
     return null;
 };
 const resolveExtensionlessPath = (basePath) => {
-    const normalized = jsTsPathResolution_normalizeRepoPath(basePath);
+    const normalized = normalizeRepoPath(basePath);
     if (hasKnownExtension(normalized)) {
         return normalized;
     }
     return `${normalized}.ts`;
 };
 const resolveAsModuleFile = (candidatePath) => {
-    const normalized = jsTsPathResolution_normalizeRepoPath(candidatePath);
+    const normalized = normalizeRepoPath(candidatePath);
     if (hasKnownExtension(normalized)) {
         return normalized;
     }
     return resolveExtensionlessPath(normalized);
 };
 const resolveRelativeSpecifier = (fromFile, specifier) => {
-    const fromDirectory = (0,external_node_path_namespaceObject.dirname)(jsTsPathResolution_normalizeRepoPath(fromFile));
-    const joinedPath = jsTsPathResolution_normalizeRepoPath(external_node_path_namespaceObject.posix.join(fromDirectory, specifier));
+    const fromDirectory = (0,external_node_path_namespaceObject.dirname)(normalizeRepoPath(fromFile));
+    const joinedPath = normalizeRepoPath(external_node_path_namespaceObject.posix.join(fromDirectory, specifier));
     const asFile = resolveAsModuleFile(joinedPath);
     if (asFile) {
         return asFile;
@@ -75521,7 +75620,7 @@ const resolveRelativeSpecifier = (fromFile, specifier) => {
  * @returns null for bare package imports and other unresolved specifiers.
  */
 const resolveJsTsSpecifier = (fromFile, specifier, resolutionConfig) => {
-    const normalizedFromFile = jsTsPathResolution_normalizeRepoPath(fromFile);
+    const normalizedFromFile = normalizeRepoPath(fromFile);
     if (specifier.startsWith("./") || specifier.startsWith("../")) {
         return resolveRelativeSpecifier(normalizedFromFile, specifier);
     }
@@ -75541,6 +75640,7 @@ const resolveJsTsSpecifier = (fromFile, specifier, resolutionConfig) => {
 ;// CONCATENATED MODULE: ./core/contextual/extractors/jsTsExtractor.ts
 
 
+
 const JS_TS_EXTENSIONS = [
     ".js",
     ".jsx",
@@ -75551,9 +75651,8 @@ const JS_TS_EXTENSIONS = [
     ".mts",
     ".cts",
 ];
-const jsTsExtractor_normalizeForwardSlashes = (filePath) => filePath.replace(/\\/g, "/");
 const extractJsTsEdges = (filePath, fileText, context) => {
-    const normalizedFilePath = jsTsExtractor_normalizeForwardSlashes(filePath);
+    const normalizedFilePath = normalizeForwardSlashes(filePath);
     const resolutionConfig = readJsTsResolutionConfig(context);
     const references = extractStaticJsTsReferences(normalizedFilePath, fileText);
     const edges = [];
@@ -75570,7 +75669,7 @@ const extractJsTsEdges = (filePath, fileText, context) => {
     }
     return edges;
 };
-const resolveJsTsModuleSpecifier = (fromFile, specifier, context) => resolveJsTsSpecifier(jsTsExtractor_normalizeForwardSlashes(fromFile), specifier, readJsTsResolutionConfig(context));
+const resolveJsTsModuleSpecifier = (fromFile, specifier, context) => resolveJsTsSpecifier(normalizeForwardSlashes(fromFile), specifier, readJsTsResolutionConfig(context));
 /** v1 JS/TS extractor for static ESM imports and literal require(). */
 const jsTsExtractor = {
     id: "js_ts",
@@ -75788,6 +75887,9 @@ const PYTHON_STDLIB_TOP_LEVEL_MODULES = new Set([
     "zlib",
     "zoneinfo",
 ]);
+const RELATIVE_MODULE_PATTERN = /^(\.+)(.*)$/;
+const FROM_IMPORT_PATTERN = /^from\s+(\.+[\w.]*|[\w.]+)\s+import\s+(.+)$/;
+const IMPORT_STATEMENT_PATTERN = /^import\s+(.+)$/;
 const stripPythonCommentsAndStrings = (source) => {
     const withoutTripleQuoted = source.replace(/"""[\s\S]*?"""|'''[\s\S]*?'''/g, " ");
     const withoutSingleQuoted = withoutTripleQuoted.replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, " ");
@@ -75796,7 +75898,7 @@ const stripPythonCommentsAndStrings = (source) => {
 const collapseParenthesizedImportBlocks = (source) => source.replace(/\(([\s\S]*?)\)/g, (_match, innerBlock) => innerBlock.replace(/\s+/g, " "));
 const isDynamicImportLine = (line) => /\b__import__\s*\(/.test(line) || /\bimportlib\.import_module\s*\(/.test(line);
 const parseRelativeModuleSpecifier = (specifier) => {
-    const relativeMatch = specifier.match(/^(\.+)(.*)$/);
+    const relativeMatch = RELATIVE_MODULE_PATTERN.exec(specifier);
     if (!relativeMatch) {
         return null;
     }
@@ -75838,7 +75940,7 @@ const extractImportStatementSpecifiers = (statement) => {
         return [];
     }
     const specifiers = [];
-    const fromImportMatch = normalizedStatement.match(/^from\s+(\.+[\w.]*|[\w.]+)\s+import\s+(.+)$/);
+    const fromImportMatch = FROM_IMPORT_PATTERN.exec(normalizedStatement);
     if (fromImportMatch?.[1]) {
         const fromModule = fromImportMatch[1];
         if (/^\.+$/.test(fromModule)) {
@@ -75855,7 +75957,7 @@ const extractImportStatementSpecifiers = (statement) => {
         }
         return specifiers;
     }
-    const importMatch = normalizedStatement.match(/^import\s+(.+)$/);
+    const importMatch = IMPORT_STATEMENT_PATTERN.exec(normalizedStatement);
     if (!importMatch?.[1]) {
         return [];
     }
@@ -75901,9 +76003,10 @@ const extractPythonImportSpecifiers = (source) => {
  */
 
 
+
 const DEFAULT_PACKAGE_ROOTS = ["."];
-const pythonPathResolution_normalizeRepoPath = (filePath) => filePath.replace(/\\/g, "/").replace(/^\.\//, "").replace(/\/$/, "");
-const splitPathSegments = (filePath) => pythonPathResolution_normalizeRepoPath(filePath).split("/").filter((segment) => segment.length > 0);
+const normalizePythonRepoPath = (filePath) => normalizeRepoPath(filePath).replace(/\/$/, "");
+const splitPathSegments = (filePath) => normalizePythonRepoPath(filePath).split("/").filter((segment) => segment.length > 0);
 const directoryPathForFile = (filePath) => {
     const segments = splitPathSegments(filePath);
     if (segments.length <= 1) {
@@ -75916,7 +76019,7 @@ const modulePathToRepoFile = (modulePath) => {
     if (!normalizedModulePath) {
         return "__init__.py";
     }
-    return `${normalizedModulePath.replace(/\./g, "/")}.py`;
+    return `${normalizedModulePath.replaceAll(".", "/")}.py`;
 };
 const resolveRelativeModuleToRepoFile = (moduleSpecifier, fromFile) => {
     const relativeModule = parseRelativeModuleSpecifier(moduleSpecifier);
@@ -75935,7 +76038,7 @@ const resolveRelativeModuleToRepoFile = (moduleSpecifier, fromFile) => {
     return modulePathToRepoFile(resolvedModulePath);
 };
 const resolveAbsoluteModuleUnderRoot = (moduleSpecifier, packageRoot) => {
-    const normalizedRoot = pythonPathResolution_normalizeRepoPath(packageRoot);
+    const normalizedRoot = normalizeRepoPath(packageRoot);
     const moduleFile = modulePathToRepoFile(moduleSpecifier);
     if (!normalizedRoot || normalizedRoot === ".") {
         return moduleFile;
@@ -75950,7 +76053,7 @@ const readPythonResolutionConfig = (context) => {
     }
     const packageRoots = packageRootsValue
         .filter((entry) => typeof entry === "string")
-        .map((entry) => pythonPathResolution_normalizeRepoPath(entry));
+        .map((entry) => normalizeRepoPath(entry));
     return {
         packageRoots: packageRoots.length > 0 ? packageRoots : DEFAULT_PACKAGE_ROOTS,
     };
@@ -75967,7 +76070,7 @@ const readPythonResolutionConfig = (context) => {
  * @returns Canonical `.py` path or null when unresolvable.
  */
 const resolvePythonModuleToRepoFile = (moduleSpecifier, fromFile, packageRoots) => {
-    const normalizedFromFile = pythonPathResolution_normalizeRepoPath(fromFile);
+    const normalizedFromFile = normalizeRepoPath(fromFile);
     if (moduleSpecifier.startsWith(".")) {
         return resolveRelativeModuleToRepoFile(moduleSpecifier, normalizedFromFile);
     }
@@ -75977,7 +76080,7 @@ const resolvePythonModuleToRepoFile = (moduleSpecifier, fromFile, packageRoots) 
     for (const packageRoot of packageRoots) {
         const resolvedTarget = resolveAbsoluteModuleUnderRoot(moduleSpecifier, packageRoot);
         if (resolvedTarget) {
-            return pythonPathResolution_normalizeRepoPath(resolvedTarget);
+            return normalizeRepoPath(resolvedTarget);
         }
     }
     return null;
@@ -76004,10 +76107,10 @@ const resolvePythonSpecifier = (fromFile, specifier, context) => {
  */
 
 
+
 const PYTHON_EXTENSIONS = [".py", ".pyi"];
-const pythonExtractor_normalizeForwardSlashes = (filePath) => filePath.replace(/\\/g, "/");
 const extractPythonEdges = (filePath, fileText, context) => {
-    const normalizedFilePath = pythonExtractor_normalizeForwardSlashes(filePath);
+    const normalizedFilePath = normalizeForwardSlashes(filePath);
     const { packageRoots } = readPythonResolutionConfig(context);
     const importSpecifiers = extractPythonImportSpecifiers(fileText);
     const edges = [];
@@ -76048,6 +76151,9 @@ const RUST_STDLIB_CRATE_NAMES = new Set([
     "std",
     "test",
 ]);
+const MOD_DECLARATION_PATTERN = /^\s*mod\s+(\w+)\s*;/;
+const GROUPED_USE_PATTERN = /^(.*)::\{([^}]+)\}$/;
+const USE_STATEMENT_PATTERN = /^use\s+(.+?)\s*;$/;
 const stripRustCommentsAndStrings = (source) => {
     const withoutRawStrings = source.replace(/r#+"[\s\S]*?"#+/g, " ");
     const withoutDoubleQuoted = withoutRawStrings.replace(/"(?:\\.|[^"\\])*"/g, " ");
@@ -76056,7 +76162,7 @@ const stripRustCommentsAndStrings = (source) => {
 };
 const isMacroGeneratedModuleLine = (line) => /\b(?:include!|include_str!|include_bytes!|concat!|env!)\s*\(/.test(line);
 const parseModDeclarationName = (line) => {
-    const modMatch = line.match(/^\s*mod\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*;/);
+    const modMatch = MOD_DECLARATION_PATTERN.exec(line);
     return modMatch?.[1] ?? null;
 };
 const splitUsePathSegments = (usePath) => usePath
@@ -76068,7 +76174,7 @@ const expandGroupedUsePaths = (useClause) => {
     if (!normalizedClause) {
         return [];
     }
-    const braceMatch = normalizedClause.match(/^(.*)::\{([^}]+)\}$/);
+    const braceMatch = GROUPED_USE_PATTERN.exec(normalizedClause);
     if (!braceMatch) {
         return [normalizedClause.split(/\s+as\s+/)[0]?.trim() ?? normalizedClause];
     }
@@ -76092,7 +76198,7 @@ const expandGroupedUsePaths = (useClause) => {
 };
 const parseUseStatementPaths = (statement) => {
     const normalizedStatement = statement.replace(/\s+/g, " ").trim();
-    const useMatch = normalizedStatement.match(/^use\s+(.+?)\s*;$/);
+    const useMatch = USE_STATEMENT_PATTERN.exec(normalizedStatement);
     if (!useMatch?.[1]) {
         return [];
     }
@@ -76168,15 +76274,16 @@ const isRustStdCratePath = (usePath) => {
  */
 
 
-const rustPathResolution_normalizeRepoPath = (filePath) => filePath.replace(/\\/g, "/").replace(/^\.\//, "").replace(/\/$/, "");
+
+const normalizeRustRepoPath = (filePath) => normalizeRepoPath(filePath).replace(/\/$/, "");
 const joinRepoPath = (...segments) => {
     const joinedPath = segments
         .filter((segment) => segment.length > 0)
         .join("/")
         .replace(/\/+/g, "/");
-    return rustPathResolution_normalizeRepoPath(joinedPath);
+    return normalizeRustRepoPath(joinedPath);
 };
-const rustPathResolution_splitPathSegments = (filePath) => rustPathResolution_normalizeRepoPath(filePath).split("/").filter((segment) => segment.length > 0);
+const rustPathResolution_splitPathSegments = (filePath) => normalizeRustRepoPath(filePath).split("/").filter((segment) => segment.length > 0);
 const isRustCrateRoot = (value) => {
     if (typeof value !== "object" || value === null) {
         return false;
@@ -76193,15 +76300,15 @@ const readRustResolutionConfig = (context) => {
         return { crateRoots: [] };
     }
     const crateRoots = crateRootsValue.filter(isRustCrateRoot).map((crateRoot) => ({
-        memberPath: rustPathResolution_normalizeRepoPath(crateRoot.memberPath),
+        memberPath: normalizeRustRepoPath(crateRoot.memberPath),
         packageName: crateRoot.packageName,
-        sourceRoot: rustPathResolution_normalizeRepoPath(crateRoot.sourceRoot),
+        sourceRoot: normalizeRustRepoPath(crateRoot.sourceRoot),
     }));
     return { crateRoots };
 };
 const relativePathWithinSourceRoot = (fromFile, sourceRoot) => {
-    const normalizedFromFile = rustPathResolution_normalizeRepoPath(fromFile);
-    const normalizedSourceRoot = rustPathResolution_normalizeRepoPath(sourceRoot);
+    const normalizedFromFile = normalizeRustRepoPath(fromFile);
+    const normalizedSourceRoot = normalizeRustRepoPath(sourceRoot);
     const sourceRootPrefix = `${normalizedSourceRoot}/`;
     if (normalizedFromFile === normalizedSourceRoot) {
         return "";
@@ -76239,17 +76346,17 @@ const moduleFileFromPathSegments = (sourceRoot, modulePathSegments) => {
     return joinRepoPath(sourceRoot, `${modulePathSegments.join("/")}.rs`);
 };
 const findContainingCrateRoot = (fromFile, crateRoots) => {
-    const normalizedFromFile = rustPathResolution_normalizeRepoPath(fromFile);
+    const normalizedFromFile = normalizeRustRepoPath(fromFile);
     let bestMatch = null;
     let bestMatchLength = -1;
     for (const crateRoot of crateRoots) {
-        const sourceRootPrefix = `${rustPathResolution_normalizeRepoPath(crateRoot.sourceRoot)}/`;
-        const isWithinSourceRoot = normalizedFromFile === rustPathResolution_normalizeRepoPath(crateRoot.sourceRoot) ||
+        const sourceRootPrefix = `${normalizeRustRepoPath(crateRoot.sourceRoot)}/`;
+        const isWithinSourceRoot = normalizedFromFile === normalizeRustRepoPath(crateRoot.sourceRoot) ||
             normalizedFromFile.startsWith(sourceRootPrefix);
         if (!isWithinSourceRoot) {
             continue;
         }
-        const matchLength = rustPathResolution_normalizeRepoPath(crateRoot.sourceRoot).length;
+        const matchLength = normalizeRustRepoPath(crateRoot.sourceRoot).length;
         if (matchLength > bestMatchLength) {
             bestMatch = crateRoot;
             bestMatchLength = matchLength;
@@ -76370,10 +76477,10 @@ const resolveRustSpecifier = (fromFile, specifier, context) => {
  */
 
 
+
 const RUST_EXTENSIONS = [".rs"];
-const rustExtractor_normalizeForwardSlashes = (filePath) => filePath.replace(/\\/g, "/");
 const extractRustEdges = (filePath, fileText, context) => {
-    const normalizedFilePath = rustExtractor_normalizeForwardSlashes(filePath);
+    const normalizedFilePath = normalizeForwardSlashes(filePath);
     const { crateRoots } = readRustResolutionConfig(context);
     if (crateRoots.length === 0) {
         return [];
@@ -76427,7 +76534,11 @@ const scss_syntax_parse = scss_syntax.parse
 ;// CONCATENATED MODULE: ./core/contextual/extractors/stylesheetImportScan.ts
 
 
+
 const STYLESHEET_AT_RULE_NAMES = new Set(["import", "use", "forward"]);
+const QUOTED_SPECIFIER_PATTERN = /^['"]([^'"]+)['"]/;
+const URL_SPECIFIER_PATTERN = /^url\(\s*['"]?([^'")\s]+)['"]?\s*\)/i;
+const UNQUOTED_SPECIFIER_PATTERN = /^([\w./-]+)/;
 const parseStylesheetRoot = (filePath, fileText) => {
     const lowerPath = filePath.toLowerCase();
     try {
@@ -76452,18 +76563,41 @@ const edgeKindForAtRule = (atRuleName) => {
             return null;
     }
 };
-const stripAsAliasSuffix = (params) => params.replace(/\s+as\s+[\w-]+(?:\s+with\s+.+)?$/i, "").trim();
+const AS_ALIAS_SUFFIX_PATTERN = /\s+as\s+/i;
+const ALIAS_NAME_PATTERN = /^[\w-]+/;
+const WITH_CLAUSE_PREFIX_PATTERN = /^\s+with\b/i;
+const stripAsAliasSuffix = (params) => {
+    const trimmedParams = params.trim();
+    const asAliasMatch = AS_ALIAS_SUFFIX_PATTERN.exec(trimmedParams);
+    if (!asAliasMatch || asAliasMatch.index === undefined) {
+        return trimmedParams;
+    }
+    const suffixAfterAs = trimmedParams
+        .slice(asAliasMatch.index + asAliasMatch[0].length)
+        .replace(/;$/, "")
+        .trim();
+    const aliasNameMatch = ALIAS_NAME_PATTERN.exec(suffixAfterAs);
+    if (!aliasNameMatch) {
+        return trimmedParams;
+    }
+    const remainderAfterAlias = suffixAfterAs.slice(aliasNameMatch[0].length);
+    const hasValidAliasSuffix = remainderAfterAlias.length === 0 || WITH_CLAUSE_PREFIX_PATTERN.test(remainderAfterAlias);
+    if (!hasValidAliasSuffix) {
+        return trimmedParams;
+    }
+    return trimmedParams.slice(0, asAliasMatch.index).trim();
+};
 const parseQuotedSpecifier = (params) => {
     const trimmedParams = stripAsAliasSuffix(params.trim()).replace(/;$/, "");
-    const singleQuoted = trimmedParams.match(/^['"]([^'"]+)['"]/);
+    const singleQuoted = QUOTED_SPECIFIER_PATTERN.exec(trimmedParams);
     if (singleQuoted?.[1]) {
         return singleQuoted[1];
     }
-    const urlMatch = trimmedParams.match(/^url\(\s*['"]?([^'")\s]+)['"]?\s*\)/i);
+    const urlMatch = URL_SPECIFIER_PATTERN.exec(trimmedParams);
     if (urlMatch?.[1]) {
         return urlMatch[1];
     }
-    const unquoted = trimmedParams.match(/^([\w./_-]+)/);
+    const unquoted = UNQUOTED_SPECIFIER_PATTERN.exec(trimmedParams);
     return unquoted?.[1] ?? null;
 };
 const referenceKey = (reference) => `${reference.kind}:${reference.specifier}`;
@@ -76509,15 +76643,29 @@ const collectPostcssReferences = (filePath, fileText) => {
     });
     return references;
 };
-const INDENTED_SASS_AT_RULE_LINE = /^\s*@(import|use|forward)\s+(.+?)\s*;?\s*$/;
+const INDENTED_SASS_AT_RULE_PREFIX = /^\s*@(import|use|forward)\s+/;
+const parseIndentedSassAtRuleLine = (line) => {
+    const prefixMatch = INDENTED_SASS_AT_RULE_PREFIX.exec(line);
+    if (!prefixMatch?.[1]) {
+        return null;
+    }
+    let params = line.slice(prefixMatch[0].length).trimEnd();
+    if (params.endsWith(";")) {
+        params = params.slice(0, -1).trimEnd();
+    }
+    if (params.length === 0) {
+        return null;
+    }
+    return { atRuleName: prefixMatch[1], params };
+};
 const collectIndentedSassLineReferences = (fileText) => {
     const references = [];
     for (const line of fileText.split("\n")) {
-        const match = line.match(INDENTED_SASS_AT_RULE_LINE);
-        if (!match?.[1] || !match[2]) {
+        const parsedLine = parseIndentedSassAtRuleLine(line);
+        if (!parsedLine) {
             continue;
         }
-        const reference = referenceFromAtRule(match[1], match[2]);
+        const reference = referenceFromAtRule(parsedLine.atRuleName, parsedLine.params);
         if (reference) {
             references.push(reference);
         }
@@ -76529,7 +76677,7 @@ const collectIndentedSassLineReferences = (fileText) => {
  * Built-in `sass:*` modules are included here; callers filter them during resolution.
  */
 const extractStylesheetReferences = (filePath, fileText) => {
-    const normalizedPath = filePath.replace(/\\/g, "/");
+    const normalizedPath = normalizeForwardSlashes(filePath);
     const postcssReferences = collectPostcssReferences(normalizedPath, fileText);
     if (!normalizedPath.toLowerCase().endsWith(".sass")) {
         return dedupeReferences(postcssReferences);
@@ -76557,7 +76705,7 @@ const STYLESHEET_RESOLUTION_EXTENSIONS = [".scss", ".sass", ".css"];
  */
 
 
-const stylesheetPathResolution_normalizeRepoPath = (filePath) => filePath.replace(/\\/g, "/").replace(/^\.\//, "");
+
 const hasStylesheetExtension = (filePath) => {
     const lower = filePath.toLowerCase();
     return STYLESHEET_FILE_EXTENSIONS.some((extension) => lower.endsWith(extension));
@@ -76575,16 +76723,24 @@ const readStylesheetResolutionConfig = (context) => {
     const baseUrlValue = resolutionConfig[STYLESHEET_RESOLUTION_CONFIG_KEYS.baseUrl];
     const pathsValue = resolutionConfig[STYLESHEET_RESOLUTION_CONFIG_KEYS.tsconfigPaths];
     return {
-        baseUrl: typeof baseUrlValue === "string" ? stylesheetPathResolution_normalizeRepoPath(baseUrlValue) : undefined,
+        baseUrl: typeof baseUrlValue === "string" ? normalizeRepoPath(baseUrlValue) : undefined,
         tsconfigPaths: stylesheetPathResolution_isPathsRecord(pathsValue) ? pathsValue : undefined,
     };
+};
+const resolveWildcardReplacement = (replacement, matchedSegment) => {
+    const replacementWildcardIndex = replacement.indexOf("*");
+    if (replacementWildcardIndex === -1) {
+        return normalizeRepoPath(replacement);
+    }
+    const resolved = `${replacement.slice(0, replacementWildcardIndex)}${matchedSegment}${replacement.slice(replacementWildcardIndex + 1)}`;
+    return normalizeRepoPath(resolved);
 };
 const stylesheetPathResolution_applyTsconfigPathMapping = (specifier, tsconfigPaths) => {
     for (const [pattern, replacements] of Object.entries(tsconfigPaths)) {
         const wildcardIndex = pattern.indexOf("*");
         if (wildcardIndex === -1) {
             if (specifier === pattern && replacements[0]) {
-                return stylesheetPathResolution_normalizeRepoPath(replacements[0]);
+                return normalizeRepoPath(replacements[0]);
             }
             continue;
         }
@@ -76594,20 +76750,17 @@ const stylesheetPathResolution_applyTsconfigPathMapping = (specifier, tsconfigPa
             continue;
         }
         const matchedSegment = specifier.slice(prefix.length, specifier.length - suffix.length);
-        for (const replacement of replacements) {
-            const replacementWildcardIndex = replacement.indexOf("*");
-            if (replacementWildcardIndex === -1) {
-                return stylesheetPathResolution_normalizeRepoPath(replacement);
-            }
-            const resolved = `${replacement.slice(0, replacementWildcardIndex)}${matchedSegment}${replacement.slice(replacementWildcardIndex + 1)}`;
-            return stylesheetPathResolution_normalizeRepoPath(resolved);
+        const replacement = replacements[0];
+        if (!replacement) {
+            continue;
         }
+        return resolveWildcardReplacement(replacement, matchedSegment);
     }
     return null;
 };
 const stripQueryAndFragment = (specifier) => specifier.split(/[?#]/, 1)[0] ?? specifier;
 const partialAndIndexCandidates = (joinedPath) => {
-    const normalized = stylesheetPathResolution_normalizeRepoPath(joinedPath);
+    const normalized = normalizeRepoPath(joinedPath);
     if (hasStylesheetExtension(normalized)) {
         return [normalized];
     }
@@ -76615,18 +76768,16 @@ const partialAndIndexCandidates = (joinedPath) => {
     const baseName = external_node_path_namespaceObject.posix.basename(normalized);
     const candidates = [];
     for (const extension of STYLESHEET_RESOLUTION_EXTENSIONS) {
-        candidates.push(external_node_path_namespaceObject.posix.join(directory, `_${baseName}${extension}`));
-        candidates.push(external_node_path_namespaceObject.posix.join(directory, `${baseName}${extension}`));
+        candidates.push(external_node_path_namespaceObject.posix.join(directory, `_${baseName}${extension}`), external_node_path_namespaceObject.posix.join(directory, `${baseName}${extension}`));
     }
     for (const extension of STYLESHEET_RESOLUTION_EXTENSIONS) {
-        candidates.push(external_node_path_namespaceObject.posix.join(normalized, `_index${extension}`));
-        candidates.push(external_node_path_namespaceObject.posix.join(normalized, `index${extension}`));
+        candidates.push(external_node_path_namespaceObject.posix.join(normalized, `_index${extension}`), external_node_path_namespaceObject.posix.join(normalized, `index${extension}`));
     }
     return candidates;
 };
 const stylesheetPathResolution_resolveRelativeSpecifier = (fromFile, specifier) => {
-    const fromDirectory = (0,external_node_path_namespaceObject.dirname)(stylesheetPathResolution_normalizeRepoPath(fromFile));
-    const joinedPath = stylesheetPathResolution_normalizeRepoPath(external_node_path_namespaceObject.posix.join(fromDirectory, specifier));
+    const fromDirectory = (0,external_node_path_namespaceObject.dirname)(normalizeRepoPath(fromFile));
+    const joinedPath = normalizeRepoPath(external_node_path_namespaceObject.posix.join(fromDirectory, specifier));
     const candidates = partialAndIndexCandidates(joinedPath);
     return candidates[0] ?? null;
 };
@@ -76664,7 +76815,7 @@ const resolveStylesheetSpecifier = (fromFile, specifier, resolutionConfig) => {
     if (!normalizedSpecifier || normalizedSpecifier.startsWith("sass:")) {
         return null;
     }
-    return resolveStylesheetPath(stylesheetPathResolution_normalizeRepoPath(fromFile), normalizedSpecifier, resolutionConfig);
+    return resolveStylesheetPath(normalizeRepoPath(fromFile), normalizedSpecifier, resolutionConfig);
 };
 
 ;// CONCATENATED MODULE: ./core/contextual/extractors/stylesheetExtractor.ts
@@ -76679,9 +76830,9 @@ const resolveStylesheetSpecifier = (fromFile, specifier, resolutionConfig) => {
 
 
 
-const stylesheetExtractor_normalizeForwardSlashes = (filePath) => filePath.replace(/\\/g, "/");
+
 const extractStylesheetEdges = (filePath, fileText, context) => {
-    const normalizedFilePath = stylesheetExtractor_normalizeForwardSlashes(filePath);
+    const normalizedFilePath = normalizeForwardSlashes(filePath);
     const resolutionConfig = readStylesheetResolutionConfig(context);
     const references = extractStylesheetReferences(normalizedFilePath, fileText);
     const edges = [];
@@ -76698,7 +76849,7 @@ const extractStylesheetEdges = (filePath, fileText, context) => {
     }
     return edges;
 };
-const resolveStylesheetModuleSpecifier = (fromFile, specifier, context) => resolveStylesheetSpecifier(stylesheetExtractor_normalizeForwardSlashes(fromFile), specifier, readStylesheetResolutionConfig(context));
+const resolveStylesheetModuleSpecifier = (fromFile, specifier, context) => resolveStylesheetSpecifier(normalizeForwardSlashes(fromFile), specifier, readStylesheetResolutionConfig(context));
 /** v1 stylesheet extractor for static @import, @use, and @forward edges. */
 const stylesheetExtractor = {
     id: "stylesheet",
@@ -76786,13 +76937,15 @@ const resolveHeadCommitAuthorEmail = (repositoryRoot, headRef, dependencies) => 
  * Checks whether a path exists in a git tree at a given revision.
  */
 
-const normalizeRepositoryRelativePath = (repositoryRelativePath) => repositoryRelativePath.replace(/\\/g, "/");
+
+
 /**
  * @returns `true` when `git cat-file -e <revision>:<path>` succeeds.
  */
 const pathExistsAtGitRevision = (repositoryRoot, revision, repositoryRelativePath, dependencies) => {
     const runGit = dependencies?.runGitCommand ?? runGitCommand;
-    const normalizedPath = normalizeRepositoryRelativePath(repositoryRelativePath);
+    assertSafeRepositoryRelativePath(repositoryRelativePath);
+    const normalizedPath = normalizeForwardSlashes(repositoryRelativePath);
     try {
         runGit(repositoryRoot, ["cat-file", "-e", `${revision}:${normalizedPath}`]);
         return true;
@@ -76805,7 +76958,7 @@ const pathExistsAtGitRevision = (repositoryRoot, revision, repositoryRelativePat
 ;// CONCATENATED MODULE: ./adapters/github/contextual/resolveChangedFileEntries.ts
 
 
-const resolveChangedFileEntries_normalizeRepositoryRelativePath = (repositoryRelativePath) => repositoryRelativePath.replace(/\\/g, "/");
+
 /**
  * Paths added between merge-base and head via `git diff --diff-filter=A`.
  */
@@ -76825,7 +76978,7 @@ const resolveAddedPathsBetweenRefs = (repositoryRoot, baseRef, headRef, dependen
         for (const line of diffOutput.split("\n")) {
             const trimmedLine = line.trim();
             if (trimmedLine.length > 0) {
-                addedPaths.add(resolveChangedFileEntries_normalizeRepositoryRelativePath(trimmedLine));
+                addedPaths.add(normalizeForwardSlashes(trimmedLine));
             }
         }
         return addedPaths;
@@ -76838,7 +76991,7 @@ const resolveAddedPathsBetweenRefs = (repositoryRoot, baseRef, headRef, dependen
  * @returns `added` when the path is in the diff-added set or absent at `baseRevision`.
  */
 const resolveFileChangeKind = (repositoryRoot, baseRevision, filePath, addedPaths, dependencies) => {
-    const normalizedPath = resolveChangedFileEntries_normalizeRepositoryRelativePath(filePath);
+    const normalizedPath = normalizeForwardSlashes(filePath);
     if (addedPaths.has(normalizedPath)) {
         return "added";
     }
@@ -76853,7 +77006,7 @@ const resolveFileChangeKind = (repositoryRoot, baseRevision, filePath, addedPath
 const resolveChangedFileEntries = (repositoryRoot, baseRef, headRef, baseRevision, changedPaths, dependencies) => {
     const addedPaths = resolveAddedPathsBetweenRefs(repositoryRoot, baseRef, headRef, dependencies);
     return changedPaths.map((changedPath) => ({
-        path: resolveChangedFileEntries_normalizeRepositoryRelativePath(changedPath),
+        path: normalizeForwardSlashes(changedPath),
         changeKind: resolveFileChangeKind(repositoryRoot, baseRevision, changedPath, addedPaths, dependencies),
     }));
 };
@@ -77538,6 +77691,58 @@ const mapGithubNativeAutoMergeFailureToOutcome = (cause) => {
     }
     throw cause;
 };
+const hydrateIstanbulCoverageForPull = async (istanbulCoverageHydration, githubApiClient, pullRequestLookup, headSha) => {
+    if (istanbulCoverageHydration?.shouldHydrate !== true ||
+        istanbulCoverageHydration.repositoryRelativePath.trim() === "") {
+        return undefined;
+    }
+    const rawCoverageJson = await githubApiClient.getRepositoryFileTextAtRef({
+        repositoryOwner: pullRequestLookup.repositoryOwner,
+        repositoryName: pullRequestLookup.repositoryName,
+        path: istanbulCoverageHydration.repositoryRelativePath.trim(),
+        ref: headSha,
+    });
+    if (rawCoverageJson === null || rawCoverageJson.trim() === "") {
+        return undefined;
+    }
+    try {
+        return parseCoverageArtifactText({
+            format: "istanbul",
+            text: rawCoverageJson,
+        });
+    }
+    catch (cause) {
+        if (!(cause instanceof IstanbulCoverageParseError)) {
+            throw cause;
+        }
+        return undefined;
+    }
+};
+const mergeContextualEvidenceIntoPullContext = (pullContext, contextualEvidenceHydration, hydrateContextualEvidenceFn, pullSnapshot, changedPaths, classifiedAtIso) => {
+    const contextualHydrationResult = hydrateContextualEvidenceFn({
+        repositoryRoot: contextualEvidenceHydration.repositoryRoot,
+        baseRef: pullSnapshot.baseRefName,
+        headRef: pullSnapshot.headSha,
+        authorLogin: pullSnapshot.authorLogin,
+        changedPaths,
+        classifiedAt: new Date(classifiedAtIso),
+        hydrateAuthorFamiliarity: contextualEvidenceHydration.hydrateAuthorFamiliarity,
+        hydrateBlastRadius: contextualEvidenceHydration.hydrateBlastRadius,
+        authorFamiliarityOptions: contextualEvidenceHydration.authorFamiliarityOptions,
+        blastRadiusOptions: contextualEvidenceHydration.blastRadiusOptions,
+        dependencies: contextualEvidenceHydration.dependencies,
+    });
+    return {
+        ...pullContext,
+        contextualEvidence: contextualHydrationResult.contextualEvidence,
+        ...(contextualHydrationResult.baseRevision === undefined
+            ? {}
+            : { baseRevision: contextualHydrationResult.baseRevision }),
+        ...(contextualHydrationResult.authorEmails === undefined
+            ? {}
+            : { authorEmails: contextualHydrationResult.authorEmails }),
+    };
+};
 class GitHubAdapter {
     githubAdapterDependencies;
     /** Set in {@link GitHubAdapter.buildContext} for {@link GitHubAdapter.writeResult} (check run `head_sha`). */
@@ -77560,30 +77765,7 @@ class GitHubAdapter {
         this.lastPullRequestHeadSha = pullSnapshot.headSha;
         this.lastPullRequestNodeId = pullSnapshot.pullRequestNodeId;
         const fileSnapshots = await githubApiClient.listPullRequestFiles(pullRequestLookup);
-        const hydration = this.githubAdapterDependencies.istanbulCoverageHydration;
-        let coverageReport;
-        if (hydration?.shouldHydrate === true &&
-            hydration.repositoryRelativePath.trim() !== "") {
-            const rawCoverageJson = await githubApiClient.getRepositoryFileTextAtRef({
-                repositoryOwner: pullRequestLookup.repositoryOwner,
-                repositoryName: pullRequestLookup.repositoryName,
-                path: hydration.repositoryRelativePath.trim(),
-                ref: pullSnapshot.headSha,
-            });
-            if (rawCoverageJson !== null && rawCoverageJson.trim() !== "") {
-                try {
-                    coverageReport = parseCoverageArtifactText({
-                        format: "istanbul",
-                        text: rawCoverageJson,
-                    });
-                }
-                catch (cause) {
-                    if (!(cause instanceof IstanbulCoverageParseError)) {
-                        throw cause;
-                    }
-                }
-            }
-        }
+        const coverageReport = await hydrateIstanbulCoverageForPull(this.githubAdapterDependencies.istanbulCoverageHydration, githubApiClient, pullRequestLookup, pullSnapshot.headSha);
         const headCommitCommittedAtIso = await githubApiClient.getRepositoryCommitCommittedAtIso({
             repositoryOwner: pullRequestLookup.repositoryOwner,
             repositoryName: pullRequestLookup.repositoryName,
@@ -77600,29 +77782,7 @@ class GitHubAdapter {
         const contextualEvidenceHydration = this.githubAdapterDependencies.contextualEvidenceHydration;
         if (contextualEvidenceHydration?.shouldHydrate === true) {
             const hydrateContextualEvidenceFn = this.githubAdapterDependencies.hydrateContextualEvidence ?? hydrateContextualEvidence;
-            const contextualHydrationResult = hydrateContextualEvidenceFn({
-                repositoryRoot: contextualEvidenceHydration.repositoryRoot,
-                baseRef: pullSnapshot.baseRefName,
-                headRef: pullSnapshot.headSha,
-                authorLogin: pullSnapshot.authorLogin,
-                changedPaths: fileSnapshots.map((fileSnapshot) => fileSnapshot.path),
-                classifiedAt: new Date(classifiedAtIso),
-                hydrateAuthorFamiliarity: contextualEvidenceHydration.hydrateAuthorFamiliarity,
-                hydrateBlastRadius: contextualEvidenceHydration.hydrateBlastRadius,
-                authorFamiliarityOptions: contextualEvidenceHydration.authorFamiliarityOptions,
-                blastRadiusOptions: contextualEvidenceHydration.blastRadiusOptions,
-                dependencies: contextualEvidenceHydration.dependencies,
-            });
-            pullContext = {
-                ...pullContext,
-                contextualEvidence: contextualHydrationResult.contextualEvidence,
-                ...(contextualHydrationResult.baseRevision === undefined
-                    ? {}
-                    : { baseRevision: contextualHydrationResult.baseRevision }),
-                ...(contextualHydrationResult.authorEmails === undefined
-                    ? {}
-                    : { authorEmails: contextualHydrationResult.authorEmails }),
-            };
+            pullContext = mergeContextualEvidenceIntoPullContext(pullContext, contextualEvidenceHydration, hydrateContextualEvidenceFn, pullSnapshot, fileSnapshots.map((fileSnapshot) => fileSnapshot.path), classifiedAtIso);
         }
         return pullContext;
     }
@@ -77946,9 +78106,16 @@ const worstFindingByMaxAggregation = (findings, characterizationScores) => {
     if (findings.length === 0) {
         return null;
     }
-    let worstFinding = findings[0];
+    const [firstFinding] = findings;
+    if (firstFinding === undefined) {
+        return null;
+    }
+    let worstFinding = firstFinding;
     for (let index = 1; index < findings.length; index += 1) {
         const candidateFinding = findings[index];
+        if (candidateFinding === undefined) {
+            continue;
+        }
         const worseByScore = pickWorseFinding(worstFinding, candidateFinding, characterizationScores);
         worstFinding =
             scoreForFinding(worseByScore, characterizationScores) ===
@@ -78113,13 +78280,13 @@ const authorSeniorityCriterion = {
 };
 
 ;// CONCATENATED MODULE: ./core/criteria/blastRadius.ts
+
 const blastRadius_DEFAULT_CHARACTERIZATION_SCORES = {
     isolated: 20,
     moderate: 55,
     broad: 90,
 };
 const blastRadius_CHARACTERIZATION_RISK_ORDER = ["broad", "moderate", "isolated"];
-const blastRadius_normalizeForwardSlashes = (filePath) => filePath.replace(/\\/g, "/");
 /**
  * @param scoreValue - Raw score from config.
  * @returns Clamped 0–100 score, or undefined when invalid.
@@ -78212,8 +78379,8 @@ const allChangedFilesUnsupportedForBlastRadius = (context) => {
     if (context.files.length === 0) {
         return false;
     }
-    const notAnalyzedPaths = new Set((context.contextualEvidence?.notAnalyzedForBlastRadius ?? []).map((entry) => blastRadius_normalizeForwardSlashes(entry.path)));
-    return context.files.every((changedFile) => notAnalyzedPaths.has(blastRadius_normalizeForwardSlashes(changedFile.path)));
+    const notAnalyzedPaths = new Set((context.contextualEvidence?.notAnalyzedForBlastRadius ?? []).map((entry) => normalizeForwardSlashes(entry.path)));
+    return context.files.every((changedFile) => notAnalyzedPaths.has(normalizeForwardSlashes(changedFile.path)));
 };
 /**
  * @param worstFinding - Aggregated worst blast-radius finding.
@@ -82193,7 +82360,9 @@ const buildContextualEvidencePayload = (pullRequestContext, options) => {
     return {
         authorLogin: pullRequestContext.author,
         changeNumber: pullRequestContext.changeNumber,
-        changedFiles: pullRequestContext.files.map((changedFile) => changedFile.path).sort(),
+        changedFiles: pullRequestContext.files
+            .map((changedFile) => changedFile.path)
+            .sort((leftPath, rightPath) => leftPath.localeCompare(rightPath)),
         familiarity: snapshot.familiarityFindings,
         blastRadius: snapshot.blastRadiusFindings,
         notAnalyzedForBlastRadius: snapshot.notAnalyzedForBlastRadius,

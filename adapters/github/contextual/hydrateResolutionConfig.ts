@@ -17,11 +17,16 @@ const CONFIG_CANDIDATE_FILENAMES = ["tsconfig.json", "jsconfig.json"] as const;
 const GO_MOD_FILENAME = "go.mod";
 const PYPROJECT_FILENAME = "pyproject.toml";
 const CARGO_MANIFEST_FILENAME = "Cargo.toml";
-const PYPROJECT_WHERE_PATTERN = /where\s*=\s*\[\s*"([^"]+)"\s*\]/;
-const GO_MODULE_DIRECTIVE_PATTERN = /^module\s+(\S+)/m;
-const CARGO_PACKAGE_NAME_PATTERN = /^\s*\[package\][\s\S]*?^name\s*=\s*"([^"]+)"/m;
-const CARGO_WORKSPACE_MEMBERS_PATTERN =
-  /^\s*\[workspace\][\s\S]*?^members\s*=\s*\[([\s\S]*?)\]/m;
+const CARGO_PACKAGE_SECTION_HEADER = "[package]";
+const CARGO_WORKSPACE_SECTION_HEADER = "[workspace]";
+const PYPROJECT_WHERE_LINE_PATTERN = /^where\s*=\s*\[\s*"([^"]+)"\s*\]/;
+const GO_MODULE_DIRECTIVE_LINE_PATTERN = /^module\s+(\S+)/;
+const CARGO_PACKAGE_NAME_LINE_PATTERN = /^name\s*=\s*"([^"]+)"/;
+const CARGO_WORKSPACE_MEMBERS_LINE_PATTERN = /^members\s*=\s*\[(.*)\]\s*$/;
+const CARGO_WORKSPACE_MEMBERS_OPEN_LINE_PATTERN = /^members\s*=\s*\[/;
+
+const isTomlSectionHeaderLine = (line: string): boolean =>
+  line.startsWith("[") && line.endsWith("]");
 
 const isStringArray = (value: unknown): value is readonly string[] =>
   Array.isArray(value) && value.every((entry) => typeof entry === "string");
@@ -74,9 +79,11 @@ const readPythonPackageRoots = (repoRoot: string): readonly string[] | undefined
   }
 
   const pyprojectText = readFileSync(pyprojectPath, "utf8");
-  const whereMatch = PYPROJECT_WHERE_PATTERN.exec(pyprojectText);
-  if (whereMatch?.[1]) {
-    return [normalizeRepoPath(whereMatch[1])];
+  for (const pyprojectLine of pyprojectText.split("\n")) {
+    const whereMatch = PYPROJECT_WHERE_LINE_PATTERN.exec(pyprojectLine.trim());
+    if (whereMatch?.[1]) {
+      return [normalizeRepoPath(whereMatch[1])];
+    }
   }
 
   return undefined;
@@ -89,12 +96,14 @@ const readGoModulePath = (repoRoot: string): string | undefined => {
   }
 
   const goModText = readFileSync(goModPath, "utf8");
-  const moduleDirectiveMatch = GO_MODULE_DIRECTIVE_PATTERN.exec(goModText);
-  if (!moduleDirectiveMatch?.[1]) {
-    return undefined;
+  for (const goModLine of goModText.split("\n")) {
+    const moduleDirectiveMatch = GO_MODULE_DIRECTIVE_LINE_PATTERN.exec(goModLine.trim());
+    if (moduleDirectiveMatch?.[1]) {
+      return normalizeRepoPath(moduleDirectiveMatch[1]);
+    }
   }
 
-  return normalizeRepoPath(moduleDirectiveMatch[1]);
+  return undefined;
 };
 
 const readCargoManifestText = (manifestPath: string): string | undefined => {
@@ -104,21 +113,69 @@ const readCargoManifestText = (manifestPath: string): string | undefined => {
   return readFileSync(manifestPath, "utf8");
 };
 
+const extractQuotedMemberPaths = (membersText: string): readonly string[] | undefined => {
+  const memberPaths = [...membersText.matchAll(/"([^"]+)"/g)].map((match) =>
+    normalizeRepoPath(match[1] ?? ""),
+  );
+  return memberPaths.length > 0 ? memberPaths : undefined;
+};
+
 const readCargoPackageName = (cargoManifestText: string): string | undefined => {
-  const packageNameMatch = CARGO_PACKAGE_NAME_PATTERN.exec(cargoManifestText);
-  return packageNameMatch?.[1];
+  let inPackageSection = false;
+  for (const manifestLine of cargoManifestText.split("\n")) {
+    const trimmedLine = manifestLine.trim();
+    if (isTomlSectionHeaderLine(trimmedLine)) {
+      inPackageSection = trimmedLine === CARGO_PACKAGE_SECTION_HEADER;
+      continue;
+    }
+    if (!inPackageSection) {
+      continue;
+    }
+    const packageNameMatch = CARGO_PACKAGE_NAME_LINE_PATTERN.exec(trimmedLine);
+    if (packageNameMatch?.[1]) {
+      return packageNameMatch[1];
+    }
+  }
+  return undefined;
 };
 
 const readWorkspaceMemberPaths = (cargoManifestText: string): readonly string[] | undefined => {
-  const workspaceMembersMatch = CARGO_WORKSPACE_MEMBERS_PATTERN.exec(cargoManifestText);
-  if (!workspaceMembersMatch?.[1]) {
-    return undefined;
+  let inWorkspaceSection = false;
+  let multilineMembersText: string | undefined;
+
+  for (const manifestLine of cargoManifestText.split("\n")) {
+    const trimmedLine = manifestLine.trim();
+
+    if (multilineMembersText !== undefined) {
+      multilineMembersText = `${multilineMembersText}\n${trimmedLine}`;
+      if (trimmedLine.includes("]")) {
+        return extractQuotedMemberPaths(multilineMembersText);
+      }
+      continue;
+    }
+
+    if (isTomlSectionHeaderLine(trimmedLine)) {
+      inWorkspaceSection = trimmedLine === CARGO_WORKSPACE_SECTION_HEADER;
+      continue;
+    }
+    if (!inWorkspaceSection) {
+      continue;
+    }
+
+    const singleLineMembersMatch = CARGO_WORKSPACE_MEMBERS_LINE_PATTERN.exec(trimmedLine);
+    if (singleLineMembersMatch?.[1] !== undefined) {
+      return extractQuotedMemberPaths(singleLineMembersMatch[1]);
+    }
+
+    if (
+      CARGO_WORKSPACE_MEMBERS_OPEN_LINE_PATTERN.test(trimmedLine) &&
+      !trimmedLine.includes("]")
+    ) {
+      multilineMembersText = trimmedLine;
+    }
   }
 
-  const memberPaths = [...workspaceMembersMatch[1].matchAll(/"([^"]+)"/g)].map(
-    (match) => normalizeRepoPath(match[1] ?? ""),
-  );
-  return memberPaths.length > 0 ? memberPaths : undefined;
+  return undefined;
 };
 
 const readRustCrateRoot = (
