@@ -17,6 +17,7 @@ export default defineConfig({
         "core/criteria/testCoverage.types.ts",
         "adapters/PlatformAdapter.ts",
         "adapters/github/githubAdapter.types.ts",
+        "adapters/github/contextual/hydrateDependencyGraph.types.ts",
         "core/report.types.ts",
         "core/contextual/contextual.types.ts",
         "core/contextual/extractors/types.ts",

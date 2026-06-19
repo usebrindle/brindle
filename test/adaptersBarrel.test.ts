@@ -7,5 +7,6 @@ describe("adapters index barrel", () => {
     expect(adapters.GitHubAdapter).toBeDefined();
     expect(adapters.createOctokitGithubApiClient).toBeDefined();
     expect(adapters.mapGitHubPullAndFilesToPRContext).toBeDefined();
+    expect(adapters.hydrateDependencyGraph).toBeDefined();
   });
 });

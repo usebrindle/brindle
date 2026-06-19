@@ -1,4 +1,10 @@
 export type { PlatformAdapter } from "./PlatformAdapter.js";
+export { hydrateDependencyGraph } from "./github/contextual/hydrateDependencyGraph.js";
+export type {
+  HydrateDependencyGraphDependencies,
+  HydrateDependencyGraphInput,
+  HydrateDependencyGraphResult,
+} from "./github/contextual/hydrateDependencyGraph.types.js";
 export { GitHubAdapter } from "./github/GitHubAdapter.js";
 export { createOctokitGithubApiClient } from "./github/octokitGithubApiClient.js";
 export { mapGitHubPullAndFilesToPRContext } from "./github/mapGitHubPullToPrContext.js";
