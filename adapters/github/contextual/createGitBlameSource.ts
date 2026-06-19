@@ -35,8 +35,8 @@ const runGitBlame = (
 };
 
 const queryGitBlameStats = (repoRoot: string, query: GitBlameQuery): GitBlameStats => {
-  let contentOwnershipOutput = "";
-  let windowedChurnOutput = "";
+  let contentOwnershipOutput: string;
+  let windowedChurnOutput: string;
 
   try {
     contentOwnershipOutput = runGitBlame(repoRoot, query.revision, query.path);
