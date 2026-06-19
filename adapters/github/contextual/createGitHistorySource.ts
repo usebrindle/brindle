@@ -85,7 +85,7 @@ const aggregateHistoryStats = (
 
 const queryGitHistoryStats = (repoRoot: string, query: GitHistoryQuery): GitHistoryStats => {
   const sinceDate = formatGitSinceDate(query.since);
-  let logOutput = "";
+  let logOutput: string;
 
   try {
     logOutput = runGitCommand(repoRoot, [
