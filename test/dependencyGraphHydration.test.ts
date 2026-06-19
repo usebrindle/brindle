@@ -125,6 +125,52 @@ describe("hydrateResolutionConfig", () => {
       rmSync(repositoryRoot, { recursive: true, force: true });
     }
   });
+
+  it("reads workspace crate roots from root Cargo.toml", () => {
+    const repositoryRoot = mkdtempSync(join(tmpdir(), "brindle-rust-resolution-config-"));
+
+    try {
+      writeFileSync(
+        join(repositoryRoot, "Cargo.toml"),
+        [
+          "[workspace]",
+          'members = [".", "crates/util"]',
+          "",
+          "[package]",
+          'name = "myapp"',
+          'version = "0.1.0"',
+        ].join("\n"),
+        "utf8",
+      );
+      mkdirSync(join(repositoryRoot, "crates", "util"), { recursive: true });
+      writeFileSync(
+        join(repositoryRoot, "crates", "util", "Cargo.toml"),
+        [
+          "[package]",
+          'name = "util"',
+          'version = "0.1.0"',
+        ].join("\n"),
+        "utf8",
+      );
+
+      expect(hydrateResolutionConfig(repositoryRoot)).toEqual({
+        crateRoots: [
+          {
+            memberPath: ".",
+            packageName: "myapp",
+            sourceRoot: "src",
+          },
+          {
+            memberPath: "crates/util",
+            packageName: "util",
+            sourceRoot: "crates/util/src",
+          },
+        ],
+      });
+    } finally {
+      rmSync(repositoryRoot, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("classifyNotAnalyzedChangedFile", () => {
