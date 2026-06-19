@@ -3,6 +3,12 @@
  */
 import { describe, expect, it } from "vitest";
 
+import {
+  builtInExtractors,
+  createExtractorRegistry,
+  DEFAULT_V1_EXTRACTOR_IDS,
+  defaultExtractorRegistry,
+} from "../core/contextual/extractors/index.js";
 import { buildReverseDependencyGraph } from "../core/contextual/extractors/buildReverseDependencyGraph.js";
 import type { DependencyEdge } from "../core/contextual/extractors/types.js";
 
@@ -35,6 +41,36 @@ const countTransitiveReach = (
 
   return visited.size;
 };
+
+describe("ExtractorRegistry", () => {
+  it("exports DEFAULT_V1_EXTRACTOR_IDS as js_ts and stylesheet", () => {
+    expect(DEFAULT_V1_EXTRACTOR_IDS).toEqual(["js_ts", "stylesheet"]);
+  });
+
+  it("looks up built-in extractors by id", () => {
+    expect(defaultExtractorRegistry.getById("js_ts")?.id).toBe("js_ts");
+    expect(defaultExtractorRegistry.getById("stylesheet")?.id).toBe("stylesheet");
+    expect(defaultExtractorRegistry.getById("go")).toBeUndefined();
+  });
+
+  it("looks up extractors by file extension", () => {
+    expect(defaultExtractorRegistry.getForFile("src/App.tsx")?.id).toBe("js_ts");
+    expect(defaultExtractorRegistry.getForFile("src/App.TSX")?.id).toBe("js_ts");
+    expect(defaultExtractorRegistry.getForFile("styles/main.scss")?.id).toBe("stylesheet");
+    expect(defaultExtractorRegistry.getForFile("styles/main.sass")?.id).toBe("stylesheet");
+    expect(defaultExtractorRegistry.getForFile("README.md")).toBeUndefined();
+    expect(defaultExtractorRegistry.getForFile("Makefile")).toBeUndefined();
+  });
+
+  it("registers custom extractors and exposes them as builtIns", () => {
+    const registry = createExtractorRegistry(builtInExtractors);
+    expect(registry.builtIns).toHaveLength(2);
+    expect(registry.builtIns.map((extractor) => extractor.id)).toEqual([
+      "js_ts",
+      "stylesheet",
+    ]);
+  });
+});
 
 describe("buildReverseDependencyGraph", () => {
   it("maps a single forward edge to one reverse entry", () => {
