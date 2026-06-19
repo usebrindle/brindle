@@ -12,7 +12,9 @@ import type {
   RiskReport,
   ScoreResult,
 } from "./types.js";
+import { renderContextualEvidenceMarkdown } from "./contextual/report/renderContextualEvidenceMarkdown.js";
 import type { BuildRiskReportOptions, CheckConclusionPolicy } from "./report.types.js";
+import type { ContextualEvidencePayload } from "./contextual/report/contextualEvidenceReport.types.js";
 
 /** Hidden marker in PR comment markdown so the GitHub adapter can update the same comment across runs. */
 export const BRINDLE_MERGE_RISK_COMMENT_MARKER = "<!-- brindle-merge-risk -->";
@@ -135,12 +137,35 @@ const markdownLinesForMutatorsAndDisabledCriteria = (scoreResult: ScoreResult): 
   return lines;
 };
 
+const markdownLinesForContextualEvidenceDetails = (
+  contextualEvidencePayload: ContextualEvidencePayload,
+): string[] => {
+  const contextualEvidenceBody = renderContextualEvidenceMarkdown(contextualEvidencePayload);
+  return [
+    "<details>",
+    "<summary>Contextual evidence</summary>",
+    "",
+    contextualEvidenceBody,
+    "",
+    "</details>",
+  ];
+};
+
+export type BuildMergeRiskCommentMarkdownOptions = {
+  /** When present, appended after the score breakdown in a collapsible block. */
+  contextualEvidence?: ContextualEvidencePayload;
+};
+
 /**
  * Markdown summary suitable for an optional change-request comment (LLD reporting flow).
  *
  * @param scoreResult - Outcome from {@link score}.
+ * @param commentOptions - Optional contextual evidence payload for the evidence block.
  */
-export const buildMergeRiskCommentMarkdown = (scoreResult: ScoreResult): string => {
+export const buildMergeRiskCommentMarkdown = (
+  scoreResult: ScoreResult,
+  commentOptions?: BuildMergeRiskCommentMarkdownOptions,
+): string => {
   const summaryLines = markdownLinesForSummaryHeader(scoreResult);
   const tableLines = markdownLinesForCriteriaTable(scoreResult.breakdown);
   const auditLines = markdownLinesForMutatorsAndDisabledCriteria(scoreResult);
@@ -158,15 +183,14 @@ export const buildMergeRiskCommentMarkdown = (scoreResult: ScoreResult): string 
     "</details>",
   ];
 
-  const commentBodyParts = [
-    summaryLines.join("\n"),
-    "",
-    scoreBreakdownDetailsBlockLines.join("\n"),
-    "",
-    "*🐾 Scored by Brindle*",
-    "",
-    BRINDLE_MERGE_RISK_COMMENT_MARKER,
-  ];
+  const commentBodyParts = [summaryLines.join("\n"), "", scoreBreakdownDetailsBlockLines.join("\n")];
+
+  const contextualEvidencePayload = commentOptions?.contextualEvidence;
+  if (contextualEvidencePayload !== undefined) {
+    commentBodyParts.push("", markdownLinesForContextualEvidenceDetails(contextualEvidencePayload).join("\n"));
+  }
+
+  commentBodyParts.push("", "*🐾 Scored by Brindle*", "", BRINDLE_MERGE_RISK_COMMENT_MARKER);
   return `${commentBodyParts.join("\n")}\n`;
 };
 
@@ -182,7 +206,9 @@ export const buildRiskReport = (
   reportOptions: BuildRiskReportOptions,
 ): RiskReport => ({
   result: scoreResult,
-  commentMarkdown: buildMergeRiskCommentMarkdown(scoreResult),
+  commentMarkdown: buildMergeRiskCommentMarkdown(scoreResult, {
+    contextualEvidence: reportOptions.contextualEvidence,
+  }),
   checkConclusion: checkConclusionForTier(scoreResult.tier, {
     failOnHigh: reportOptions.failOnHigh,
     informationalCheckConclusion: reportOptions.informationalCheckConclusion === true,

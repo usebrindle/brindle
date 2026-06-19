@@ -15,8 +15,12 @@ import type { PlatformAdapter } from "../PlatformAdapter.js";
 
 import type {
   GitHubAdapterDependencies,
+  GitHubApiClient,
+  GitHubPullRequestLookup,
+  GitHubPullSnapshot,
   GitHubTemporalContextHydration,
 } from "./githubAdapter.types.js";
+import { hydrateContextualEvidence } from "./contextual/hydrateContextualEvidence.js";
 import { mapGitHubPullAndFilesToPRContext } from "./mapGitHubPullToPrContext.js";
 
 const mapGithubNativeAutoMergeFailureToOutcome = (cause: unknown): AutoMergeOutcome => {
@@ -30,6 +34,79 @@ const mapGithubNativeAutoMergeFailureToOutcome = (cause: unknown): AutoMergeOutc
     }
   }
   throw cause;
+};
+
+const hydrateIstanbulCoverageForPull = async (
+  istanbulCoverageHydration: GitHubAdapterDependencies["istanbulCoverageHydration"],
+  githubApiClient: GitHubApiClient,
+  pullRequestLookup: GitHubPullRequestLookup,
+  headSha: string,
+): Promise<PRContext["coverage"]> => {
+  if (
+    istanbulCoverageHydration?.shouldHydrate !== true ||
+    istanbulCoverageHydration.repositoryRelativePath.trim() === ""
+  ) {
+    return undefined;
+  }
+
+  const rawCoverageJson = await githubApiClient.getRepositoryFileTextAtRef({
+    repositoryOwner: pullRequestLookup.repositoryOwner,
+    repositoryName: pullRequestLookup.repositoryName,
+    path: istanbulCoverageHydration.repositoryRelativePath.trim(),
+    ref: headSha,
+  });
+
+  if (rawCoverageJson === null || rawCoverageJson.trim() === "") {
+    return undefined;
+  }
+
+  try {
+    return parseCoverageArtifactText({
+      format: "istanbul",
+      text: rawCoverageJson,
+    });
+  } catch (cause: unknown) {
+    if (!(cause instanceof IstanbulCoverageParseError)) {
+      throw cause;
+    }
+    return undefined;
+  }
+};
+
+const mergeContextualEvidenceIntoPullContext = (
+  pullContext: PRContext,
+  contextualEvidenceHydration: NonNullable<
+    GitHubAdapterDependencies["contextualEvidenceHydration"]
+  >,
+  hydrateContextualEvidenceFn: typeof hydrateContextualEvidence,
+  pullSnapshot: GitHubPullSnapshot,
+  changedPaths: readonly string[],
+  classifiedAtIso: string,
+): PRContext => {
+  const contextualHydrationResult = hydrateContextualEvidenceFn({
+    repositoryRoot: contextualEvidenceHydration.repositoryRoot,
+    baseRef: pullSnapshot.baseRefName,
+    headRef: pullSnapshot.headSha,
+    authorLogin: pullSnapshot.authorLogin,
+    changedPaths,
+    classifiedAt: new Date(classifiedAtIso),
+    hydrateAuthorFamiliarity: contextualEvidenceHydration.hydrateAuthorFamiliarity,
+    hydrateBlastRadius: contextualEvidenceHydration.hydrateBlastRadius,
+    authorFamiliarityOptions: contextualEvidenceHydration.authorFamiliarityOptions,
+    blastRadiusOptions: contextualEvidenceHydration.blastRadiusOptions,
+    dependencies: contextualEvidenceHydration.dependencies,
+  });
+
+  return {
+    ...pullContext,
+    contextualEvidence: contextualHydrationResult.contextualEvidence,
+    ...(contextualHydrationResult.baseRevision === undefined
+      ? {}
+      : { baseRevision: contextualHydrationResult.baseRevision }),
+    ...(contextualHydrationResult.authorEmails === undefined
+      ? {}
+      : { authorEmails: contextualHydrationResult.authorEmails }),
+  };
 };
 
 export class GitHubAdapter implements PlatformAdapter {
@@ -59,31 +136,12 @@ export class GitHubAdapter implements PlatformAdapter {
     this.lastPullRequestNodeId = pullSnapshot.pullRequestNodeId;
     const fileSnapshots = await githubApiClient.listPullRequestFiles(pullRequestLookup);
 
-    const hydration = this.githubAdapterDependencies.istanbulCoverageHydration;
-    let coverageReport: PRContext["coverage"];
-    if (
-      hydration?.shouldHydrate === true &&
-      hydration.repositoryRelativePath.trim() !== ""
-    ) {
-      const rawCoverageJson = await githubApiClient.getRepositoryFileTextAtRef({
-        repositoryOwner: pullRequestLookup.repositoryOwner,
-        repositoryName: pullRequestLookup.repositoryName,
-        path: hydration.repositoryRelativePath.trim(),
-        ref: pullSnapshot.headSha,
-      });
-      if (rawCoverageJson !== null && rawCoverageJson.trim() !== "") {
-        try {
-          coverageReport = parseCoverageArtifactText({
-            format: "istanbul",
-            text: rawCoverageJson,
-          });
-        } catch (cause: unknown) {
-          if (!(cause instanceof IstanbulCoverageParseError)) {
-            throw cause;
-          }
-        }
-      }
-    }
+    const coverageReport = await hydrateIstanbulCoverageForPull(
+      this.githubAdapterDependencies.istanbulCoverageHydration,
+      githubApiClient,
+      pullRequestLookup,
+      pullSnapshot.headSha,
+    );
 
     const headCommitCommittedAtIso = await githubApiClient.getRepositoryCommitCommittedAtIso({
       repositoryOwner: pullRequestLookup.repositoryOwner,
@@ -100,7 +158,7 @@ export class GitHubAdapter implements PlatformAdapter {
         : {}),
     };
 
-    return mapGitHubPullAndFilesToPRContext(
+    let pullContext = mapGitHubPullAndFilesToPRContext(
       pullRequestLookup.repositoryOwner,
       pullRequestLookup.repositoryName,
       pullRequestLookup.pullRequestNumber,
@@ -109,6 +167,22 @@ export class GitHubAdapter implements PlatformAdapter {
       coverageReport,
       temporalHydration,
     );
+
+    const contextualEvidenceHydration = this.githubAdapterDependencies.contextualEvidenceHydration;
+    if (contextualEvidenceHydration?.shouldHydrate === true) {
+      const hydrateContextualEvidenceFn =
+        this.githubAdapterDependencies.hydrateContextualEvidence ?? hydrateContextualEvidence;
+      pullContext = mergeContextualEvidenceIntoPullContext(
+        pullContext,
+        contextualEvidenceHydration,
+        hydrateContextualEvidenceFn,
+        pullSnapshot,
+        fileSnapshots.map((fileSnapshot) => fileSnapshot.path),
+        classifiedAtIso,
+      );
+    }
+
+    return pullContext;
   }
 
   async writeResult(report: RiskReport): Promise<void> {

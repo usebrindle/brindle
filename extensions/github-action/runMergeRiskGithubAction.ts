@@ -17,6 +17,7 @@ import {
   MergeRiskConfigError,
   score,
 } from "../../core/index.js";
+import { buildContextualEvidencePayload } from "../../core/contextual/index.js";
 import { loadTrustedPlugins } from "../../core/plugins/loadTrustedPlugins.js";
 import type { TrustedPluginsScoringArtifacts } from "../../core/plugins/loadTrustedPlugins.js";
 import { validateTrustedPluginsPathsStayUnderDirectory } from "../../core/plugins/trustedPluginPaths.js";
@@ -27,6 +28,8 @@ import type {
   ScoreResult,
   TrustedPluginsConfiguration,
 } from "../../core/types.js";
+import type { AuthorFamiliarityCriterionOptions } from "../../core/criteria/authorFamiliarity.types.js";
+import type { BlastRadiusCriterionOptions } from "../../core/criteria/blastRadius.types.js";
 
 /**
  * GitHub Actions job output names (must match `outputs` in {@link ./action.yml}).
@@ -343,6 +346,30 @@ export const runMergeRiskGithubAction = async (): Promise<void> => {
     testCoverageCriterionConfig !== undefined &&
     testCoverageCriterionConfig.enabled !== false;
 
+  const authorFamiliarityCriterionConfig = scoringConfig.criteria.author_familiarity;
+  const blastRadiusCriterionConfig = scoringConfig.criteria.blast_radius;
+  const authorFamiliarityOptions =
+    authorFamiliarityCriterionConfig?.options as AuthorFamiliarityCriterionOptions | undefined;
+  const blastRadiusOptions =
+    blastRadiusCriterionConfig?.options as BlastRadiusCriterionOptions | undefined;
+  const shouldHydrateAuthorFamiliarity =
+    authorFamiliarityCriterionConfig !== undefined &&
+    authorFamiliarityCriterionConfig.enabled !== false;
+  const shouldHydrateBlastRadius =
+    blastRadiusCriterionConfig !== undefined &&
+    blastRadiusCriterionConfig.enabled !== false;
+  const shouldHydrateContextualEvidence =
+    shouldHydrateAuthorFamiliarity || shouldHydrateBlastRadius;
+
+  const githubWorkspacePath = process.env.GITHUB_WORKSPACE?.trim() ?? "";
+  if (shouldHydrateContextualEvidence && githubWorkspacePath === "") {
+    throw new Error(
+      "Contextual criteria (author_familiarity and/or blast_radius) require a checked-out repository. " +
+        "Add actions/checkout@v4 with ref set to github.event.pull_request.head.sha before this action " +
+        "(see docs/guides/contextual-evidence.md).",
+    );
+  }
+
   const githubApiClient = createOctokitGithubApiClient(octokit);
 
   const githubAdapter = new GitHubAdapter({
@@ -354,16 +381,50 @@ export const runMergeRiskGithubAction = async (): Promise<void> => {
     istanbulCoverageHydration: shouldHydrateIstanbulCoverage
       ? { repositoryRelativePath: coverageReportPath, shouldHydrate: true }
       : undefined,
+    contextualEvidenceHydration: shouldHydrateContextualEvidence
+      ? {
+          shouldHydrate: true,
+          repositoryRoot: githubWorkspacePath,
+          hydrateAuthorFamiliarity: shouldHydrateAuthorFamiliarity,
+          hydrateBlastRadius: shouldHydrateBlastRadius,
+          ...(shouldHydrateAuthorFamiliarity
+            ? {
+                authorFamiliarityOptions: {
+                  historyWindowDays: authorFamiliarityOptions?.history_window_days,
+                  authorEmails: authorFamiliarityOptions?.author_emails,
+                },
+              }
+            : {}),
+          ...(shouldHydrateBlastRadius
+            ? {
+                blastRadiusOptions: {
+                  enabledExtractors: blastRadiusOptions?.enabled_extractors,
+                  thresholds: blastRadiusOptions?.thresholds,
+                },
+              }
+            : {}),
+        }
+      : undefined,
   });
 
   const pullRequestContext = await githubAdapter.buildContext();
   const scoreResult = score(pullRequestContext, scoringConfig, trustedPluginsArtifacts);
+  const contextualEvidencePayload = shouldHydrateContextualEvidence
+    ? buildContextualEvidencePayload(pullRequestContext, {
+        historyWindowDays: authorFamiliarityOptions?.history_window_days,
+      })
+    : undefined;
   const riskReport = buildRiskReport(
     scoreResult,
-    buildMergeRiskReportOptionsFromGithubActionInputs(autoMerge, {
-      informationalCheckConclusion,
-      failOnHigh,
-    }),
+    {
+      ...buildMergeRiskReportOptionsFromGithubActionInputs(autoMerge, {
+        informationalCheckConclusion,
+        failOnHigh,
+      }),
+      ...(contextualEvidencePayload === null || contextualEvidencePayload === undefined
+        ? {}
+        : { contextualEvidence: contextualEvidencePayload }),
+    },
   );
   writeMergeRiskGithubActionJobOutputs(scoreResult, riskReport);
   await githubAdapter.writeResult(riskReport);

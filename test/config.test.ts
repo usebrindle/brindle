@@ -721,6 +721,328 @@ criteria:
     expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
   });
 
+  it("accepts author_familiarity with history_window_days, characterization_scores, aggregation, and author_emails", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  author_familiarity:
+    weight: 15
+    options:
+      history_window_days: 180
+      aggregation: max
+      characterization_scores:
+        high: 10
+        moderate: 45
+        none: 80
+      author_emails:
+        - "dev@example.com"
+        - "123456+dev@users.noreply.github.com"
+`;
+    const scoringConfig = loadScoringConfigFromMergeRiskYaml(yamlText);
+    expect(scoringConfig.criteria.author_familiarity?.weight).toBe(15);
+    expect(scoringConfig.criteria.author_familiarity?.options).toEqual({
+      history_window_days: 180,
+      aggregation: "max",
+      characterization_scores: {
+        high: 10,
+        moderate: 45,
+        none: 80,
+      },
+      author_emails: ["dev@example.com", "123456+dev@users.noreply.github.com"],
+    });
+  });
+
+  it("accepts author_familiarity with empty options object", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  author_familiarity:
+    weight: 1
+    options: {}
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).not.toThrow();
+  });
+
+  it("accepts author_familiarity with no options key", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  author_familiarity:
+    weight: 1
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).not.toThrow();
+  });
+
+  it("throws when author_familiarity.options has an unknown property", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  author_familiarity:
+    weight: 1
+    options:
+      unknown_flag: true
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when author_familiarity.options.history_window_days is zero", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  author_familiarity:
+    weight: 1
+    options:
+      history_window_days: 0
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when author_familiarity.options.characterization_scores has score above 100", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  author_familiarity:
+    weight: 1
+    options:
+      characterization_scores:
+        high: 101
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when author_familiarity.options.characterization_scores has unknown tier", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  author_familiarity:
+    weight: 1
+    options:
+      characterization_scores:
+        low: 10
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when author_familiarity.options.aggregation is not max", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  author_familiarity:
+    weight: 1
+    options:
+      aggregation: sum
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when author_familiarity.options.author_emails is empty", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  author_familiarity:
+    weight: 1
+    options:
+      author_emails: []
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when author_familiarity.options.author_emails entry is empty string", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  author_familiarity:
+    weight: 1
+    options:
+      author_emails: [""]
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("accepts blast_radius with characterization_scores, enabled_extractors, thresholds, and aggregation", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  blast_radius:
+    weight: 20
+    options:
+      aggregation: max
+      characterization_scores:
+        isolated: 15
+        moderate: 50
+        broad: 85
+      enabled_extractors:
+        - js_ts
+        - stylesheet
+      thresholds:
+        isolatedMax: 2
+        moderateMax: 10
+`;
+    const scoringConfig = loadScoringConfigFromMergeRiskYaml(yamlText);
+    expect(scoringConfig.criteria.blast_radius?.weight).toBe(20);
+    expect(scoringConfig.criteria.blast_radius?.options).toEqual({
+      aggregation: "max",
+      characterization_scores: {
+        isolated: 15,
+        moderate: 50,
+        broad: 85,
+      },
+      enabled_extractors: ["js_ts", "stylesheet"],
+      thresholds: {
+        isolatedMax: 2,
+        moderateMax: 10,
+      },
+    });
+  });
+
+  it("accepts blast_radius with empty options object", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  blast_radius:
+    weight: 1
+    options: {}
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).not.toThrow();
+  });
+
+  it("accepts blast_radius with no options key", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  blast_radius:
+    weight: 1
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).not.toThrow();
+  });
+
+  it("throws when blast_radius.options has an unknown property", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  blast_radius:
+    weight: 1
+    options:
+      unknown_flag: true
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when blast_radius.options.characterization_scores has score above 100", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  blast_radius:
+    weight: 1
+    options:
+      characterization_scores:
+        broad: 101
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when blast_radius.options.characterization_scores has unknown tier", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  blast_radius:
+    weight: 1
+    options:
+      characterization_scores:
+        wide: 90
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when blast_radius.options.aggregation is not max", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  blast_radius:
+    weight: 1
+    options:
+      aggregation: sum
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when blast_radius.options.enabled_extractors is empty", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  blast_radius:
+    weight: 1
+    options:
+      enabled_extractors: []
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when blast_radius.options.enabled_extractors entry is empty string", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  blast_radius:
+    weight: 1
+    options:
+      enabled_extractors: [""]
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
+  it("throws when blast_radius.options.thresholds has an unknown property", () => {
+    const yamlText = `
+thresholds:
+  low: 0
+  medium: 50
+criteria:
+  blast_radius:
+    weight: 1
+    options:
+      thresholds:
+        isolated_max: 2
+`;
+    expect(() => loadScoringConfigFromMergeRiskYaml(yamlText)).toThrow(MergeRiskConfigError);
+  });
+
   it("accepts junior_author mutator with valid options", () => {
     const yamlText = `
 thresholds:
@@ -1293,6 +1615,19 @@ describe("repo .merge-risk.yml dogfood", () => {
     const scoringConfig = loadScoringConfigFromMergeRiskYaml(yamlText);
     expect(scoringConfig.services?.github_action_extension?.globs?.[0]).toBe("extensions/github-action/**");
     expect(scoringConfig.criteria.service_criticality?.weight).toBe(6);
+    expect(scoringConfig.criteria.author_familiarity?.weight).toBe(8);
+    expect(scoringConfig.criteria.author_familiarity?.options).toMatchObject({
+      history_window_days: 180,
+      aggregation: "max",
+      characterization_scores: { high: 15, moderate: 50, none: 85 },
+    });
+    expect(scoringConfig.criteria.blast_radius?.weight).toBe(6);
+    expect(scoringConfig.criteria.blast_radius?.options).toMatchObject({
+      aggregation: "max",
+      enabled_extractors: ["js_ts", "stylesheet"],
+      characterization_scores: { isolated: 20, moderate: 55, broad: 90 },
+      thresholds: { isolatedMax: 2, moderateMax: 10 },
+    });
     expect(scoringConfig.mutators?.junior_author?.options).toMatchObject({
       logins: ["dependabot[bot]", "github-actions[bot]"],
       multiplier: 1.06,

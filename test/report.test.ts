@@ -6,7 +6,7 @@ import {
   buildRiskReport,
   checkConclusionForTier,
 } from "../core/report.js";
-import type { BuildRiskReportOptions } from "../core/report.types.js";
+import type { BuildRiskReportOptions, ContextualEvidencePayload } from "../core/report.types.js";
 import type { ScoreResult } from "../core/types.js";
 
 const baseReportOptions = (): BuildRiskReportOptions => ({
@@ -221,5 +221,179 @@ describe("buildMergeRiskCommentMarkdown", () => {
     );
     expect(markdown).toContain("m1");
     expect(markdown).not.toContain("Criteria disabled");
+  });
+
+  it("omits contextual evidence block when payload is absent", () => {
+    const markdown = buildMergeRiskCommentMarkdown(scoreResultFixture());
+    expect(markdown).not.toContain("<summary>Contextual evidence</summary>");
+  });
+});
+
+const contextualEvidencePayloadFixture = (): ContextualEvidencePayload => ({
+  authorLogin: "external-dev",
+  changeNumber: 6098,
+  changedFiles: ["packages/zod/src/types.ts", "src/newFeature.ts"],
+  familiarity: [
+    {
+      touchedFile: "src/newFeature.ts",
+      changeKind: "added",
+      characterization: "high",
+      authorOwnedLineCount: 0,
+      totalBlameableLineCount: 0,
+      shareOfCurrentContent: 0,
+      authorChangedLineCount: 0,
+      totalChangedLineCount: 0,
+      shareOfWindowedLineChurn: 0,
+      authorCommitCount: 0,
+      totalFileCommitCount: 0,
+      lastTouchDate: null,
+      shareOfFileCommitChurn: 0,
+    },
+    {
+      touchedFile: "packages/zod/src/types.ts",
+      changeKind: "modified",
+      characterization: "none",
+      authorOwnedLineCount: 0,
+      totalBlameableLineCount: 420,
+      shareOfCurrentContent: 0,
+      authorChangedLineCount: 0,
+      totalChangedLineCount: 180,
+      shareOfWindowedLineChurn: 0,
+      authorCommitCount: 0,
+      totalFileCommitCount: 42,
+      lastTouchDate: null,
+      shareOfFileCommitChurn: 0,
+    },
+  ],
+  blastRadius: [
+    {
+      changedFile: "src/schema.ts",
+      characterization: "broad",
+      directDependentCount: 1,
+      directDependents: ["src/LoginForm.tsx"],
+      transitiveReachCount: 52,
+    },
+  ],
+  notAnalyzedForBlastRadius: [{ path: "docs/README.md", reason: "no extractor for extension .md" }],
+  limitations: [
+    "Familiarity uses git blame and git log at merge-base; PR commits excluded",
+    "Transitive reach follows static import edges only",
+  ],
+  enabledExtractors: ["js_ts", "stylesheet"],
+  historyWindowDays: 180,
+  classifiedAtIso: "2026-06-18T12:00:00.000Z",
+});
+
+describe("buildMergeRiskCommentMarkdown with contextual evidence", () => {
+  it("appends collapsible contextual evidence after score breakdown without changing verdict", () => {
+    const scoreResult = scoreResultFixture({
+      tier: "HIGH",
+      score: 75,
+      breakdown: [
+        {
+          name: "Author familiarity",
+          score: 85,
+          weight: 50,
+          weighted: 42.5,
+          justification: "See Contextual evidence",
+        },
+        {
+          name: "Blast radius",
+          score: 90,
+          weight: 50,
+          weighted: 45,
+          justification: "See Contextual evidence",
+        },
+      ],
+    });
+
+    const markdown = buildMergeRiskCommentMarkdown(scoreResult, {
+      contextualEvidence: contextualEvidencePayloadFixture(),
+    });
+
+    expect(markdown).toContain("## 🔴 Merge risk — HIGH (score 75)");
+    expect(markdown).toContain("A human must review and approve this change before merging.");
+    expect(markdown).not.toMatch(/Contextual evidence[\s\S]*merge recommendation/i);
+    expect(markdown).not.toMatch(/Contextual evidence[\s\S]*safe to merge/i);
+
+    const scoreBreakdownIndex = markdown.indexOf("<summary>Score breakdown</summary>");
+    const contextualEvidenceIndex = markdown.indexOf("<summary>Contextual evidence</summary>");
+    const footerIndex = markdown.indexOf("*🐾 Scored by Brindle*");
+
+    expect(scoreBreakdownIndex).toBeGreaterThan(-1);
+    expect(contextualEvidenceIndex).toBeGreaterThan(scoreBreakdownIndex);
+    expect(footerIndex).toBeGreaterThan(contextualEvidenceIndex);
+
+    const contextualDetailsOpen = markdown.indexOf("<details>", contextualEvidenceIndex);
+    const contextualDetailsClose = markdown.indexOf("</details>", contextualEvidenceIndex);
+    expect(contextualDetailsClose).toBeGreaterThan(contextualDetailsOpen);
+    expect(markdown.indexOf("Changed files (2):", contextualDetailsOpen)).toBeGreaterThan(-1);
+    expect(markdown.indexOf("### Familiarity", contextualDetailsOpen)).toBeGreaterThan(-1);
+    expect(markdown.indexOf("File added in this PR; no prior history on this path", contextualDetailsOpen)).toBeGreaterThan(-1);
+    expect(markdown.indexOf("Reach: 52 files transitively", contextualDetailsOpen)).toBeGreaterThan(-1);
+    expect(markdown.indexOf("docs/README.md — no extractor for extension .md", contextualDetailsOpen)).toBeGreaterThan(-1);
+    expect(markdown).toContain(BRINDLE_MERGE_RISK_COMMENT_MARKER);
+  });
+
+  it("matches full comment snapshot with contextual block via buildRiskReport", () => {
+    const scoreResult = scoreResultFixture({ tier: "MEDIUM", score: 42 });
+    const report = buildRiskReport(scoreResult, {
+      ...baseReportOptions(),
+      contextualEvidence: contextualEvidencePayloadFixture(),
+    });
+
+    expect(report.commentMarkdown).toMatchInlineSnapshot(`
+      "## 🟡 Merge risk — MEDIUM (score 42) — review is recommended.
+
+      Have a human review this change before merging.
+
+      <details>
+      <summary>Score breakdown</summary>
+
+      | Criterion | Raw | Weight % | Weighted | Notes |
+      | --- | ---: | ---: | ---: | --- |
+      | Diff size | 50 | 100 | 50 | 100 lines changed |
+
+      </details>
+
+      <details>
+      <summary>Contextual evidence</summary>
+
+      Changed files (2):
+        packages/zod/src/types.ts
+        src/newFeature.ts
+
+      ### Familiarity
+      How familiar the author was with each changed file **before this PR** (last 180 days).
+
+      \`packages/zod/src/types.ts\` — none
+
+        Author owned 0% of lines and 0% of line churn in 6 months before this PR (no author commits in window; 42 commits by others in window).
+
+      \`src/newFeature.ts\` — high
+
+        File added in this PR; no prior history on this path. Author is the sole contributor in this change.
+
+      ### Blast radius
+      Static dependency reach for changed source files (transitive reach characterizes breadth).
+
+      \`src/schema.ts\` — broad
+
+        Reach: 52 files transitively (1 direct importer), including \`src/LoginForm.tsx\`.
+
+      ### Not analyzed for blast radius
+        docs/README.md — no extractor for extension .md
+
+      ### Limitations
+      - Familiarity uses git blame and git log at merge-base; PR commits excluded
+      - Transitive reach follows static import edges only
+
+      </details>
+
+      *🐾 Scored by Brindle*
+
+      <!-- brindle-merge-risk -->
+      "
+    `);
   });
 });

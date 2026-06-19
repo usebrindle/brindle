@@ -17,6 +17,7 @@ How to turn features on in `.merge-risk.yml` and the GitHub workflow.
 | [Mutators](guides/mutators.md) | Multiplicative bumps after weighted criteria (`junior_author`, `critical_service`). |
 | [Declarative rules](guides/declarative-rules.md) | Extra weighted `labels_any` rules in config. |
 | [Trusted plugins](guides/trusted-plugins.md) | Base-ref YAML plugin files merged into the score. |
+| [Contextual evidence](guides/contextual-evidence.md) | Author familiarity and blast radius; head checkout before the Action. |
 
 ## Reference
 
@@ -26,7 +27,7 @@ Tables and schema-shaped docs for precise contracts.
 | --- | --- |
 | [Programmatic use (npm)](programmatic-use.md) | `@usebrindle/merge-risk-core`, `PlatformAdapter`, and base-ref security for custom runners. |
 | [GitHub Action inputs](reference/action-inputs.md) | Inputs from `extensions/github-action/action.yml`. |
-| [Criteria (built-ins)](reference/criteria.md) | The six built-in `criteria` ids and what they measure. |
+| [Criteria (built-ins)](reference/criteria.md) | The eight built-in `criteria` ids and what they measure. |
 | [Config JSON Schema](reference/config-schema.md) | Field reference mirroring `schema/merge-risk-config.schema.json`. |
 
 ## Concepts
@@ -38,6 +39,7 @@ Tables and schema-shaped docs for precise contracts.
 ## Design history
 
 - [Architecture Decision Records](adrs/) — why behind accepted decisions.
+- [Design documents index](designs/README.md) — LLD map including contextual evidence.
 - [Low-level design](designs/lld-merge-risk-classifier.md) — how the shipped layout maps to the engine and adapters.
 
 ---

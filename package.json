@@ -51,6 +51,10 @@
     "@octokit/rest": "^22.0.1",
     "ajv": "^8.20.0",
     "js-yaml": "^4.2.0",
-    "micromatch": "^4.0.8"
+    "micromatch": "^4.0.8",
+    "postcss": "^8.5.15",
+    "postcss-sass": "^0.5.0",
+    "postcss-scss": "^4.0.9",
+    "@babel/parser": "^7.28.5"
   }
 }
