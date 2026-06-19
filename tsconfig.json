@@ -18,6 +18,7 @@
   },
   "include": [
     "core/**/*.ts",
+    "core/**/*.d.ts",
     "adapters/**/*.ts",
     "extensions/**/*.ts",
     "test/**/*.ts",
