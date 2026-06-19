@@ -7,14 +7,13 @@
  * @see docs/designs/lld-dependency-graph-extractors.md
  */
 import { extractStylesheetReferences } from "./stylesheetImportScan.js";
+import { normalizeForwardSlashes } from "../pathNormalize.js";
 import {
   readStylesheetResolutionConfig,
   resolveStylesheetSpecifier,
 } from "./stylesheetPathResolution.js";
 import { STYLESHEET_FILE_EXTENSIONS } from "./stylesheetExtractor.types.js";
 import type { DependencyEdge, DependencyExtractor, ExtractorContext } from "./types.js";
-
-const normalizeForwardSlashes = (filePath: string): string => filePath.replace(/\\/g, "/");
 
 const extractStylesheetEdges = (
   filePath: string,

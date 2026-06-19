@@ -4,6 +4,7 @@
  * @see docs/designs/lld-dependency-graph-extractors.md
  */
 import { isRustStdCratePath, splitUsePathSegments } from "./rustModUseScan.js";
+import { normalizeRepoPath } from "../pathNormalize.js";
 import {
   RUST_RESOLUTION_CONFIG_KEYS,
   type RustCrateRoot,
@@ -11,19 +12,19 @@ import {
 } from "./rustExtractor.types.js";
 import type { ExtractorContext } from "./types.js";
 
-const normalizeRepoPath = (filePath: string): string =>
-  filePath.replace(/\\/g, "/").replace(/^\.\//, "").replace(/\/$/, "");
+const normalizeRustRepoPath = (filePath: string): string =>
+  normalizeRepoPath(filePath).replace(/\/$/, "");
 
 const joinRepoPath = (...segments: readonly string[]): string => {
   const joinedPath = segments
     .filter((segment) => segment.length > 0)
     .join("/")
     .replace(/\/+/g, "/");
-  return normalizeRepoPath(joinedPath);
+  return normalizeRustRepoPath(joinedPath);
 };
 
 const splitPathSegments = (filePath: string): readonly string[] =>
-  normalizeRepoPath(filePath).split("/").filter((segment) => segment.length > 0);
+  normalizeRustRepoPath(filePath).split("/").filter((segment) => segment.length > 0);
 
 const isRustCrateRoot = (value: unknown): value is RustCrateRoot => {
   if (typeof value !== "object" || value === null) {
@@ -45,9 +46,9 @@ export const readRustResolutionConfig = (context: ExtractorContext): RustResolut
   }
 
   const crateRoots = crateRootsValue.filter(isRustCrateRoot).map((crateRoot) => ({
-    memberPath: normalizeRepoPath(crateRoot.memberPath),
+    memberPath: normalizeRustRepoPath(crateRoot.memberPath),
     packageName: crateRoot.packageName,
-    sourceRoot: normalizeRepoPath(crateRoot.sourceRoot),
+    sourceRoot: normalizeRustRepoPath(crateRoot.sourceRoot),
   }));
 
   return { crateRoots };
@@ -57,8 +58,8 @@ const relativePathWithinSourceRoot = (
   fromFile: string,
   sourceRoot: string,
 ): string | null => {
-  const normalizedFromFile = normalizeRepoPath(fromFile);
-  const normalizedSourceRoot = normalizeRepoPath(sourceRoot);
+  const normalizedFromFile = normalizeRustRepoPath(fromFile);
+  const normalizedSourceRoot = normalizeRustRepoPath(sourceRoot);
   const sourceRootPrefix = `${normalizedSourceRoot}/`;
   if (normalizedFromFile === normalizedSourceRoot) {
     return "";
@@ -115,20 +116,20 @@ const findContainingCrateRoot = (
   fromFile: string,
   crateRoots: readonly RustCrateRoot[],
 ): RustCrateRoot | null => {
-  const normalizedFromFile = normalizeRepoPath(fromFile);
+  const normalizedFromFile = normalizeRustRepoPath(fromFile);
   let bestMatch: RustCrateRoot | null = null;
   let bestMatchLength = -1;
 
   for (const crateRoot of crateRoots) {
-    const sourceRootPrefix = `${normalizeRepoPath(crateRoot.sourceRoot)}/`;
+    const sourceRootPrefix = `${normalizeRustRepoPath(crateRoot.sourceRoot)}/`;
     const isWithinSourceRoot =
-      normalizedFromFile === normalizeRepoPath(crateRoot.sourceRoot) ||
+      normalizedFromFile === normalizeRustRepoPath(crateRoot.sourceRoot) ||
       normalizedFromFile.startsWith(sourceRootPrefix);
     if (!isWithinSourceRoot) {
       continue;
     }
 
-    const matchLength = normalizeRepoPath(crateRoot.sourceRoot).length;
+    const matchLength = normalizeRustRepoPath(crateRoot.sourceRoot).length;
     if (matchLength > bestMatchLength) {
       bestMatch = crateRoot;
       bestMatchLength = matchLength;

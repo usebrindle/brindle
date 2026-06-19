@@ -3,20 +3,15 @@
  *
  * @see docs/adrs/0010-contextual-analysis-at-head.md
  */
-import { execFileSync } from "node:child_process";
-
-const normalizeForwardSlashes = (filePath: string): string => filePath.replace(/\\/g, "/");
+import { normalizeForwardSlashes } from "../../../core/contextual/pathNormalize.js";
+import { runGitCommand } from "./gitCommand.js";
 
 /**
  * @param repoRoot - Absolute path to the git repository root.
  * @returns Repo-relative tracked paths from `git ls-files` (forward slashes).
  */
 export const listGitTrackedFiles = (repoRoot: string): readonly string[] => {
-  const output = execFileSync("git", ["ls-files", "-z"], {
-    cwd: repoRoot,
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-  });
+  const output = runGitCommand(repoRoot, ["ls-files", "-z"]);
 
   if (output.length === 0) {
     return [];

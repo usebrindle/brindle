@@ -7,6 +7,7 @@
  * @see docs/designs/lld-dependency-graph-extractors.md
  */
 import { extractPythonImportSpecifiers } from "./pythonImportScan.js";
+import { normalizeForwardSlashes } from "../pathNormalize.js";
 import {
   readPythonResolutionConfig,
   resolvePythonModuleToRepoFile,
@@ -15,8 +16,6 @@ import {
 import type { DependencyEdge, DependencyExtractor, ExtractorContext } from "./types.js";
 
 const PYTHON_EXTENSIONS = [".py", ".pyi"] as const;
-
-const normalizeForwardSlashes = (filePath: string): string => filePath.replace(/\\/g, "/");
 
 const extractPythonEdges = (
   filePath: string,

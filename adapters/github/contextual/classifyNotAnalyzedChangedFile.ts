@@ -5,8 +5,7 @@
  */
 import type { NotAnalyzedForBlastRadius } from "../../../core/contextual/contextual.types.js";
 import type { ExtractorRegistry } from "../../../core/contextual/extractors/registry.js";
-
-const normalizeForwardSlashes = (filePath: string): string => filePath.replace(/\\/g, "/");
+import { normalizeForwardSlashes } from "../../../core/contextual/pathNormalize.js";
 
 const fileExtensionFromPath = (filePath: string): string | undefined => {
   const lastDotIndex = filePath.lastIndexOf(".");

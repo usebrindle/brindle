@@ -4,6 +4,7 @@
  * @see docs/designs/lld-dependency-graph-extractors.md
  */
 import { parseRelativeModuleSpecifier, isStdlibTopLevelModule } from "./pythonImportScan.js";
+import { normalizeRepoPath } from "../pathNormalize.js";
 import {
   PYTHON_RESOLUTION_CONFIG_KEYS,
   type PythonResolutionConfig,
@@ -12,11 +13,11 @@ import type { ExtractorContext } from "./types.js";
 
 const DEFAULT_PACKAGE_ROOTS = ["."] as const;
 
-const normalizeRepoPath = (filePath: string): string =>
-  filePath.replace(/\\/g, "/").replace(/^\.\//, "").replace(/\/$/, "");
+const normalizePythonRepoPath = (filePath: string): string =>
+  normalizeRepoPath(filePath).replace(/\/$/, "");
 
 const splitPathSegments = (filePath: string): string[] =>
-  normalizeRepoPath(filePath).split("/").filter((segment) => segment.length > 0);
+  normalizePythonRepoPath(filePath).split("/").filter((segment) => segment.length > 0);
 
 const directoryPathForFile = (filePath: string): string => {
   const segments = splitPathSegments(filePath);

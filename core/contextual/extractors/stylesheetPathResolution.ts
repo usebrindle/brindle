@@ -5,6 +5,7 @@
  */
 import { dirname, posix } from "node:path";
 
+import { normalizeRepoPath } from "../pathNormalize.js";
 import type { ExtractorContext } from "./types.js";
 import {
   STYLESHEET_FILE_EXTENSIONS,
@@ -12,9 +13,6 @@ import {
   STYLESHEET_RESOLUTION_CONFIG_KEYS,
   type StylesheetResolutionConfig,
 } from "./stylesheetExtractor.types.js";
-
-const normalizeRepoPath = (filePath: string): string =>
-  filePath.replace(/\\/g, "/").replace(/^\.\//, "");
 
 const hasStylesheetExtension = (filePath: string): boolean => {
   const lower = filePath.toLowerCase();
@@ -47,6 +45,19 @@ export const readStylesheetResolutionConfig = (
   };
 };
 
+const resolveWildcardReplacement = (
+  replacement: string,
+  matchedSegment: string,
+): string => {
+  const replacementWildcardIndex = replacement.indexOf("*");
+  if (replacementWildcardIndex === -1) {
+    return normalizeRepoPath(replacement);
+  }
+
+  const resolved = `${replacement.slice(0, replacementWildcardIndex)}${matchedSegment}${replacement.slice(replacementWildcardIndex + 1)}`;
+  return normalizeRepoPath(resolved);
+};
+
 const applyTsconfigPathMapping = (
   specifier: string,
   tsconfigPaths: Readonly<Record<string, readonly string[]>>,
@@ -67,14 +78,12 @@ const applyTsconfigPathMapping = (
     }
 
     const matchedSegment = specifier.slice(prefix.length, specifier.length - suffix.length);
-    for (const replacement of replacements) {
-      const replacementWildcardIndex = replacement.indexOf("*");
-      if (replacementWildcardIndex === -1) {
-        return normalizeRepoPath(replacement);
-      }
-      const resolved = `${replacement.slice(0, replacementWildcardIndex)}${matchedSegment}${replacement.slice(replacementWildcardIndex + 1)}`;
-      return normalizeRepoPath(resolved);
+    const replacement = replacements[0];
+    if (!replacement) {
+      continue;
     }
+
+    return resolveWildcardReplacement(replacement, matchedSegment);
   }
 
   return null;
@@ -94,13 +103,17 @@ const partialAndIndexCandidates = (joinedPath: string): readonly string[] => {
   const candidates: string[] = [];
 
   for (const extension of STYLESHEET_RESOLUTION_EXTENSIONS) {
-    candidates.push(posix.join(directory, `_${baseName}${extension}`));
-    candidates.push(posix.join(directory, `${baseName}${extension}`));
+    candidates.push(
+      posix.join(directory, `_${baseName}${extension}`),
+      posix.join(directory, `${baseName}${extension}`),
+    );
   }
 
   for (const extension of STYLESHEET_RESOLUTION_EXTENSIONS) {
-    candidates.push(posix.join(normalized, `_index${extension}`));
-    candidates.push(posix.join(normalized, `index${extension}`));
+    candidates.push(
+      posix.join(normalized, `_index${extension}`),
+      posix.join(normalized, `index${extension}`),
+    );
   }
 
   return candidates;

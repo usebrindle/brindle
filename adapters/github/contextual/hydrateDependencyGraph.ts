@@ -9,6 +9,7 @@ import { join } from "node:path";
 
 import { buildReverseDependencyGraph } from "../../../core/contextual/extractors/buildReverseDependencyGraph.js";
 import type { DependencyEdge, ExtractorContext } from "../../../core/contextual/extractors/types.js";
+import { normalizeForwardSlashes } from "../../../core/contextual/pathNormalize.js";
 
 import { classifyNotAnalyzedChangedFile } from "./classifyNotAnalyzedChangedFile.js";
 import { limitationsForEnabledExtractors } from "./extractorLimitations.js";
@@ -19,8 +20,6 @@ import type {
   HydrateDependencyGraphInput,
   HydrateDependencyGraphResult,
 } from "./hydrateDependencyGraph.types.js";
-
-const normalizeForwardSlashes = (filePath: string): string => filePath.replace(/\\/g, "/");
 
 const defaultReadFileText = (absolutePath: string): string | null => {
   try {

@@ -14,6 +14,10 @@ const RUST_STDLIB_CRATE_NAMES = new Set([
   "test",
 ]);
 
+const MOD_DECLARATION_PATTERN = /^\s*mod\s+(\w+)\s*;/;
+const GROUPED_USE_PATTERN = /^(.*)::\{([^}]+)\}$/;
+const USE_STATEMENT_PATTERN = /^use\s+(.+?)\s*;$/;
+
 const stripRustCommentsAndStrings = (source: string): string => {
   const withoutRawStrings = source.replace(/r#+"[\s\S]*?"#+/g, " ");
   const withoutDoubleQuoted = withoutRawStrings.replace(/"(?:\\.|[^"\\])*"/g, " ");
@@ -25,7 +29,7 @@ const isMacroGeneratedModuleLine = (line: string): boolean =>
   /\b(?:include!|include_str!|include_bytes!|concat!|env!)\s*\(/.test(line);
 
 const parseModDeclarationName = (line: string): string | null => {
-  const modMatch = line.match(/^\s*mod\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*;/);
+  const modMatch = MOD_DECLARATION_PATTERN.exec(line);
   return modMatch?.[1] ?? null;
 };
 
@@ -41,7 +45,7 @@ const expandGroupedUsePaths = (useClause: string): readonly string[] => {
     return [];
   }
 
-  const braceMatch = normalizedClause.match(/^(.*)::\{([^}]+)\}$/);
+  const braceMatch = GROUPED_USE_PATTERN.exec(normalizedClause);
   if (!braceMatch) {
     return [normalizedClause.split(/\s+as\s+/)[0]?.trim() ?? normalizedClause];
   }
@@ -69,7 +73,7 @@ const expandGroupedUsePaths = (useClause: string): readonly string[] => {
 
 const parseUseStatementPaths = (statement: string): readonly string[] => {
   const normalizedStatement = statement.replace(/\s+/g, " ").trim();
-  const useMatch = normalizedStatement.match(/^use\s+(.+?)\s*;$/);
+  const useMatch = USE_STATEMENT_PATTERN.exec(normalizedStatement);
   if (!useMatch?.[1]) {
     return [];
   }

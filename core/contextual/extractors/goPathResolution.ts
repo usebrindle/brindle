@@ -3,14 +3,12 @@
  *
  * @see docs/designs/lld-dependency-graph-extractors.md
  */
+import { normalizeRepoPath } from "../pathNormalize.js";
 import type { ExtractorContext } from "./types.js";
 import {
   GO_RESOLUTION_CONFIG_KEYS,
   type GoResolutionConfig,
 } from "./goExtractor.types.js";
-
-const normalizeRepoPath = (filePath: string): string =>
-  filePath.replace(/\\/g, "/").replace(/^\.\//, "");
 
 /** Read go resolution hints from the shared extractor context. */
 export const readGoResolutionConfig = (context: ExtractorContext): GoResolutionConfig => {
@@ -61,7 +59,10 @@ export const resolveGoImportToRepoFile = (
   }
 
   const pathSegments = packageDirectory.split("/");
-  const packageName = pathSegments[pathSegments.length - 1];
+  const packageName = pathSegments.at(-1);
+  if (!packageName) {
+    return null;
+  }
   return `${packageDirectory}/${packageName}.go`;
 };
 

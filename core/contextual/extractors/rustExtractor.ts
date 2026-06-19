@@ -6,6 +6,7 @@
  * @see docs/designs/lld-dependency-graph-extractors.md
  */
 import { extractRustModDeclarations, extractRustUsePaths } from "./rustModUseScan.js";
+import { normalizeForwardSlashes } from "../pathNormalize.js";
 import {
   readRustResolutionConfig,
   resolveRustModToRepoFile,
@@ -15,8 +16,6 @@ import {
 import type { DependencyEdge, DependencyExtractor, ExtractorContext } from "./types.js";
 
 const RUST_EXTENSIONS = [".rs"] as const;
-
-const normalizeForwardSlashes = (filePath: string): string => filePath.replace(/\\/g, "/");
 
 const extractRustEdges = (
   filePath: string,

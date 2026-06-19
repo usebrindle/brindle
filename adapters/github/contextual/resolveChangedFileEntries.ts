@@ -5,13 +5,11 @@
  */
 import type { ChangedFileEntry } from "../../../core/contextual/familiarity.types.js";
 import type { FileChangeKind } from "../../../core/contextual/contextual.types.js";
+import { normalizeForwardSlashes } from "../../../core/contextual/pathNormalize.js";
 
 import { runGitCommand } from "./gitCommand.js";
 import type { HydrateFamiliarityPrContextDependencies } from "./hydrateFamiliarityPrContext.types.js";
 import { pathExistsAtGitRevision } from "./pathExistsAtGitRevision.js";
-
-const normalizeRepositoryRelativePath = (repositoryRelativePath: string): string =>
-  repositoryRelativePath.replace(/\\/g, "/");
 
 /**
  * Paths added between merge-base and head via `git diff --diff-filter=A`.
@@ -40,7 +38,7 @@ export const resolveAddedPathsBetweenRefs = (
     for (const line of diffOutput.split("\n")) {
       const trimmedLine = line.trim();
       if (trimmedLine.length > 0) {
-        addedPaths.add(normalizeRepositoryRelativePath(trimmedLine));
+        addedPaths.add(normalizeForwardSlashes(trimmedLine));
       }
     }
     return addedPaths;
@@ -59,7 +57,7 @@ export const resolveFileChangeKind = (
   addedPaths: ReadonlySet<string>,
   dependencies?: HydrateFamiliarityPrContextDependencies,
 ): FileChangeKind => {
-  const normalizedPath = normalizeRepositoryRelativePath(filePath);
+  const normalizedPath = normalizeForwardSlashes(filePath);
 
   if (addedPaths.has(normalizedPath)) {
     return "added";
@@ -91,7 +89,7 @@ export const resolveChangedFileEntries = (
   );
 
   return changedPaths.map((changedPath) => ({
-    path: normalizeRepositoryRelativePath(changedPath),
+    path: normalizeForwardSlashes(changedPath),
     changeKind: resolveFileChangeKind(
       repositoryRoot,
       baseRevision,

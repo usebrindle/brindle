@@ -10,15 +10,15 @@ import { GO_RESOLUTION_CONFIG_KEYS } from "../../../core/contextual/extractors/g
 import { JS_TS_RESOLUTION_CONFIG_KEYS } from "../../../core/contextual/extractors/jsTsExtractor.types.js";
 import { PYTHON_RESOLUTION_CONFIG_KEYS } from "../../../core/contextual/extractors/pythonExtractor.types.js";
 import { RUST_RESOLUTION_CONFIG_KEYS } from "../../../core/contextual/extractors/rustExtractor.types.js";
+import { normalizeRepoPath } from "../../../core/contextual/pathNormalize.js";
 import type { RustCrateRoot } from "../../../core/contextual/extractors/rustExtractor.types.js";
 
 const CONFIG_CANDIDATE_FILENAMES = ["tsconfig.json", "jsconfig.json"] as const;
 const GO_MOD_FILENAME = "go.mod";
 const PYPROJECT_FILENAME = "pyproject.toml";
 const CARGO_MANIFEST_FILENAME = "Cargo.toml";
-
-const normalizeRepoPath = (filePath: string): string =>
-  filePath.replace(/\\/g, "/").replace(/^\.\//, "");
+const PYPROJECT_WHERE_PATTERN = /where\s*=\s*\[\s*"([^"]+)"\s*\]/;
+const GO_MODULE_DIRECTIVE_PATTERN = /^module\s+(\S+)/m;
 
 const isStringArray = (value: unknown): value is readonly string[] =>
   Array.isArray(value) && value.every((entry) => typeof entry === "string");
@@ -71,7 +71,7 @@ const readPythonPackageRoots = (repoRoot: string): readonly string[] | undefined
   }
 
   const pyprojectText = readFileSync(pyprojectPath, "utf8");
-  const whereMatch = pyprojectText.match(/where\s*=\s*\[\s*"([^"]+)"\s*\]/);
+  const whereMatch = PYPROJECT_WHERE_PATTERN.exec(pyprojectText);
   if (whereMatch?.[1]) {
     return [normalizeRepoPath(whereMatch[1])];
   }
@@ -86,7 +86,7 @@ const readGoModulePath = (repoRoot: string): string | undefined => {
   }
 
   const goModText = readFileSync(goModPath, "utf8");
-  const moduleDirectiveMatch = goModText.match(/^module\s+(\S+)/m);
+  const moduleDirectiveMatch = GO_MODULE_DIRECTIVE_PATTERN.exec(goModText);
   if (!moduleDirectiveMatch?.[1]) {
     return undefined;
   }

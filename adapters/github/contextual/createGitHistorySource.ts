@@ -11,6 +11,7 @@ import type {
 } from "../../../core/contextual/familiarity.types.js";
 import { formatGitSinceDate } from "./formatGitSinceDate.js";
 import { runGitCommand } from "./gitCommand.js";
+import { assertSafeRepositoryRelativePath } from "./assertSafeRepositoryRelativePath.js";
 
 const EMPTY_HISTORY_STATS: GitHistoryStats = {
   authorCommitCount: 0,
@@ -88,6 +89,7 @@ const queryGitHistoryStats = (repoRoot: string, query: GitHistoryQuery): GitHist
   let logOutput: string;
 
   try {
+    assertSafeRepositoryRelativePath(query.path);
     logOutput = runGitCommand(repoRoot, [
       "log",
       `--since=${sinceDate}`,

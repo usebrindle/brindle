@@ -9,9 +9,13 @@ import type { Root } from "postcss";
 import postcssSass from "postcss-sass";
 import postcssScss from "postcss-scss";
 
+import { normalizeForwardSlashes } from "../pathNormalize.js";
 import type { StylesheetReference } from "./stylesheetExtractor.types.js";
 
 const STYLESHEET_AT_RULE_NAMES = new Set(["import", "use", "forward"]);
+const QUOTED_SPECIFIER_PATTERN = /^['"]([^'"]+)['"]/;
+const URL_SPECIFIER_PATTERN = /^url\(\s*['"]?([^'")\s]+)['"]?\s*\)/i;
+const UNQUOTED_SPECIFIER_PATTERN = /^([\w./_-]+)/;
 
 const parseStylesheetRoot = (filePath: string, fileText: string): Root | null => {
   const lowerPath = filePath.toLowerCase();
@@ -45,17 +49,17 @@ const stripAsAliasSuffix = (params: string): string =>
 
 const parseQuotedSpecifier = (params: string): string | null => {
   const trimmedParams = stripAsAliasSuffix(params.trim()).replace(/;$/, "");
-  const singleQuoted = trimmedParams.match(/^['"]([^'"]+)['"]/);
+  const singleQuoted = QUOTED_SPECIFIER_PATTERN.exec(trimmedParams);
   if (singleQuoted?.[1]) {
     return singleQuoted[1];
   }
 
-  const urlMatch = trimmedParams.match(/^url\(\s*['"]?([^'")\s]+)['"]?\s*\)/i);
+  const urlMatch = URL_SPECIFIER_PATTERN.exec(trimmedParams);
   if (urlMatch?.[1]) {
     return urlMatch[1];
   }
 
-  const unquoted = trimmedParams.match(/^([\w./_-]+)/);
+  const unquoted = UNQUOTED_SPECIFIER_PATTERN.exec(trimmedParams);
   return unquoted?.[1] ?? null;
 };
 
@@ -132,7 +136,7 @@ const collectIndentedSassLineReferences = (
   const references: StylesheetReference[] = [];
 
   for (const line of fileText.split("\n")) {
-    const match = line.match(INDENTED_SASS_AT_RULE_LINE);
+    const match = INDENTED_SASS_AT_RULE_LINE.exec(line);
     if (!match?.[1] || !match[2]) {
       continue;
     }
@@ -154,7 +158,7 @@ export const extractStylesheetReferences = (
   filePath: string,
   fileText: string,
 ): readonly StylesheetReference[] => {
-  const normalizedPath = filePath.replace(/\\/g, "/");
+  const normalizedPath = normalizeForwardSlashes(filePath);
   const postcssReferences = collectPostcssReferences(normalizedPath, fileText);
 
   if (!normalizedPath.toLowerCase().endsWith(".sass")) {
