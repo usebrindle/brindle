@@ -1,4 +1,6 @@
 export type { PlatformAdapter } from "./PlatformAdapter.js";
+export { createGitBlameSource } from "./github/contextual/createGitBlameSource.js";
+export { createGitHistorySource } from "./github/contextual/createGitHistorySource.js";
 export { hydrateDependencyGraph } from "./github/contextual/hydrateDependencyGraph.js";
 export type {
   HydrateDependencyGraphDependencies,

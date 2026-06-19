@@ -14,6 +14,15 @@ export type {
   FileChangeKind,
   NotAnalyzedForBlastRadius,
 } from "./contextual.types.js";
+export type {
+  ChangedFileEntry,
+  GitBlameQuery,
+  GitBlameSource,
+  GitBlameStats,
+  GitHistoryQuery,
+  GitHistorySource,
+  GitHistoryStats,
+} from "./familiarity.types.js";
 export {
   isBlastRadiusFinding,
   isContextualEvidenceSnapshot,

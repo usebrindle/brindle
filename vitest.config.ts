@@ -20,6 +20,7 @@ export default defineConfig({
         "adapters/github/contextual/hydrateDependencyGraph.types.ts",
         "core/report.types.ts",
         "core/contextual/contextual.types.ts",
+        "core/contextual/familiarity.types.ts",
         "core/contextual/extractors/types.ts",
         "core/contextual/extractors/jsTsExtractor.types.ts",
         "core/contextual/extractors/stylesheetExtractor.types.ts",
