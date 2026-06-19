@@ -13,7 +13,6 @@ import {
   resolveJsTsSpecifier,
 } from "../core/contextual/extractors/jsTsPathResolution.js";
 import type { ExtractorContext } from "../core/contextual/extractors/types.js";
-import ts from "typescript";
 
 const testContext = (
   resolutionConfig: ExtractorContext["resolutionConfig"] = {},
@@ -160,11 +159,11 @@ describe("jsTsExtractor", () => {
 });
 
 describe("jsTsImportScan", () => {
-  it("maps file extensions to ScriptKind", () => {
-    expect(scriptKindForJsTsFile("src/App.jsx")).toBe(ts.ScriptKind.JSX);
-    expect(scriptKindForJsTsFile("src/App.tsx")).toBe(ts.ScriptKind.TSX);
-    expect(scriptKindForJsTsFile("src/App.mjs")).toBe(ts.ScriptKind.JS);
-    expect(scriptKindForJsTsFile("src/App.ts")).toBe(ts.ScriptKind.TS);
+  it("maps file extensions to script kind", () => {
+    expect(scriptKindForJsTsFile("src/App.jsx")).toBe("jsx");
+    expect(scriptKindForJsTsFile("src/App.tsx")).toBe("tsx");
+    expect(scriptKindForJsTsFile("src/App.mjs")).toBe("js");
+    expect(scriptKindForJsTsFile("src/App.ts")).toBe("ts");
   });
 
   it("collects static references without duplicates from nested blocks", () => {
