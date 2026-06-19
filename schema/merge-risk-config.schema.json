@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://brindle.dev/schema/merge-risk-config.schema.json",
   "title": "Merge risk scoring config (subset)",
-  "description": "YAML shape under .merge-risk.yml consumed by the scorer. Validates optional `declarative_rules`, `trusted_plugins`, and criterion/mutator options (including `diff_size` and `test_coverage` options) when those keys are present. Additional top-level keys are allowed for forward compatibility.",
+  "description": "YAML shape under .merge-risk.yml consumed by the scorer. Validates optional `declarative_rules`, `trusted_plugins`, and criterion/mutator options (including `diff_size`, `test_coverage`, `author_familiarity`, and `blast_radius` options) when those keys are present. Additional top-level keys are allowed for forward compatibility.",
   "definitions": {
     "filePatternsOptions": {
       "type": "object",
@@ -116,6 +116,66 @@
           "type": "number",
           "exclusiveMinimum": 0,
           "maximum": 100
+        }
+      }
+    },
+    "authorFamiliarityOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "history_window_days": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "aggregation": {
+          "type": "string",
+          "enum": ["max"]
+        },
+        "characterization_scores": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "high": { "type": "number", "minimum": 0, "maximum": 100 },
+            "moderate": { "type": "number", "minimum": 0, "maximum": 100 },
+            "none": { "type": "number", "minimum": 0, "maximum": 100 }
+          }
+        },
+        "author_emails": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "blastRadiusOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "aggregation": {
+          "type": "string",
+          "enum": ["max"]
+        },
+        "characterization_scores": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "isolated": { "type": "number", "minimum": 0, "maximum": 100 },
+            "moderate": { "type": "number", "minimum": 0, "maximum": 100 },
+            "broad": { "type": "number", "minimum": 0, "maximum": 100 }
+          }
+        },
+        "enabled_extractors": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "thresholds": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "isolatedMax": { "type": "number", "minimum": 0 },
+            "moderateMax": { "type": "number", "minimum": 0 }
+          }
         }
       }
     },
@@ -431,6 +491,70 @@
                   "enabled": { "type": "boolean" },
                   "options": {
                     "$ref": "#/definitions/testCoverageOptions"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "criteria": {
+            "type": "object",
+            "required": ["author_familiarity"]
+          }
+        },
+        "required": ["criteria"]
+      },
+      "then": {
+        "properties": {
+          "criteria": {
+            "type": "object",
+            "properties": {
+              "author_familiarity": {
+                "type": "object",
+                "required": ["weight"],
+                "additionalProperties": true,
+                "properties": {
+                  "weight": { "type": "number" },
+                  "enabled": { "type": "boolean" },
+                  "options": {
+                    "$ref": "#/definitions/authorFamiliarityOptions"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "criteria": {
+            "type": "object",
+            "required": ["blast_radius"]
+          }
+        },
+        "required": ["criteria"]
+      },
+      "then": {
+        "properties": {
+          "criteria": {
+            "type": "object",
+            "properties": {
+              "blast_radius": {
+                "type": "object",
+                "required": ["weight"],
+                "additionalProperties": true,
+                "properties": {
+                  "weight": { "type": "number" },
+                  "enabled": { "type": "boolean" },
+                  "options": {
+                    "$ref": "#/definitions/blastRadiusOptions"
                   }
                 }
               }
