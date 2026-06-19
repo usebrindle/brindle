@@ -5,6 +5,7 @@
  */
 export { builtInExtractors, defaultExtractorRegistry } from "./builtins.js";
 export { buildReverseDependencyGraph } from "./buildReverseDependencyGraph.js";
+export { goExtractor } from "./goExtractor.js";
 export { jsTsExtractor } from "./jsTsExtractor.js";
 export {
   createExtractorRegistry,

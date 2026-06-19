@@ -6,9 +6,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { GO_RESOLUTION_CONFIG_KEYS } from "../../../core/contextual/extractors/goExtractor.types.js";
 import { JS_TS_RESOLUTION_CONFIG_KEYS } from "../../../core/contextual/extractors/jsTsExtractor.types.js";
 
 const CONFIG_CANDIDATE_FILENAMES = ["tsconfig.json", "jsconfig.json"] as const;
+const GO_MOD_FILENAME = "go.mod";
 
 const normalizeRepoPath = (filePath: string): string =>
   filePath.replace(/\\/g, "/").replace(/^\.\//, "");
@@ -57,9 +59,24 @@ const readRootCompilerConfig = (
   return {};
 };
 
+const readGoModulePath = (repoRoot: string): string | undefined => {
+  const goModPath = join(repoRoot, GO_MOD_FILENAME);
+  if (!existsSync(goModPath)) {
+    return undefined;
+  }
+
+  const goModText = readFileSync(goModPath, "utf8");
+  const moduleDirectiveMatch = goModText.match(/^module\s+(\S+)/m);
+  if (!moduleDirectiveMatch?.[1]) {
+    return undefined;
+  }
+
+  return normalizeRepoPath(moduleDirectiveMatch[1]);
+};
+
 /**
  * @param repoRoot - Absolute path to the repository root.
- * @returns Shared `resolutionConfig` keys for js_ts and stylesheet extractors.
+ * @returns Shared `resolutionConfig` keys for js_ts, stylesheet, and go extractors.
  */
 export const hydrateResolutionConfig = (
   repoRoot: string,
@@ -73,6 +90,11 @@ export const hydrateResolutionConfig = (
   if (compilerConfig.tsconfigPaths) {
     resolutionConfig[JS_TS_RESOLUTION_CONFIG_KEYS.tsconfigPaths] =
       compilerConfig.tsconfigPaths;
+  }
+
+  const modulePath = readGoModulePath(repoRoot);
+  if (modulePath) {
+    resolutionConfig[GO_RESOLUTION_CONFIG_KEYS.modulePath] = modulePath;
   }
 
   return resolutionConfig;

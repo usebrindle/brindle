@@ -4,14 +4,16 @@
  * @see docs/designs/lld-dependency-graph-extractors.md
  */
 import { createExtractorRegistry } from "./registry.js";
+import { goExtractor } from "./goExtractor.js";
 import { jsTsExtractor } from "./jsTsExtractor.js";
 import { stylesheetExtractor } from "./stylesheetExtractor.js";
 import type { DependencyExtractor } from "./types.js";
 
-/** v1 built-in extractors; v2 adds go, python, rust. */
+/** v1 built-in extractors; v2 adds python and rust. */
 export const builtInExtractors: readonly DependencyExtractor[] = [
   jsTsExtractor,
   stylesheetExtractor,
+  goExtractor,
 ];
 
 /** Default registry with all v1 built-in extractors. */

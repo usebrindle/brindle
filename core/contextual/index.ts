@@ -60,6 +60,7 @@ export {
   createExtractorRegistry,
   DEFAULT_V1_EXTRACTOR_IDS,
   defaultExtractorRegistry,
+  goExtractor,
   jsTsExtractor,
   stylesheetExtractor,
 } from "./extractors/index.js";

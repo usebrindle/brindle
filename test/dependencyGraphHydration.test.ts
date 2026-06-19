@@ -86,6 +86,24 @@ describe("hydrateResolutionConfig", () => {
       rmSync(repositoryRoot, { recursive: true, force: true });
     }
   });
+
+  it("reads module path from root go.mod", () => {
+    const repositoryRoot = mkdtempSync(join(tmpdir(), "brindle-go-resolution-config-"));
+
+    try {
+      writeFileSync(
+        join(repositoryRoot, "go.mod"),
+        ["module example.com/myapp", "", "go 1.22"].join("\n"),
+        "utf8",
+      );
+
+      expect(hydrateResolutionConfig(repositoryRoot)).toEqual({
+        modulePath: "example.com/myapp",
+      });
+    } finally {
+      rmSync(repositoryRoot, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("classifyNotAnalyzedChangedFile", () => {
