@@ -10,6 +10,7 @@
  * Pipeline-only types (`scorer.types.ts`, per-criterion `*.types.ts`) stay out of the barrel; **`BuildRiskReportOptions`** is exported for report policy wiring.
  *
  * - **Coverage** — `parseCoverageArtifactText` / Istanbul helpers under `./coverage/` (see `./coverage/adapter.js`).
+ * - **Contextual evidence** — shared types under `./contextual/` (see `./contextual/index.js`).
  *
  * @see docs/designs/lld-merge-risk-classifier.md
  */
@@ -34,3 +35,4 @@ export type { BuildRiskReportOptions, CheckConclusionPolicy } from "./report.typ
 export { parseCoverageArtifactText } from "./coverage/adapter.js";
 export type { SupportedCoverageArtifactFormat } from "./coverage/adapter.types.js";
 export { IstanbulCoverageParseError, parseIstanbulCoverageJson } from "./coverage/istanbul.js";
+export type { ContextualCharacterization, FileChangeKind } from "./contextual/contextual.types.js";
