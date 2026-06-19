@@ -65,7 +65,7 @@ const asAstNode = (value: unknown): BabelAstNode | null =>
 
 const readStringLiteralValue = (node: unknown): string | null => {
   const astNode = asAstNode(node);
-  if (!astNode || astNode.type !== "StringLiteral") {
+  if (astNode?.type !== "StringLiteral") {
     return null;
   }
 
@@ -97,49 +97,66 @@ const isRequireCallee = (callee: unknown): boolean => {
   return false;
 };
 
-const collectStaticReferencesFromNode = (
-  node: unknown,
+const collectImportReferenceFromNode = (
+  astNode: BabelAstNode,
   references: JsTsStaticReference[],
 ): void => {
-  const astNode = asAstNode(node);
-  if (!astNode) {
+  if (
+    astNode.type !== "ImportDeclaration" &&
+    astNode.type !== "ExportAllDeclaration" &&
+    astNode.type !== "ExportNamedDeclaration"
+  ) {
     return;
   }
 
-  if (astNode.type === "ImportDeclaration" || astNode.type === "ExportAllDeclaration") {
-    const specifier = readStringLiteralValue(astNode.source);
-    if (specifier) {
-      references.push({ specifier, kind: "static_import" });
-    }
+  const specifier = readStringLiteralValue(astNode.source);
+  if (specifier) {
+    references.push({ specifier, kind: "static_import" });
+  }
+};
+
+const collectRequireReferenceFromNode = (
+  astNode: BabelAstNode,
+  references: JsTsStaticReference[],
+): void => {
+  if (astNode.type !== "CallExpression" || !isRequireCallee(astNode.callee)) {
+    return;
   }
 
-  if (astNode.type === "ExportNamedDeclaration") {
-    const specifier = readStringLiteralValue(astNode.source);
-    if (specifier) {
-      references.push({ specifier, kind: "static_import" });
-    }
+  const callArguments = astNode.arguments;
+  if (!Array.isArray(callArguments) || callArguments.length === 0) {
+    return;
   }
 
-  if (astNode.type === "CallExpression" && isRequireCallee(astNode.callee)) {
-    const callArguments = astNode.arguments;
-    if (Array.isArray(callArguments) && callArguments.length > 0) {
-      const specifier = readStringLiteralValue(callArguments[0]);
-      if (specifier) {
-        references.push({ specifier, kind: "static_require" });
-      }
-    }
+  const specifier = readStringLiteralValue(callArguments[0]);
+  if (specifier) {
+    references.push({ specifier, kind: "static_require" });
+  }
+};
+
+const collectTsImportEqualsReferenceFromNode = (
+  astNode: BabelAstNode,
+  references: JsTsStaticReference[],
+): void => {
+  if (astNode.type !== "TSImportEqualsDeclaration") {
+    return;
   }
 
-  if (astNode.type === "TSImportEqualsDeclaration") {
-    const moduleReference = asAstNode(astNode.moduleReference);
-    if (moduleReference?.type === "TSExternalModuleReference") {
-      const specifier = readStringLiteralValue(moduleReference.expression);
-      if (specifier) {
-        references.push({ specifier, kind: "static_import" });
-      }
-    }
+  const moduleReference = asAstNode(astNode.moduleReference);
+  if (moduleReference?.type !== "TSExternalModuleReference") {
+    return;
   }
 
+  const specifier = readStringLiteralValue(moduleReference.expression);
+  if (specifier) {
+    references.push({ specifier, kind: "static_import" });
+  }
+};
+
+const walkAstNodeChildren = (
+  astNode: BabelAstNode,
+  references: JsTsStaticReference[],
+): void => {
   for (const childValue of Object.values(astNode)) {
     if (Array.isArray(childValue)) {
       for (const childNode of childValue) {
@@ -150,6 +167,21 @@ const collectStaticReferencesFromNode = (
 
     collectStaticReferencesFromNode(childValue, references);
   }
+};
+
+const collectStaticReferencesFromNode = (
+  node: unknown,
+  references: JsTsStaticReference[],
+): void => {
+  const astNode = asAstNode(node);
+  if (!astNode) {
+    return;
+  }
+
+  collectImportReferenceFromNode(astNode, references);
+  collectRequireReferenceFromNode(astNode, references);
+  collectTsImportEqualsReferenceFromNode(astNode, references);
+  walkAstNodeChildren(astNode, references);
 };
 
 /**

@@ -109,9 +109,9 @@ const worstFindingByMaxAggregation = (
   if (findings.length === 0) {
     return null;
   }
-  let worstFinding = findings[0]!;
+  let worstFinding = findings[0];
   for (let index = 1; index < findings.length; index += 1) {
-    const candidateFinding = findings[index]!;
+    const candidateFinding = findings[index];
     const worseByScore = pickWorseFinding(worstFinding, candidateFinding, characterizationScores);
     worstFinding =
       scoreForFinding(worseByScore, characterizationScores) ===

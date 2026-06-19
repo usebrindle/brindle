@@ -28,7 +28,9 @@ export const countDirectImportersForFile = (
   changedFile: string,
   graph: ReverseDependencyGraph,
 ): { dependentCount: number; dependents: readonly string[] } => {
-  const dependents = [...(graph.get(changedFile) ?? [])].sort();
+  const dependents = [...(graph.get(changedFile) ?? [])].sort((left, right) =>
+    left.localeCompare(right),
+  );
   return { dependentCount: dependents.length, dependents };
 };
 

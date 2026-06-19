@@ -19,6 +19,9 @@ const PYPROJECT_FILENAME = "pyproject.toml";
 const CARGO_MANIFEST_FILENAME = "Cargo.toml";
 const PYPROJECT_WHERE_PATTERN = /where\s*=\s*\[\s*"([^"]+)"\s*\]/;
 const GO_MODULE_DIRECTIVE_PATTERN = /^module\s+(\S+)/m;
+const CARGO_PACKAGE_NAME_PATTERN = /^\s*\[package\][\s\S]*?^name\s*=\s*"([^"]+)"/m;
+const CARGO_WORKSPACE_MEMBERS_PATTERN =
+  /^\s*\[workspace\][\s\S]*?^members\s*=\s*\[([\s\S]*?)\]/m;
 
 const isStringArray = (value: unknown): value is readonly string[] =>
   Array.isArray(value) && value.every((entry) => typeof entry === "string");
@@ -102,14 +105,12 @@ const readCargoManifestText = (manifestPath: string): string | undefined => {
 };
 
 const readCargoPackageName = (cargoManifestText: string): string | undefined => {
-  const packageNameMatch = cargoManifestText.match(/^\s*\[package\][\s\S]*?^name\s*=\s*"([^"]+)"/m);
+  const packageNameMatch = CARGO_PACKAGE_NAME_PATTERN.exec(cargoManifestText);
   return packageNameMatch?.[1];
 };
 
 const readWorkspaceMemberPaths = (cargoManifestText: string): readonly string[] | undefined => {
-  const workspaceMembersMatch = cargoManifestText.match(
-    /^\s*\[workspace\][\s\S]*?^members\s*=\s*\[([\s\S]*?)\]/m,
-  );
+  const workspaceMembersMatch = CARGO_WORKSPACE_MEMBERS_PATTERN.exec(cargoManifestText);
   if (!workspaceMembersMatch?.[1]) {
     return undefined;
   }
