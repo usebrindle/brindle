@@ -1,11 +1,14 @@
 /**
  * JavaScript/TypeScript static import and require extractor (v1).
  *
- * Stub until US-005 implements parsing per extractors LLD.
+ * Parses ESM imports, export-from, and static-literal require() using the
+ * TypeScript compiler API. Resolves relative specifiers and root tsconfig paths/baseUrl.
  *
  * @see docs/designs/lld-dependency-graph-extractors.md
  */
 import type { DependencyEdge, DependencyExtractor, ExtractorContext } from "./types.js";
+import { extractStaticJsTsReferences } from "./jsTsImportScan.js";
+import { readJsTsResolutionConfig, resolveJsTsSpecifier } from "./jsTsPathResolution.js";
 
 const JS_TS_EXTENSIONS = [
   ".js",
@@ -18,18 +21,53 @@ const JS_TS_EXTENSIONS = [
   ".cts",
 ] as const;
 
-const extractNoEdges = (): readonly DependencyEdge[] => [];
+const normalizeForwardSlashes = (filePath: string): string => filePath.replace(/\\/g, "/");
 
-const resolveNoSpecifier = (
-  _fromFile: string,
-  _specifier: string,
-  _context: ExtractorContext,
-): null => null;
+const extractJsTsEdges = (
+  filePath: string,
+  fileText: string,
+  context: ExtractorContext,
+): readonly DependencyEdge[] => {
+  const normalizedFilePath = normalizeForwardSlashes(filePath);
+  const resolutionConfig = readJsTsResolutionConfig(context);
+  const references = extractStaticJsTsReferences(normalizedFilePath, fileText);
+  const edges: DependencyEdge[] = [];
 
-/** v1 JS/TS extractor; edge extraction implemented in US-005. */
+  for (const reference of references) {
+    const resolvedTarget = resolveJsTsSpecifier(
+      normalizedFilePath,
+      reference.specifier,
+      resolutionConfig,
+    );
+    if (!resolvedTarget) {
+      continue;
+    }
+
+    edges.push({
+      from: normalizedFilePath,
+      to: resolvedTarget,
+      kind: reference.kind,
+    });
+  }
+
+  return edges;
+};
+
+const resolveJsTsModuleSpecifier = (
+  fromFile: string,
+  specifier: string,
+  context: ExtractorContext,
+): string | null =>
+  resolveJsTsSpecifier(
+    normalizeForwardSlashes(fromFile),
+    specifier,
+    readJsTsResolutionConfig(context),
+  );
+
+/** v1 JS/TS extractor for static ESM imports and literal require(). */
 export const jsTsExtractor: DependencyExtractor = {
   id: "js_ts",
   fileExtensions: JS_TS_EXTENSIONS,
-  extractEdges: extractNoEdges,
-  resolveSpecifier: resolveNoSpecifier,
+  extractEdges: extractJsTsEdges,
+  resolveSpecifier: resolveJsTsModuleSpecifier,
 };
