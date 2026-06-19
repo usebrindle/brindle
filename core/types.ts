@@ -3,6 +3,7 @@
  * @see docs/designs/lld-merge-risk-classifier.md
  */
 
+import type { ContextualEvidenceSnapshot } from "./contextual/contextual.types.js";
 import type { ServicesCatalog } from "./criteria/serviceCriticality.types.js";
 import type { TrustedPluginsConfiguration } from "./plugins/trustedPlugins.types.js";
 
@@ -77,6 +78,19 @@ export interface PRContext {
    * Omitted when the commit lookup fails or the response has no usable date.
    */
   headCommitCommittedAtIso?: string;
+  /**
+   * Merge-base revision between PR base and head; familiarity git queries stop here (exclude `base..head`).
+   * Populated when contextual criteria are enabled.
+   */
+  baseRevision?: string;
+  /**
+   * Resolved author emails for familiarity git queries (head commit, noreply patterns, optional config).
+   */
+  authorEmails?: readonly string[];
+  /**
+   * Pre-computed familiarity and blast-radius findings for criteria and report (hydrated once per run).
+   */
+  contextualEvidence?: ContextualEvidenceSnapshot;
 }
 
 export interface Criterion {

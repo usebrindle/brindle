@@ -35,4 +35,14 @@ export type { BuildRiskReportOptions, CheckConclusionPolicy } from "./report.typ
 export { parseCoverageArtifactText } from "./coverage/adapter.js";
 export type { SupportedCoverageArtifactFormat } from "./coverage/adapter.types.js";
 export { IstanbulCoverageParseError, parseIstanbulCoverageJson } from "./coverage/istanbul.js";
-export type { ContextualCharacterization, FileChangeKind } from "./contextual/contextual.types.js";
+export type {
+  BlastRadiusCharacterization,
+  BlastRadiusFinding,
+  ContextualCharacterization,
+  ContextualEvidenceSnapshot,
+  FamiliarityFinding,
+  FileChangeKind,
+  NotAnalyzedForBlastRadius,
+  SerializedContextualEvidenceSnapshot,
+  SerializedFamiliarityFinding,
+} from "./contextual/index.js";
