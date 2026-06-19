@@ -104,6 +104,27 @@ describe("hydrateResolutionConfig", () => {
       rmSync(repositoryRoot, { recursive: true, force: true });
     }
   });
+
+  it("reads package roots from pyproject.toml setuptools where", () => {
+    const repositoryRoot = mkdtempSync(join(tmpdir(), "brindle-python-resolution-config-"));
+
+    try {
+      writeFileSync(
+        join(repositoryRoot, "pyproject.toml"),
+        [
+          "[tool.setuptools.packages.find]",
+          'where = ["src"]',
+        ].join("\n"),
+        "utf8",
+      );
+
+      expect(hydrateResolutionConfig(repositoryRoot)).toEqual({
+        packageRoots: ["src"],
+      });
+    } finally {
+      rmSync(repositoryRoot, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("classifyNotAnalyzedChangedFile", () => {

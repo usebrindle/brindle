@@ -23,10 +23,18 @@ export const GO_EXTRACTOR_LIMITATIONS = [
   "go: build tags, generated protobuf paths outside the module, and build-time-only imports excluded",
 ] as const;
 
+/** Limitation lines for the python extractor when enabled. */
+export const PYTHON_EXTRACTOR_LIMITATIONS = [
+  "python: literal import and from-import module paths only; dynamic __import__ and importlib.import_module excluded",
+  "python: relative imports and absolute imports under package roots only; stdlib top-level modules produce no graph edge",
+  "python: external pip packages and namespace packages without static file mapping excluded",
+] as const;
+
 const EXTRACTOR_LIMITATIONS_BY_ID: Readonly<Record<string, readonly string[]>> = {
   js_ts: JS_TS_EXTRACTOR_LIMITATIONS,
   stylesheet: STYLESHEET_EXTRACTOR_LIMITATIONS,
   go: GO_EXTRACTOR_LIMITATIONS,
+  python: PYTHON_EXTRACTOR_LIMITATIONS,
 };
 
 /**

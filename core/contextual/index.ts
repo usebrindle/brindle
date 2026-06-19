@@ -62,6 +62,7 @@ export {
   defaultExtractorRegistry,
   goExtractor,
   jsTsExtractor,
+  pythonExtractor,
   stylesheetExtractor,
 } from "./extractors/index.js";
 export type {
