@@ -11,6 +11,7 @@ import postcssScss from "postcss-scss";
 
 import { normalizeForwardSlashes } from "../pathNormalize.js";
 import type { StylesheetReference } from "./stylesheetExtractor.types.js";
+import { indexOfAsKeyword } from "./safeStringScan.js";
 
 const STYLESHEET_AT_RULE_NAMES = new Set(["import", "use", "forward"]);
 const QUOTED_SPECIFIER_PATTERN = /^['"]([^'"]+)['"]/;
@@ -44,19 +45,18 @@ const edgeKindForAtRule = (
   }
 };
 
-const AS_ALIAS_SUFFIX_PATTERN = /\s+as\s+/i;
 const ALIAS_NAME_PATTERN = /^[\w-]+/;
 const WITH_CLAUSE_PREFIX_PATTERN = /^\s+with\b/i;
 
 const stripAsAliasSuffix = (params: string): string => {
   const trimmedParams = params.trim();
-  const asAliasMatch = AS_ALIAS_SUFFIX_PATTERN.exec(trimmedParams);
-  if (!asAliasMatch || asAliasMatch.index === undefined) {
+  const asAliasIndex = indexOfAsKeyword(trimmedParams);
+  if (asAliasIndex === -1) {
     return trimmedParams;
   }
 
   const suffixAfterAs = trimmedParams
-    .slice(asAliasMatch.index + asAliasMatch[0].length)
+    .slice(asAliasIndex + 4)
     .replace(/;$/, "")
     .trim();
   const aliasNameMatch = ALIAS_NAME_PATTERN.exec(suffixAfterAs);
@@ -71,7 +71,7 @@ const stripAsAliasSuffix = (params: string): string => {
     return trimmedParams;
   }
 
-  return trimmedParams.slice(0, asAliasMatch.index).trim();
+  return trimmedParams.slice(0, asAliasIndex).trim();
 };
 
 const parseQuotedSpecifier = (params: string): string | null => {
