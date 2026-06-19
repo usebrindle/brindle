@@ -31,7 +31,11 @@ export {
   buildRiskReport,
   checkConclusionForTier,
 } from "./report.js";
-export type { BuildRiskReportOptions, CheckConclusionPolicy } from "./report.types.js";
+export type {
+  BuildRiskReportOptions,
+  CheckConclusionPolicy,
+  ContextualEvidencePayload,
+} from "./report.types.js";
 export { parseCoverageArtifactText } from "./coverage/adapter.js";
 export type { SupportedCoverageArtifactFormat } from "./coverage/adapter.types.js";
 export { IstanbulCoverageParseError, parseIstanbulCoverageJson } from "./coverage/istanbul.js";
