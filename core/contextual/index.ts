@@ -16,6 +16,7 @@ export type {
 } from "./contextual.types.js";
 export type {
   ChangedFileEntry,
+  FamiliarityInput,
   GitBlameQuery,
   GitBlameSource,
   GitBlameStats,
@@ -23,6 +24,14 @@ export type {
   GitHistorySource,
   GitHistoryStats,
 } from "./familiarity.types.js";
+export {
+  analyzeFamiliarity,
+  characterizeFamiliarity,
+  historyWindowSince,
+  shareOfCurrentContent,
+  shareOfFileCommitChurn,
+  shareOfWindowedLineChurn,
+} from "./familiarity.js";
 export {
   isBlastRadiusFinding,
   isContextualEvidenceSnapshot,
