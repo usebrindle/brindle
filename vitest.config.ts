@@ -19,6 +19,7 @@ export default defineConfig({
         "adapters/github/githubAdapter.types.ts",
         "adapters/github/contextual/hydrateDependencyGraph.types.ts",
         "adapters/github/contextual/hydrateFamiliarityPrContext.types.ts",
+        "adapters/github/contextual/hydrateBlastRadiusContextualEvidence.types.ts",
         "core/report.types.ts",
         "core/contextual/contextual.types.ts",
         "core/contextual/familiarity.types.ts",
