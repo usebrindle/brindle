@@ -19,6 +19,7 @@ export default defineConfig({
         "adapters/github/githubAdapter.types.ts",
         "core/report.types.ts",
         "core/contextual/contextual.types.ts",
+        "core/contextual/extractors/types.ts",
         "**/*.config.ts",
       ],
       thresholds: {

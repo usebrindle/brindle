@@ -29,3 +29,11 @@ export type {
   SerializedContextualEvidenceSnapshot,
   SerializedFamiliarityFinding,
 } from "./serialization.js";
+export { buildReverseDependencyGraph } from "./extractors/index.js";
+export type {
+  DependencyEdge,
+  DependencyEdgeKind,
+  DependencyExtractor,
+  ExtractorContext,
+  ReverseDependencyGraph,
+} from "./extractors/index.js";
