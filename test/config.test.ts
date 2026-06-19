@@ -1615,6 +1615,19 @@ describe("repo .merge-risk.yml dogfood", () => {
     const scoringConfig = loadScoringConfigFromMergeRiskYaml(yamlText);
     expect(scoringConfig.services?.github_action_extension?.globs?.[0]).toBe("extensions/github-action/**");
     expect(scoringConfig.criteria.service_criticality?.weight).toBe(6);
+    expect(scoringConfig.criteria.author_familiarity?.weight).toBe(8);
+    expect(scoringConfig.criteria.author_familiarity?.options).toMatchObject({
+      history_window_days: 180,
+      aggregation: "max",
+      characterization_scores: { high: 15, moderate: 50, none: 85 },
+    });
+    expect(scoringConfig.criteria.blast_radius?.weight).toBe(6);
+    expect(scoringConfig.criteria.blast_radius?.options).toMatchObject({
+      aggregation: "max",
+      enabled_extractors: ["js_ts", "stylesheet"],
+      characterization_scores: { isolated: 20, moderate: 55, broad: 90 },
+      thresholds: { isolatedMax: 2, moderateMax: 10 },
+    });
     expect(scoringConfig.mutators?.junior_author?.options).toMatchObject({
       logins: ["dependabot[bot]", "github-actions[bot]"],
       multiplier: 1.06,

@@ -28,12 +28,12 @@ trusted_plugins:
 
 criteria:
   diff_size:
-    weight: 54
+    weight: 44
     options:
       # Line churn vs cap → raw score; calibrate so typical PRs map to tiers by repo norms (not tiny caps).
       max_lines_for_cap: 800
   file_patterns:
-    weight: 22
+    weight: 18
     options:
       aggregation: max
       patterns:
@@ -67,6 +67,29 @@ criteria:
       scores:
         github_action_extension: 32
         merge_risk_schema: 28
+  author_familiarity:
+    weight: 8
+    options:
+      history_window_days: 180
+      aggregation: max
+      characterization_scores:
+        high: 15
+        moderate: 50
+        none: 85
+  blast_radius:
+    weight: 6
+    options:
+      aggregation: max
+      enabled_extractors:
+        - js_ts
+        - stylesheet
+      characterization_scores:
+        isolated: 20
+        moderate: 55
+        broad: 90
+      thresholds:
+        isolatedMax: 2
+        moderateMax: 10
 
 # Multiplicative bump for the same automation logins listed under author_seniority (exercises mutators on bot PRs).
 mutators:
