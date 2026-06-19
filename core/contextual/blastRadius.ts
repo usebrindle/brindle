@@ -11,7 +11,7 @@ const DEFAULT_ISOLATED_MAX = 2;
 const DEFAULT_MODERATE_MAX = 10;
 
 const resolveThresholds = (
-  thresholds?: BlastRadiusThresholds,
+  thresholds?: Partial<BlastRadiusThresholds>,
 ): BlastRadiusThresholds => ({
   isolatedMax: thresholds?.isolatedMax ?? DEFAULT_ISOLATED_MAX,
   moderateMax: thresholds?.moderateMax ?? DEFAULT_MODERATE_MAX,

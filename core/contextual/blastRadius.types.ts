@@ -18,5 +18,5 @@ export interface BlastRadiusInput {
   changedFiles: readonly string[];
   graph: ReverseDependencyGraph;
   /** Optional override; defaults to isolated ≤2, moderate ≤10. */
-  thresholds?: BlastRadiusThresholds;
+  thresholds?: Partial<BlastRadiusThresholds>;
 }

@@ -22,7 +22,7 @@ export interface HydrateBlastRadiusContextualEvidenceInput {
   enabledExtractorIds: readonly string[];
   registry: ExtractorRegistry;
   /** Optional reach thresholds from `criteria.blast_radius.options.thresholds`. */
-  thresholds?: BlastRadiusThresholds;
+  thresholds?: Partial<BlastRadiusThresholds>;
   dependencies?: Partial<HydrateDependencyGraphDependencies>;
 }
 

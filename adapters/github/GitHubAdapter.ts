@@ -17,6 +17,7 @@ import type {
   GitHubAdapterDependencies,
   GitHubTemporalContextHydration,
 } from "./githubAdapter.types.js";
+import { hydrateContextualEvidence } from "./contextual/hydrateContextualEvidence.js";
 import { mapGitHubPullAndFilesToPRContext } from "./mapGitHubPullToPrContext.js";
 
 const mapGithubNativeAutoMergeFailureToOutcome = (cause: unknown): AutoMergeOutcome => {
@@ -100,7 +101,7 @@ export class GitHubAdapter implements PlatformAdapter {
         : {}),
     };
 
-    return mapGitHubPullAndFilesToPRContext(
+    let pullContext = mapGitHubPullAndFilesToPRContext(
       pullRequestLookup.repositoryOwner,
       pullRequestLookup.repositoryName,
       pullRequestLookup.pullRequestNumber,
@@ -109,6 +110,38 @@ export class GitHubAdapter implements PlatformAdapter {
       coverageReport,
       temporalHydration,
     );
+
+    const contextualEvidenceHydration = this.githubAdapterDependencies.contextualEvidenceHydration;
+    if (contextualEvidenceHydration?.shouldHydrate === true) {
+      const hydrateContextualEvidenceFn =
+        this.githubAdapterDependencies.hydrateContextualEvidence ?? hydrateContextualEvidence;
+      const contextualHydrationResult = hydrateContextualEvidenceFn({
+        repositoryRoot: contextualEvidenceHydration.repositoryRoot,
+        baseRef: pullSnapshot.baseRefName,
+        headRef: pullSnapshot.headSha,
+        authorLogin: pullSnapshot.authorLogin,
+        changedPaths: fileSnapshots.map((fileSnapshot) => fileSnapshot.path),
+        classifiedAt: new Date(classifiedAtIso),
+        hydrateAuthorFamiliarity: contextualEvidenceHydration.hydrateAuthorFamiliarity,
+        hydrateBlastRadius: contextualEvidenceHydration.hydrateBlastRadius,
+        authorFamiliarityOptions: contextualEvidenceHydration.authorFamiliarityOptions,
+        blastRadiusOptions: contextualEvidenceHydration.blastRadiusOptions,
+        dependencies: contextualEvidenceHydration.dependencies,
+      });
+
+      pullContext = {
+        ...pullContext,
+        contextualEvidence: contextualHydrationResult.contextualEvidence,
+        ...(contextualHydrationResult.baseRevision === undefined
+          ? {}
+          : { baseRevision: contextualHydrationResult.baseRevision }),
+        ...(contextualHydrationResult.authorEmails === undefined
+          ? {}
+          : { authorEmails: contextualHydrationResult.authorEmails }),
+      };
+    }
+
+    return pullContext;
   }
 
   async writeResult(report: RiskReport): Promise<void> {

@@ -7,6 +7,13 @@
 
 import type { MergeMethod } from "../../core/types.js";
 
+import type {
+  HydrateContextualAuthorFamiliarityOptions,
+  HydrateContextualBlastRadiusOptions,
+  HydrateContextualEvidenceDependencies,
+} from "./contextual/hydrateContextualEvidence.types.js";
+import type { hydrateContextualEvidence } from "./contextual/hydrateContextualEvidence.js";
+
 /** Neutral snapshot of a pull request returned by {@link GitHubApiClient.getPullRequest}. */
 export type GitHubPullSnapshot = {
   /** GitHub global node ID for GraphQL (e.g. `enablePullRequestAutoMerge`). */
@@ -156,4 +163,21 @@ export type GitHubAdapterDependencies = {
     repositoryRelativePath: string;
     shouldHydrate: boolean;
   };
+  /**
+   * When `shouldHydrate` is true, {@link GitHubAdapter.buildContext} runs git blame/log and/or
+   * dependency graph hydration at the checked-out repository (ADR 0010).
+   * Omitted or `shouldHydrate: false` skips checkout-dependent I/O.
+   */
+  contextualEvidenceHydration?: {
+    shouldHydrate: boolean;
+    /** Absolute path to the checked-out git repository (e.g. `GITHUB_WORKSPACE`). */
+    repositoryRoot: string;
+    hydrateAuthorFamiliarity: boolean;
+    hydrateBlastRadius: boolean;
+    authorFamiliarityOptions?: HydrateContextualAuthorFamiliarityOptions;
+    blastRadiusOptions?: HydrateContextualBlastRadiusOptions;
+    dependencies?: HydrateContextualEvidenceDependencies;
+  };
+  /** Injectable hydration for unit tests; defaults to {@link hydrateContextualEvidence}. */
+  hydrateContextualEvidence?: typeof hydrateContextualEvidence;
 };
