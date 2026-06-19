@@ -15,7 +15,7 @@ import type { StylesheetReference } from "./stylesheetExtractor.types.js";
 const STYLESHEET_AT_RULE_NAMES = new Set(["import", "use", "forward"]);
 const QUOTED_SPECIFIER_PATTERN = /^['"]([^'"]+)['"]/;
 const URL_SPECIFIER_PATTERN = /^url\(\s*['"]?([^'")\s]+)['"]?\s*\)/i;
-const UNQUOTED_SPECIFIER_PATTERN = /^([\w./_-]+)/;
+const UNQUOTED_SPECIFIER_PATTERN = /^([\w./-]+)/;
 
 const parseStylesheetRoot = (filePath: string, fileText: string): Root | null => {
   const lowerPath = filePath.toLowerCase();

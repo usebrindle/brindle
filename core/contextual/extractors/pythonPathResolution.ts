@@ -32,7 +32,7 @@ const modulePathToRepoFile = (modulePath: string): string => {
   if (!normalizedModulePath) {
     return "__init__.py";
   }
-  return `${normalizedModulePath.replace(/\./g, "/")}.py`;
+  return `${normalizedModulePath.replaceAll(".", "/")}.py`;
 };
 
 const resolveRelativeModuleToRepoFile = (
