@@ -51,7 +51,8 @@ describe("ExtractorRegistry", () => {
     expect(defaultExtractorRegistry.getById("js_ts")?.id).toBe("js_ts");
     expect(defaultExtractorRegistry.getById("stylesheet")?.id).toBe("stylesheet");
     expect(defaultExtractorRegistry.getById("go")?.id).toBe("go");
-    expect(defaultExtractorRegistry.getById("python")).toBeUndefined();
+    expect(defaultExtractorRegistry.getById("python")?.id).toBe("python");
+    expect(defaultExtractorRegistry.getById("rust")).toBeUndefined();
   });
 
   it("looks up extractors by file extension", () => {
@@ -60,17 +61,20 @@ describe("ExtractorRegistry", () => {
     expect(defaultExtractorRegistry.getForFile("styles/main.scss")?.id).toBe("stylesheet");
     expect(defaultExtractorRegistry.getForFile("styles/main.sass")?.id).toBe("stylesheet");
     expect(defaultExtractorRegistry.getForFile("cmd/main.go")?.id).toBe("go");
+    expect(defaultExtractorRegistry.getForFile("app/main.py")?.id).toBe("python");
+    expect(defaultExtractorRegistry.getForFile("app/types.pyi")?.id).toBe("python");
     expect(defaultExtractorRegistry.getForFile("README.md")).toBeUndefined();
     expect(defaultExtractorRegistry.getForFile("Makefile")).toBeUndefined();
   });
 
   it("registers custom extractors and exposes them as builtIns", () => {
     const registry = createExtractorRegistry(builtInExtractors);
-    expect(registry.builtIns).toHaveLength(3);
+    expect(registry.builtIns).toHaveLength(4);
     expect(registry.builtIns.map((extractor) => extractor.id)).toEqual([
       "js_ts",
       "stylesheet",
       "go",
+      "python",
     ]);
   });
 });

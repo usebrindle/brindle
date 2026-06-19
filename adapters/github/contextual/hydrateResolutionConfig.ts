@@ -8,9 +8,11 @@ import { join } from "node:path";
 
 import { GO_RESOLUTION_CONFIG_KEYS } from "../../../core/contextual/extractors/goExtractor.types.js";
 import { JS_TS_RESOLUTION_CONFIG_KEYS } from "../../../core/contextual/extractors/jsTsExtractor.types.js";
+import { PYTHON_RESOLUTION_CONFIG_KEYS } from "../../../core/contextual/extractors/pythonExtractor.types.js";
 
 const CONFIG_CANDIDATE_FILENAMES = ["tsconfig.json", "jsconfig.json"] as const;
 const GO_MOD_FILENAME = "go.mod";
+const PYPROJECT_FILENAME = "pyproject.toml";
 
 const normalizeRepoPath = (filePath: string): string =>
   filePath.replace(/\\/g, "/").replace(/^\.\//, "");
@@ -59,6 +61,21 @@ const readRootCompilerConfig = (
   return {};
 };
 
+const readPythonPackageRoots = (repoRoot: string): readonly string[] | undefined => {
+  const pyprojectPath = join(repoRoot, PYPROJECT_FILENAME);
+  if (!existsSync(pyprojectPath)) {
+    return undefined;
+  }
+
+  const pyprojectText = readFileSync(pyprojectPath, "utf8");
+  const whereMatch = pyprojectText.match(/where\s*=\s*\[\s*"([^"]+)"\s*\]/);
+  if (whereMatch?.[1]) {
+    return [normalizeRepoPath(whereMatch[1])];
+  }
+
+  return undefined;
+};
+
 const readGoModulePath = (repoRoot: string): string | undefined => {
   const goModPath = join(repoRoot, GO_MOD_FILENAME);
   if (!existsSync(goModPath)) {
@@ -76,7 +93,7 @@ const readGoModulePath = (repoRoot: string): string | undefined => {
 
 /**
  * @param repoRoot - Absolute path to the repository root.
- * @returns Shared `resolutionConfig` keys for js_ts, stylesheet, and go extractors.
+ * @returns Shared `resolutionConfig` keys for js_ts, stylesheet, go, and python extractors.
  */
 export const hydrateResolutionConfig = (
   repoRoot: string,
@@ -95,6 +112,11 @@ export const hydrateResolutionConfig = (
   const modulePath = readGoModulePath(repoRoot);
   if (modulePath) {
     resolutionConfig[GO_RESOLUTION_CONFIG_KEYS.modulePath] = modulePath;
+  }
+
+  const packageRoots = readPythonPackageRoots(repoRoot);
+  if (packageRoots) {
+    resolutionConfig[PYTHON_RESOLUTION_CONFIG_KEYS.packageRoots] = packageRoots;
   }
 
   return resolutionConfig;

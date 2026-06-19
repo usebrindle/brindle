@@ -6,6 +6,7 @@
 import { createExtractorRegistry } from "./registry.js";
 import { goExtractor } from "./goExtractor.js";
 import { jsTsExtractor } from "./jsTsExtractor.js";
+import { pythonExtractor } from "./pythonExtractor.js";
 import { stylesheetExtractor } from "./stylesheetExtractor.js";
 import type { DependencyExtractor } from "./types.js";
 
@@ -14,6 +15,7 @@ export const builtInExtractors: readonly DependencyExtractor[] = [
   jsTsExtractor,
   stylesheetExtractor,
   goExtractor,
+  pythonExtractor,
 ];
 
 /** Default registry with all v1 built-in extractors. */
