@@ -3,7 +3,11 @@
  *
  * @see docs/adrs/0002-native-auto-merge.md
  * @see docs/adrs/0003-check-runs-over-commit-statuses.md
+ * @see docs/designs/lld-contextual-evidence-reporting.md
  */
+import type { ContextualEvidencePayload } from "./contextual/report/contextualEvidenceReport.types.js";
+
+export type { ContextualEvidencePayload };
 
 /**
  * Inputs to {@link import("./report.js").checkConclusionForTier}; kept explicit so call sites stay readable.
@@ -56,4 +60,9 @@ export type BuildRiskReportOptions = {
    * When `false`, `RiskReport.autoMergeOutcome` is set to `unsupported` (e.g. Bitbucket per ADR 0007).
    */
   nativeAutoMergeSupported: boolean;
+  /**
+   * When present, a collapsible Contextual evidence block is appended after the score breakdown.
+   * Evidence supplements the tier verdict; it does not issue a second merge recommendation.
+   */
+  contextualEvidence?: ContextualEvidencePayload;
 };
