@@ -55,3 +55,18 @@ export interface GitBlameStats {
 export interface GitBlameSource {
   query(query: GitBlameQuery): GitBlameStats;
 }
+
+/** Input for pure {@link analyzeFamiliarity} at merge-base. */
+export interface FamiliarityInput {
+  /** Resolved author emails — git queries match any email in the list. */
+  authorEmails: readonly string[];
+  changedFiles: readonly ChangedFileEntry[];
+  historySource: GitHistorySource;
+  blameSource: GitBlameSource;
+  /** Merge-base revision; all git queries stop here (exclude `base..head`). */
+  baseRevision: string;
+  /** History window in days for commits and windowed line churn (default 180). */
+  historyWindowDays?: number;
+  /** Reference time from {@link PRContext.classifiedAtIso} — no `Date.now()` in analyzer. */
+  classifiedAt: Date;
+}
