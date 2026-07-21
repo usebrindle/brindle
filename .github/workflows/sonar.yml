@@ -44,7 +44,7 @@ jobs:
 
       - name: SonarQube Scan
         # Pinned to v8.1.0 — https://github.com/SonarSource/sonarqube-scan-action/releases/tag/v8.1.0
-        uses: SonarSource/sonarqube-scan-action@713881670b6b3676cda39549040e2d88c70d582e
+        uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
